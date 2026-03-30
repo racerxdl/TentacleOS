@@ -2,7 +2,6 @@
 #include "text_viewer_ui.h"
 #include "ui_manager.h"
 #include "buttons_gpio.h"
-#include "buzzer.h"
 #include "assets_manager.h"
 #include "storage_assets.h"
 #include "st7789.h"
@@ -251,25 +250,20 @@ static void nav_timer_cb(lv_timer_t * t) {
     }
 
     if (down && !btn_down_last && entry_count > 0) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
         selected = (selected + 1) % entry_count;
         update_selection();
     }
     if (up && !btn_up_last && entry_count > 0) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
         selected = (selected == 0) ? entry_count - 1 : selected - 1;
         update_selection();
     }
     if (right && !btn_right_last) {
-        buzzer_play_sound_file("buzzer_hacker_confirm");
         navigate_into();
     }
     if (left && !btn_left_last) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
         navigate_back();
     }
     if (back && !btn_back_last) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
         ui_switch_screen(SCREEN_MENU);
         return;
     }
