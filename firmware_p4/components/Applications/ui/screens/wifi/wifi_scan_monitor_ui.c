@@ -5,7 +5,6 @@
 #include "ui_theme.h"
 #include "lv_port_indev.h"
 #include "wifi_sniffer.h"
-#include "buzzer.h"
 #include "lvgl.h"
 
 static lv_obj_t * screen_monitor = NULL;
@@ -58,7 +57,6 @@ static void screen_event_cb(lv_event_t * e) {
             }
             wifi_sniffer_stop();
             wifi_sniffer_free_buffer();
-            buzzer_play_sound_file("buzzer_click");
             ui_switch_screen(SCREEN_WIFI_SCAN_MENU);
         }
     }

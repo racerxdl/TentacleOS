@@ -7,7 +7,6 @@
 #include "lv_port_indev.h"
 #include "probe_monitor.h"
 #include "esp_log.h"
-#include "buzzer.h"
 
 static const char *TAG = "UI_PROBE";
 static lv_obj_t * screen_probe = NULL;
@@ -52,7 +51,6 @@ static void toggle_handler(lv_event_t * e) {
             lv_label_set_text(lv_obj_get_child(btn_toggle, 0), "START MONITOR");
             lv_obj_set_style_bg_color(btn_toggle, lv_color_hex(0x004400), 0);
             if (update_timer) lv_timer_pause(update_timer);
-            buzzer_play_sound_file("buzzer_click");
         } else {
             probe_monitor_start();
             is_running = true;
@@ -61,7 +59,6 @@ static void toggle_handler(lv_event_t * e) {
             lv_obj_set_style_bg_color(btn_toggle, lv_color_hex(0x440000), 0);
             lv_textarea_set_text(ta_log, "Listening...\n");
             if (update_timer) lv_timer_resume(update_timer);
-            buzzer_play_sound_file("buzzer_hacker_confirm");
         }
     }
 }

@@ -6,7 +6,6 @@
 #include "ui_manager.h"
 #include "keyboard_ui.h"
 #include "msgbox_ui.h"
-#include "buzzer.h"
 #include "wifi_service.h"
 #include "esp_wifi.h"
 #include "esp_err.h"
@@ -154,8 +153,7 @@ static void wifi_item_event_cb(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t * item = lv_event_get_target(e);
     if(code == LV_EVENT_FOCUSED) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
-        lv_obj_set_style_border_color(item, current_theme.border_accent, 0);
+        lv_obj_set_style_border_color(item, ui_theme_get_accent(), 0);
         lv_obj_set_style_border_width(item, 2, 0);
         lv_obj_scroll_to_view(item, LV_ANIM_ON);
     } else if(code == LV_EVENT_DEFOCUSED) {
@@ -166,7 +164,6 @@ static void wifi_item_event_cb(lv_event_t * e) {
         if(key == LV_KEY_ESC || key == LV_KEY_LEFT) {
             ui_switch_screen(SCREEN_CONNECTION_SETTINGS);
         } else if(key == LV_KEY_ENTER || key == LV_KEY_RIGHT) {
-            buzzer_play_sound_file("buzzer_hacker_confirm");
             wifi_ap_record_t * ap = (wifi_ap_record_t *)lv_obj_get_user_data(item);
             if(!ap) return;
             strncpy(selected_ssid, (const char *)ap->ssid, sizeof(selected_ssid) - 1);

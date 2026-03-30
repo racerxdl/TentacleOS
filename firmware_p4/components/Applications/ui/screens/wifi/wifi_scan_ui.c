@@ -68,7 +68,7 @@ void ui_wifi_scan_open(void)
     lv_obj_align(spinner, LV_ALIGN_CENTER, 0, -20);
     
     // Tema aplicado ao Spinner
-    lv_obj_set_style_arc_color(spinner, current_theme.border_accent, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(spinner, ui_theme_get_accent(), LV_PART_INDICATOR);
     lv_obj_set_style_arc_color(spinner, current_theme.border_inactive, LV_PART_MAIN);
     lv_obj_set_style_arc_width(spinner, 4, LV_PART_MAIN);
     lv_obj_set_style_arc_width(spinner, 4, LV_PART_INDICATOR);

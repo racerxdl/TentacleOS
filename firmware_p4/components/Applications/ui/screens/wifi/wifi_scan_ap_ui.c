@@ -5,7 +5,6 @@
 #include "ui_manager.h"
 #include "lv_port_indev.h"
 #include "wifi_service.h"
-#include "buzzer.h"
 #include "esp_log.h"
 #include "lvgl.h"
 #include "freertos/FreeRTOS.h"
@@ -75,8 +74,7 @@ static void item_focus_cb(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t * item = lv_event_get_target(e);
     if (code == LV_EVENT_FOCUSED) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
-        lv_obj_set_style_border_color(item, current_theme.border_accent, 0);
+        lv_obj_set_style_border_color(item, ui_theme_get_accent(), 0);
         lv_obj_set_style_border_width(item, 2, 0);
         lv_obj_scroll_to_view(item, LV_ANIM_ON);
     } else if (code == LV_EVENT_DEFOCUSED) {
@@ -85,7 +83,6 @@ static void item_focus_cb(lv_event_t * e) {
     } else if (code == LV_EVENT_KEY) {
         uint32_t key = lv_event_get_key(e);
         if (key == LV_KEY_ESC || key == LV_KEY_LEFT) {
-            buzzer_play_sound_file("buzzer_click");
             ui_switch_screen(SCREEN_WIFI_SCAN_MENU);
         }
     }

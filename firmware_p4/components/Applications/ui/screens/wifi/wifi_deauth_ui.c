@@ -7,7 +7,6 @@
 #include "lv_port_indev.h"
 #include "wifi_deauther.h"
 #include "esp_log.h"
-#include "buzzer.h"
 
 static const char *TAG = "UI_DEAUTH";
 static lv_obj_t * screen_deauth = NULL;
@@ -32,7 +31,6 @@ static void toggle_attack_handler(lv_event_t * e) {
             lv_label_set_text(lv_obj_get_child(btn_start, 0), "START ATTACK");
             lv_obj_set_style_bg_color(btn_start, lv_color_hex(0x004400), 0);
             lv_label_set_text(lbl_status, "Status: IDLE");
-            buzzer_play_sound_file("buzzer_click");
         } else {
             if (!target_set) {
                 lv_label_set_text(lbl_status, "No Target Selected!");
@@ -43,7 +41,6 @@ static void toggle_attack_handler(lv_event_t * e) {
             lv_label_set_text(lv_obj_get_child(btn_start, 0), "STOP ATTACK");
             lv_obj_set_style_bg_color(btn_start, lv_color_hex(0x440000), 0);
             lv_label_set_text(lbl_status, "Status: ATTACKING...");
-            buzzer_play_sound_file("buzzer_hacker_confirm");
         }
     }
 }

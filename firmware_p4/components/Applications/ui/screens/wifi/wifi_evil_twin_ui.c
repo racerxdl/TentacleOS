@@ -7,7 +7,6 @@
 #include "lv_port_indev.h"
 #include "evil_twin.h"
 #include "wifi_service.h"
-#include "buzzer.h"
 #include "msgbox_ui.h"
 #include "storage_assets.h"
 #include "lvgl.h"
@@ -102,8 +101,7 @@ static void item_focus_cb(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t * item = lv_event_get_target(e);
     if (code == LV_EVENT_FOCUSED) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
-        lv_obj_set_style_border_color(item, current_theme.border_accent, 0);
+        lv_obj_set_style_border_color(item, ui_theme_get_accent(), 0);
         lv_obj_set_style_border_width(item, 2, 0);
         lv_obj_scroll_to_view(item, LV_ANIM_ON);
     } else if (code == LV_EVENT_DEFOCUSED) {
@@ -357,7 +355,6 @@ static void list_event_cb(lv_event_t * e) {
             populate_ap_list(results, count);
             return;
         }
-        buzzer_play_sound_file("buzzer_click");
         ui_switch_screen(SCREEN_WIFI_MENU);
         return;
     }
@@ -372,13 +369,11 @@ static void list_event_cb(lv_event_t * e) {
             current_view = EVIL_TWIN_VIEW_TEMPLATE;
             load_templates();
             populate_template_list();
-            buzzer_play_sound_file("buzzer_hacker_confirm");
         } else if (current_view == EVIL_TWIN_VIEW_TEMPLATE) {
             lv_obj_t * focused = lv_group_get_focused(main_group);
             if (!focused) return;
             selected_template = (int)(uintptr_t)lv_obj_get_user_data(focused);
             show_monitor_view();
-            buzzer_play_sound_file("buzzer_hacker_confirm");
         }
     }
 }

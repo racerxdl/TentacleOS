@@ -8,7 +8,6 @@
 #include "storage_impl.h"
 #include "tos_storage_paths.h"
 #include "tos_loot.h"
-#include "buzzer.h"
 #include "lvgl.h"
 #include <string.h>
 #include <stdio.h>
@@ -74,7 +73,6 @@ static void screen_event_cb(lv_event_t * e) {
     uint32_t key = lv_event_get_key(e);
     if (key == LV_KEY_ESC || key == LV_KEY_LEFT) {
         stop_sniffer();
-        buzzer_play_sound_file("buzzer_click");
         ui_switch_screen(SCREEN_WIFI_PACKETS_MENU);
     }
 }

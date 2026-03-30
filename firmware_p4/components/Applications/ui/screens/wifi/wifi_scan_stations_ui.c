@@ -6,7 +6,6 @@
 #include "lv_port_indev.h"
 #include "wifi_service.h"
 #include "target_scanner.h"
-#include "buzzer.h"
 #include "esp_log.h"
 #include "lvgl.h"
 
@@ -108,8 +107,7 @@ static void item_focus_cb(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t * item = lv_event_get_target(e);
     if (code == LV_EVENT_FOCUSED) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
-        lv_obj_set_style_border_color(item, current_theme.border_accent, 0);
+        lv_obj_set_style_border_color(item, ui_theme_get_accent(), 0);
         lv_obj_set_style_border_width(item, 2, 0);
         lv_obj_scroll_to_view(item, LV_ANIM_ON);
     } else if (code == LV_EVENT_DEFOCUSED) {
@@ -284,7 +282,6 @@ static void go_back_or_ap_view(void) {
         wifi_ap_record_t *results = (count > 0) ? wifi_service_get_ap_record(0) : NULL;
         populate_ap_list(results, count);
     } else {
-        buzzer_play_sound_file("buzzer_click");
         ui_switch_screen(SCREEN_WIFI_SCAN_MENU);
     }
 }

@@ -4,7 +4,6 @@
 #include "ui_theme.h"
 #include "core/lv_group.h"
 #include "ui_manager.h"
-#include "buzzer.h"
 #include "bluetooth_service.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -37,7 +36,7 @@ static void init_styles(void) {
     lv_style_init(&style_menu);
     lv_style_set_bg_opa(&style_menu, LV_OPA_TRANSP);
     lv_style_set_border_width(&style_menu, 2);
-    lv_style_set_border_color(&style_menu, current_theme.border_accent);
+    lv_style_set_border_color(&style_menu, ui_theme_get_accent());
     lv_style_set_radius(&style_menu, 0);
     lv_style_set_pad_all(&style_menu, 4);
     lv_style_set_pad_row(&style_menu, 4);
@@ -58,8 +57,7 @@ static void bt_item_event_cb(lv_event_t * e) {
     lv_obj_t * item = lv_event_get_target(e);
 
     if(code == LV_EVENT_FOCUSED) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
-        lv_obj_set_style_border_color(item, current_theme.border_accent, 0);
+        lv_obj_set_style_border_color(item, ui_theme_get_accent(), 0);
         lv_obj_set_style_border_width(item, 2, 0);
         lv_obj_scroll_to_view(item, LV_ANIM_ON);
     } 
@@ -70,11 +68,9 @@ static void bt_item_event_cb(lv_event_t * e) {
     else if(code == LV_EVENT_KEY) {
         uint32_t key = lv_event_get_key(e);
         if(key == LV_KEY_ESC || key == LV_KEY_LEFT) {
-            buzzer_play_sound_file("buzzer_click");
             ui_switch_screen(SCREEN_CONNECTION_SETTINGS);
         }
         else if(key == LV_KEY_ENTER || key == LV_KEY_RIGHT) {
-            buzzer_play_sound_file("buzzer_hacker_confirm");
             ui_switch_screen(SCREEN_CONNECTION_SETTINGS);
         }
     }

@@ -10,7 +10,6 @@
 #include "tos_storage_paths.h"
 #include "tos_loot.h"
 #include "msgbox_ui.h"
-#include "buzzer.h"
 #include "lvgl.h"
 #include <string.h>
 #include <stdio.h>
@@ -105,7 +104,6 @@ static void item_focus_cb(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t * item = lv_event_get_target(e);
     if (code == LV_EVENT_FOCUSED) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
         lv_obj_set_style_border_color(item, current_theme.border_accent, 0);
         lv_obj_set_style_border_width(item, 2, 0);
         lv_obj_scroll_to_view(item, LV_ANIM_ON);
@@ -261,7 +259,6 @@ static void list_event_cb(lv_event_t * e) {
             wifi_ap_record_t *results = (count > 0) ? wifi_service_get_ap_record(0) : NULL;
             populate_ap_list(results, count);
         } else {
-            buzzer_play_sound_file("buzzer_click");
             ui_switch_screen(SCREEN_WIFI_PACKETS_MENU);
         }
     } else if (key == LV_KEY_ENTER) {
@@ -272,7 +269,6 @@ static void list_event_cb(lv_event_t * e) {
             if (!ap) return;
             selected_ap = *ap;
             show_scan_view();
-            buzzer_play_sound_file("buzzer_hacker_confirm");
         }
     }
 }

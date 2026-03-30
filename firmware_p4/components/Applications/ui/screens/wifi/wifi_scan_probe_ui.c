@@ -5,7 +5,6 @@
 #include "ui_theme.h"
 #include "lv_port_indev.h"
 #include "probe_monitor.h"
-#include "buzzer.h"
 #include "esp_log.h"
 
 static const char *TAG = "UI_PROBE_SCAN";
@@ -59,7 +58,6 @@ static void screen_event_cb(lv_event_t * e) {
                 lv_timer_del(update_timer);
                 update_timer = NULL;
             }
-            buzzer_play_sound_file("buzzer_click");
             ui_switch_screen(SCREEN_WIFI_SCAN_MENU);
         }
     }

@@ -5,7 +5,6 @@
 #include "ui_manager.h"
 #include "lv_port_indev.h"
 #include "wifi_flood.h"
-#include "buzzer.h"
 #include "lvgl.h"
 
 static lv_obj_t * screen_probe_flood = NULL;
@@ -38,11 +37,9 @@ static void toggle_handler(lv_event_t * e) {
     if (is_running) {
         wifi_flood_stop();
         is_running = false;
-        buzzer_play_sound_file("buzzer_click");
     } else {
         wifi_flood_probe_start(NULL, current_channel);
         is_running = true;
-        buzzer_play_sound_file("buzzer_hacker_confirm");
     }
     update_ui();
 }
@@ -55,7 +52,6 @@ static void screen_event_cb(lv_event_t * e) {
             wifi_flood_stop();
             is_running = false;
         }
-        buzzer_play_sound_file("buzzer_click");
         ui_switch_screen(SCREEN_WIFI_ATTACK_MENU);
     } else if (!is_running && (key == LV_KEY_RIGHT || key == LV_KEY_UP || key == LV_KEY_DOWN)) {
         if (key == LV_KEY_RIGHT || key == LV_KEY_UP) current_channel = (current_channel % 13) + 1;
@@ -88,7 +84,7 @@ void ui_wifi_probe_flood_open(void) {
     lv_obj_set_size(btn_toggle, 140, 40);
     lv_obj_align(btn_toggle, LV_ALIGN_CENTER, 0, 45);
     lv_obj_set_style_bg_color(btn_toggle, lv_color_hex(0x5A2CA0), 0);
-    lv_obj_set_style_border_color(btn_toggle, current_theme.border_accent, 0);
+    lv_obj_set_style_border_color(btn_toggle, ui_theme_get_accent(), 0);
     lv_obj_set_style_border_width(btn_toggle, 2, 0);
 
     lv_obj_t * lbl_btn = lv_label_create(btn_toggle);

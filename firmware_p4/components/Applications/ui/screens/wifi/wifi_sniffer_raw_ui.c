@@ -5,7 +5,6 @@
 #include "ui_manager.h"
 #include "lv_port_indev.h"
 #include "wifi_sniffer.h"
-#include "buzzer.h"
 #include "msgbox_ui.h"
 #include "storage_init.h"
 #include "storage_impl.h"
@@ -143,7 +142,6 @@ static void screen_event_cb(lv_event_t * e) {
             is_running = false;
         }
         wifi_sniffer_free_buffer();
-        buzzer_play_sound_file("buzzer_click");
         ui_switch_screen(SCREEN_WIFI_PACKETS_MENU);
     } else if (key == LV_KEY_ENTER) {
         save_current_capture();

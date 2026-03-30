@@ -9,7 +9,6 @@
 #include "wifi_deauth_ui.h"
 #include "wifi_evil_twin_ui.h"
 #include "esp_log.h"
-#include "buzzer.h"
 
 static const char *TAG = "UI_WIFI_AP_LIST";
 static lv_obj_t * screen_list = NULL;
@@ -31,7 +30,6 @@ static void ap_action_handler(lv_event_t * e) {
             // I will default to Deauth for this iteration as it's the most requested feature
             
             ESP_LOGI(TAG, "Selected AP: %s", ap->ssid);
-            buzzer_play_sound_file("buzzer_hacker_confirm");
             
             ui_wifi_deauth_set_target(ap);
             ui_switch_screen(SCREEN_WIFI_DEAUTH);
@@ -66,7 +64,7 @@ void ui_wifi_ap_list_open(void) {
     lv_obj_set_size(list_obj, 220, 150);
     lv_obj_align(list_obj, LV_ALIGN_CENTER, 0, 10);
     lv_obj_set_style_bg_color(list_obj, lv_color_black(), 0);
-    lv_obj_set_style_border_color(list_obj, current_theme.border_accent, 0);
+    lv_obj_set_style_border_color(list_obj, ui_theme_get_accent(), 0);
 
     // Get results from Scanner
     current_results = ap_scanner_get_results(&result_count);

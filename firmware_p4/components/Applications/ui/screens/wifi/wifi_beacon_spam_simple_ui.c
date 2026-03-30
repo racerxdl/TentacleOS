@@ -5,7 +5,6 @@
 #include "ui_manager.h"
 #include "lv_port_indev.h"
 #include "beacon_spam.h"
-#include "buzzer.h"
 #include "lvgl.h"
 
 static lv_obj_t * screen_spam = NULL;
@@ -34,7 +33,6 @@ static void screen_event_cb(lv_event_t * e) {
             update_timer = NULL;
         }
         beacon_spam_stop();
-        buzzer_play_sound_file("buzzer_click");
         ui_switch_screen(SCREEN_WIFI_ATTACK_MENU);
     }
 }

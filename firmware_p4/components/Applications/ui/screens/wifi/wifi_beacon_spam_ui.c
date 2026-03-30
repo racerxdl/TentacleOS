@@ -7,7 +7,6 @@
 #include "lv_port_indev.h"
 #include "beacon_spam.h"
 #include "esp_log.h"
-#include "buzzer.h"
 
 static const char *TAG = "UI_BEACON_SPAM";
 static lv_obj_t * screen_spam = NULL;
@@ -31,7 +30,6 @@ static void toggle_mode_handler(lv_event_t * e) {
         if (!beacon_spam_is_running()) {
             is_random_mode = !is_random_mode;
             update_mode_label();
-            buzzer_play_sound_file("buzzer_scroll_tick");
         }
     }
 }
@@ -44,7 +42,6 @@ static void toggle_start_handler(lv_event_t * e) {
             lv_obj_set_style_bg_color(btn_start, lv_color_hex(0x004400), 0);
             lv_label_set_text(lbl_status, "Status: STOPPED");
             if (btn_mode) lv_obj_clear_state(btn_mode, LV_STATE_DISABLED);
-            buzzer_play_sound_file("buzzer_click");
         } else {
             bool success = false;
             if (is_random_mode) {
@@ -58,10 +55,8 @@ static void toggle_start_handler(lv_event_t * e) {
                 lv_obj_set_style_bg_color(btn_start, lv_color_hex(0x440000), 0);
                 lv_label_set_text(lbl_status, "Status: SPAMMING...");
                 if (btn_mode) lv_obj_add_state(btn_mode, LV_STATE_DISABLED);
-                buzzer_play_sound_file("buzzer_hacker_confirm");
             } else {
                 lv_label_set_text(lbl_status, "Failed to start!");
-                buzzer_play_sound_file("buzzer_error");
             }
         }
     }

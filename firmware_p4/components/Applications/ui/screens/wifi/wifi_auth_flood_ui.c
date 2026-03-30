@@ -8,7 +8,6 @@
 #include "wifi_service.h"
 #include "wifi_flood.h"
 #include "button_ui.h"
-#include "buzzer.h"
 #include "lvgl.h"
 
 typedef enum {
@@ -139,7 +138,8 @@ static void show_attack_view(void) {
     lv_obj_set_style_text_color(lbl_target, current_theme.text_main, 0);
     lv_obj_align(lbl_target, LV_ALIGN_TOP_MID, 0, 30);
 
-    btn_attack = button_ui_create(screen_auth, 170, 45, "START FLOOD");
+    button_ui_t btn_ui = button_ui_create(screen_auth, 170, 45, "START FLOOD", NULL, NULL);
+    btn_attack = btn_ui.obj;
     lv_obj_align(btn_attack, LV_ALIGN_CENTER, 0, 10);
     lv_obj_add_event_cb(btn_attack, list_event_cb, LV_EVENT_KEY, NULL);
 
@@ -160,8 +160,7 @@ static void item_focus_cb(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t * item = lv_event_get_target(e);
     if (code == LV_EVENT_FOCUSED) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
-        lv_obj_set_style_border_color(item, current_theme.border_accent, 0);
+        lv_obj_set_style_border_color(item, ui_theme_get_accent(), 0);
         lv_obj_set_style_border_width(item, 2, 0);
         lv_obj_scroll_to_view(item, LV_ANIM_ON);
     } else if (code == LV_EVENT_DEFOCUSED) {
@@ -235,7 +234,6 @@ static void list_event_cb(lv_event_t * e) {
             populate_ap_list(results, count);
         } else {
             stop_attack();
-            buzzer_play_sound_file("buzzer_click");
             ui_switch_screen(SCREEN_WIFI_ATTACK_MENU);
         }
     } else if (key == LV_KEY_ENTER) {
@@ -246,14 +244,11 @@ static void list_event_cb(lv_event_t * e) {
             if (!ap) return;
             selected_ap = *ap;
             show_attack_view();
-            buzzer_play_sound_file("buzzer_hacker_confirm");
         } else if (current_view == AUTH_FLOOD_VIEW_ATTACK) {
             if (!is_running) {
                 start_attack();
-                buzzer_play_sound_file("buzzer_hacker_confirm");
             } else {
                 stop_attack();
-                buzzer_play_sound_file("buzzer_click");
             }
             update_attack_labels();
         }

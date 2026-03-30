@@ -6,7 +6,6 @@
 #include "lv_port_indev.h"
 #include "ap_scanner.h"
 #include "target_scanner.h"
-#include "buzzer.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -131,8 +130,7 @@ static void item_focus_cb(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t * item = lv_event_get_target(e);
     if (code == LV_EVENT_FOCUSED) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
-        lv_obj_set_style_border_color(item, current_theme.border_accent, 0);
+        lv_obj_set_style_border_color(item, ui_theme_get_accent(), 0);
         lv_obj_set_style_border_width(item, 2, 0);
         lv_obj_scroll_to_view(item, LV_ANIM_ON);
     } else if (code == LV_EVENT_DEFOCUSED) {
@@ -257,7 +255,6 @@ static void update_clients_cb(lv_timer_t * t) {
     uint16_t count = 0;
     target_client_record_t * results = target_scanner_get_live_results(&count, &scanning);
 
-    buzzer_play_sound_file("buzzer_scroll_tick");
 
     if (!results || count == 0) {
         if (scanning) {
@@ -327,7 +324,6 @@ static void go_back_or_ap_view(void) {
         }
         start_ap_scan();
     } else {
-        buzzer_play_sound_file("buzzer_click");
         ui_switch_screen(SCREEN_WIFI_SCAN_MENU);
     }
 }
