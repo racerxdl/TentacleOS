@@ -38,6 +38,8 @@
 #include "ui_ble_spam.h"
 #include "ui_ble_spam_select.h"
 #include "ui_badusb_menu.h"
+#include "nfc_menu_ui.h"
+#include "files_ui.h"
 #include "ui_badusb_browser.h"
 #include "ui_badusb_layout.h"
 #include "ui_badusb_connect.h"
@@ -60,7 +62,7 @@
 
 #define TAG "UI_MANAGER"
 
-#define UI_TASK_STACK_SIZE      (4096 * 2) 
+#define UI_TASK_STACK_SIZE      (4096 * 4)
 #define UI_TASK_PRIORITY        (tskIDLE_PRIORITY + 2) 
 #define UI_TASK_CORE            1 
 
@@ -355,6 +357,14 @@ void ui_switch_screen(screen_id_t new_screen) {
 
       case SCREEN_BADUSB_RUNNING:
         ui_badusb_running_open();
+        break;
+
+      case SCREEN_NFC_MENU:
+        ui_nfc_menu_open();
+        break;
+
+      case SCREEN_FILES:
+        ui_files_open();
         break;
 
       default:
