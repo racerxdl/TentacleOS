@@ -8,7 +8,7 @@
 
 #define LCD_PIXEL_CLOCK_HZ (40 * 1000 * 1000)
 #define LCD_H_RES       240
-#define LCD_V_RES       240
+#define LCD_V_RES       320
 #define LCD_CMD_BITS    8
 #define LCD_PARAM_BITS  8
 
