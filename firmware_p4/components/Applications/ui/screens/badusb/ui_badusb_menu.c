@@ -12,64 +12,89 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include "ui_badusb_menu.h"
+#include "menu_component_ui.h"
 #include "ui_manager.h"
-#include "font/lv_symbol_def.h"
-#include "header_ui.h"
-#include "footer_ui.h"
 #include "lv_port_indev.h"
+#include "buttons_gpio.h"
 #include "esp_log.h"
 
-static const char *TAG = "UI_BADUSB_MENU";
+static lv_obj_t * screen = NULL;
+static menu_component_t menu;
+static lv_timer_t * nav_timer = NULL;
 
-static lv_obj_t * screen_badusb_menu = NULL;
+static bool btn_up_last = false;
+static bool btn_down_last = false;
+static bool btn_left_last = false;
+static bool btn_right_last = false;
+static bool btn_ok_last = false;
+static bool btn_back_last = false;
 
-static void menu_event_handler(lv_event_t * e) {
-  lv_event_code_t code = lv_event_get_code(e);
-  lv_obj_t * obj = lv_event_get_target(e);
-  uint32_t * user_data = lv_event_get_user_data(e);
+static const struct {
+    const char * name;
+    const char * icon;
+    int target;
+} items[] = {
+    {"Internal Memory", NULL, SCREEN_BADUSB_BROWSER},
+    {"Micro-SD",        NULL, SCREEN_BADUSB_BROWSER},
+};
 
-  if (code == LV_EVENT_KEY) {
-    uint32_t key = lv_event_get_key(e);
-    if (key == LV_KEY_ENTER) {
-      // TODO: Pass user_data to browser to know which storage to open
-      ui_switch_screen(SCREEN_BADUSB_BROWSER);
-    } else if (key == LV_KEY_ESC) {
-      ui_switch_screen(SCREEN_MENU);
+#define ITEM_COUNT (sizeof(items) / sizeof(items[0]))
+
+static void nav_timer_cb(lv_timer_t * t) {
+    if (lv_screen_active() != screen) {
+        lv_timer_delete(t);
+        nav_timer = NULL;
+        return;
     }
-  }
+    bool up    = up_button_is_down();
+    bool down  = down_button_is_down();
+    bool left  = left_button_is_down();
+    bool right = right_button_is_down();
+    bool ok    = ok_button_is_down();
+    bool back  = back_button_is_down();
+
+    if (down && !btn_down_last) {
+        menu_component_next(&menu);
+    }
+    if (up && !btn_up_last) {
+        menu_component_prev(&menu);
+    }
+    if ((back && !btn_back_last) || (left && !btn_left_last)) {
+        ui_switch_screen(SCREEN_MENU);
+    }
+    if ((ok && !btn_ok_last) || (right && !btn_right_last)) {
+        int sel = menu_component_get_selected(&menu);
+        if (sel >= 0 && sel < (int)ITEM_COUNT) {
+            ui_switch_screen(items[sel].target);
+        }
+    }
+
+    btn_up_last    = up;
+    btn_down_last  = down;
+    btn_left_last  = left;
+    btn_right_last = right;
+    btn_ok_last    = ok;
+    btn_back_last  = back;
 }
 
 void ui_badusb_menu_open(void) {
-  if (screen_badusb_menu) lv_obj_del(screen_badusb_menu);
+    if (screen) { lv_obj_del(screen); screen = NULL; }
 
-  screen_badusb_menu = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(screen_badusb_menu, lv_color_black(), 0);
-  lv_obj_remove_flag(screen_badusb_menu, LV_OBJ_FLAG_SCROLLABLE);
+    screen = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
+    lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
 
-  header_ui_create(screen_badusb_menu);
+    menu = menu_component_create(screen, "BAD USB", NULL);
 
-  lv_obj_t * list = lv_list_create(screen_badusb_menu);
-  lv_obj_set_size(list, 220, 180);
-  lv_obj_center(list);
+    for (int i = 0; i < (int)ITEM_COUNT; i++) {
+        menu_component_add_item(&menu, items[i].icon, items[i].name);
+    }
 
-  lv_obj_t * btn;
+    if (nav_timer == NULL) {
+        nav_timer = lv_timer_create(nav_timer_cb, 50, NULL);
+    }
 
-  btn = lv_list_add_button(list, LV_SYMBOL_USB, "Internal Memory");
-  lv_obj_add_event_cb(btn, menu_event_handler, LV_EVENT_KEY, (void*)0);
-
-  btn = lv_list_add_button(list, LV_SYMBOL_SD_CARD, "Micro-SD");
-  lv_obj_add_event_cb(btn, menu_event_handler, LV_EVENT_KEY, (void*)1);
-
-  footer_ui_create(screen_badusb_menu);
-
-  lv_obj_add_event_cb(screen_badusb_menu, menu_event_handler, LV_EVENT_KEY, NULL);
-
-  if (main_group) {
-    lv_group_add_obj(main_group, list);
-    lv_group_focus_obj(list);
-  }
-
-  lv_screen_load(screen_badusb_menu);
+    lv_screen_load(screen);
 }
