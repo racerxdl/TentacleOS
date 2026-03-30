@@ -3,6 +3,7 @@
 #include "ui_manager.h"
 #include "buttons_gpio.h"
 #include "esp_log.h"
+#include <stdio.h>
 #include "st7789.h"
 
 static lv_obj_t * screen_display = NULL;

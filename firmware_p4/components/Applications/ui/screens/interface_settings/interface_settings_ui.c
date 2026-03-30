@@ -5,6 +5,7 @@
 #include "lv_port_indev.h"
 #include "buttons_gpio.h"
 #include "esp_log.h"
+#include <stdio.h>
 #include "cJSON.h"
 #include "storage_assets.h"
 #include <sys/stat.h>

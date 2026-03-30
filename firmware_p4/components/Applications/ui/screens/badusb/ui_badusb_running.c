@@ -19,6 +19,7 @@
 #include "footer_ui.h"
 #include "lv_port_indev.h"
 #include "esp_log.h"
+#include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "ducky_parser.h"

@@ -9,6 +9,7 @@
 #include "wifi_deauth_ui.h"
 #include "wifi_evil_twin_ui.h"
 #include "esp_log.h"
+#include <stdio.h>
 
 static const char *TAG = "UI_WIFI_AP_LIST";
 static lv_obj_t * screen_list = NULL;

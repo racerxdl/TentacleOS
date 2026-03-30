@@ -6,6 +6,7 @@
 #include "lv_port_indev.h"
 #include "probe_monitor.h"
 #include "esp_log.h"
+#include <stdio.h>
 
 static const char *TAG = "UI_PROBE_SCAN";
 static lv_obj_t * screen_probe_scan = NULL;
