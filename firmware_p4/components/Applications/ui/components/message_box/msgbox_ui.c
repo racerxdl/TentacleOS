@@ -1,180 +1,234 @@
 #include "msgbox_ui.h"
-#include "core/lv_group.h"
+#include "assets_manager.h"
+#include "buttons_gpio.h"
 #include "buzzer.h"
-#include "esp_timer.h"
-#include "ui_theme.h"
+#include "st7789.h"
 
-static lv_obj_t * msgbox_overlay = NULL;
+#define MSGBOX_H        ((LCD_V_RES * 45) / 100)
+#define ANIM_TIME       300
+#define BORDER_COLOR    lv_color_make(0xB8, 0x9A, 0xFF)
+#define GRAD_TOP        lv_color_make(0x3A, 0x1D, 0x6E)
+#define GRAD_BOT        lv_color_make(0x0D, 0x08, 0x20)
+#define BTN_W           80
+#define BTN_H           28
+
+static lv_obj_t * panel = NULL;
+static lv_obj_t * btn_objs[2] = {NULL};
+static int btn_count = 0;
+static int btn_sel = 0;
+static bool btn_confirms[2] = {false, false};
 static msgbox_cb_t current_cb = NULL;
-static lv_style_t style_box;
-static lv_style_t style_btn;
-static bool styles_init = false;
-static int64_t msgbox_open_time = 0;
+static lv_timer_t * msgbox_timer = NULL;
 
-extern lv_group_t * main_group;
+static bool btn_left_last = false;
+static bool btn_right_last = false;
+static bool btn_ok_last = false;
+static bool btn_back_last = false;
+static bool input_locked = true;
 
-static void init_msgbox_styles(void) {
-    if(styles_init) return;
-
-    lv_style_init(&style_box);
-    lv_style_set_bg_color(&style_box, current_theme.screen_base);
-    lv_style_set_border_width(&style_box, 2);
-    lv_style_set_border_color(&style_box, current_theme.border_accent);
-    lv_style_set_radius(&style_box, 10);
-    lv_style_set_pad_all(&style_box, 10);
-
-    lv_style_init(&style_btn);
-    lv_style_set_bg_color(&style_btn, current_theme.bg_item_bot);
-    lv_style_set_bg_grad_color(&style_btn, current_theme.bg_item_top);
-    lv_style_set_bg_grad_dir(&style_btn, LV_GRAD_DIR_VER);
-    lv_style_set_border_width(&style_btn, 1);
-    lv_style_set_border_color(&style_btn, current_theme.border_inactive);
-    lv_style_set_radius(&style_btn, 4);
-    lv_style_set_text_color(&style_btn, lv_color_white());
-
-    styles_init = true;
-}
-
-static void btn_event_cb(lv_event_t * e) {
-    lv_event_code_t code = lv_event_get_code(e);
-    bool confirm = (bool)(uintptr_t)lv_event_get_user_data(e);
-
-    if(code == LV_EVENT_CLICKED) {
-        if ((esp_timer_get_time() - msgbox_open_time) < 200000) {
-            return;
-        }
-        buzzer_play_sound_file(confirm ? "buzzer_hacker_confirm" : "buzzer_scroll_tick");
-        if(current_cb) current_cb(confirm);
-        msgbox_close();
-    } else if(code == LV_EVENT_KEY) {
-        uint32_t key = lv_event_get_key(e);
-        if(key == LV_KEY_ENTER) {
-            if ((esp_timer_get_time() - msgbox_open_time) < 200000) {
-                return;
-            }
-            buzzer_play_sound_file(confirm ? "buzzer_hacker_confirm" : "buzzer_scroll_tick");
-            if(current_cb) current_cb(confirm);
-            msgbox_close();
+static void update_btn_selection(void) {
+    for (int i = 0; i < btn_count; i++) {
+        if (!btn_objs[i]) continue;
+        if (i == btn_sel) {
+            lv_obj_set_style_border_width(btn_objs[i], 2, 0);
+            lv_obj_set_style_border_color(btn_objs[i], BORDER_COLOR, 0);
+        } else {
+            lv_obj_set_style_border_width(btn_objs[i], 1, 0);
+            lv_obj_set_style_border_color(btn_objs[i], lv_color_make(0x3A, 0x1D, 0x6E), 0);
         }
     }
 }
 
-static void msgbox_overlay_event_cb(lv_event_t * e) {
-    lv_event_code_t code = lv_event_get_code(e);
-    if(code == LV_EVENT_KEY) {
-        uint32_t key = lv_event_get_key(e);
-        if(key == LV_KEY_ESC || key == LV_KEY_BACKSPACE) {
-            if ((esp_timer_get_time() - msgbox_open_time) < 200000) {
-                return;
-            }
-            buzzer_play_sound_file("buzzer_scroll_tick");
-            if(current_cb) current_cb(false);
-            msgbox_close();
-        }
+static void slide_anim_cb(void * var, int32_t val) {
+    lv_obj_set_y((lv_obj_t *)var, val);
+}
+
+static void close_anim_done(lv_anim_t * a) {
+    if (panel) {
+        lv_obj_del(panel);
+        panel = NULL;
     }
+    btn_objs[0] = btn_objs[1] = NULL;
+    btn_count = 0;
+}
+
+static void do_close(bool confirm) {
+    if (!panel) return;
+
+    buzzer_play_sound_file(confirm ? "buzzer_hacker_confirm" : "buzzer_scroll_tick");
+    if (current_cb) current_cb(confirm);
+    current_cb = NULL;
+
+    if (msgbox_timer) {
+        lv_timer_delete(msgbox_timer);
+        msgbox_timer = NULL;
+    }
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, panel);
+    lv_anim_set_values(&a, lv_obj_get_y(panel), LCD_V_RES);
+    lv_anim_set_duration(&a, ANIM_TIME);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+    lv_anim_set_exec_cb(&a, slide_anim_cb);
+    lv_anim_set_completed_cb(&a, close_anim_done);
+    lv_anim_start(&a);
+}
+
+static void msgbox_timer_cb(lv_timer_t * t) {
+    if (!panel || !lv_obj_is_valid(panel)) {
+        lv_timer_delete(t);
+        msgbox_timer = NULL;
+        return;
+    }
+
+    bool left  = left_button_is_down();
+    bool right = right_button_is_down();
+    bool ok    = ok_button_is_down();
+    bool back  = back_button_is_down();
+
+    if (input_locked) {
+        if (!ok && !back && !left && !right) input_locked = false;
+        btn_left_last = left; btn_right_last = right;
+        btn_ok_last = ok; btn_back_last = back;
+        return;
+    }
+
+    if (left && !btn_left_last && btn_count > 1) {
+        btn_sel = (btn_sel == 0) ? btn_count - 1 : btn_sel - 1;
+        update_btn_selection();
+    }
+    if (right && !btn_right_last && btn_count > 1) {
+        btn_sel = (btn_sel + 1) % btn_count;
+        update_btn_selection();
+    }
+    if (ok && !btn_ok_last && btn_count > 0) {
+        do_close(btn_confirms[btn_sel]);
+    }
+    if (back && !btn_back_last) {
+        do_close(false);
+    }
+
+    btn_left_last = left; btn_right_last = right;
+    btn_ok_last = ok; btn_back_last = back;
+}
+
+static lv_obj_t * create_btn(lv_obj_t * parent, const char * text) {
+    lv_obj_t * btn = lv_obj_create(parent);
+    lv_obj_set_size(btn, BTN_W, BTN_H);
+    lv_obj_remove_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_radius(btn, 10, 0);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(btn, GRAD_BOT, 0);
+    lv_obj_set_style_bg_grad_color(btn, GRAD_TOP, 0);
+    lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_border_width(btn, 1, 0);
+    lv_obj_set_style_border_color(btn, lv_color_make(0x3A, 0x1D, 0x6E), 0);
+    lv_obj_set_style_pad_all(btn, 0, 0);
+
+    lv_obj_t * lbl = lv_label_create(btn);
+    lv_label_set_text(lbl, text);
+    lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
+    lv_obj_center(lbl);
+
+    return btn;
 }
 
 void msgbox_open(const char * icon, const char * msg, const char * btn_ok, const char * btn_cancel, msgbox_cb_t cb) {
-    init_msgbox_styles();
-    if(msgbox_overlay) msgbox_close();
+    if (panel) msgbox_close();
 
     current_cb = cb;
-    msgbox_open_time = esp_timer_get_time();
+    input_locked = true;
+    btn_count = 0;
+    btn_sel = 0;
 
-    msgbox_overlay = lv_obj_create(lv_screen_active());
-    lv_obj_set_size(msgbox_overlay, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_bg_color(msgbox_overlay, current_theme.screen_base, 0);
-    lv_obj_set_style_bg_opa(msgbox_overlay, LV_OPA_70, 0);
-    lv_obj_set_style_border_width(msgbox_overlay, 0, 0);
-    lv_obj_set_style_outline_width(msgbox_overlay, 0, 0);
-    lv_obj_clear_flag(msgbox_overlay, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_event_cb(msgbox_overlay, msgbox_overlay_event_cb, LV_EVENT_KEY, NULL);
+    lv_obj_t * scr = lv_screen_active();
+    panel = lv_obj_create(scr);
+    lv_obj_set_size(panel, LCD_H_RES, MSGBOX_H);
+    lv_obj_set_pos(panel, 0, LCD_V_RES);
+    lv_obj_remove_flag(panel, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t * box = lv_obj_create(msgbox_overlay);
-    lv_obj_set_size(box, 230, 130); 
-    lv_obj_center(box);
-    lv_obj_add_style(box, &style_box, 0);
-    lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_radius(panel, 12, 0);
+    lv_obj_set_style_border_side(panel, LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_RIGHT, 0);
+    lv_obj_set_style_border_width(panel, 2, 0);
+    lv_obj_set_style_border_color(panel, BORDER_COLOR, 0);
+    lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(panel, GRAD_BOT, 0);
+    lv_obj_set_style_bg_grad_color(panel, GRAD_TOP, 0);
+    lv_obj_set_style_bg_grad_dir(panel, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_pad_all(panel, 0, 0);
 
-    lv_obj_t * info_cont = lv_obj_create(box);
-    lv_obj_set_size(info_cont, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_opa(info_cont, 0, 0);
-    lv_obj_set_style_border_width(info_cont, 0, 0);
-    lv_obj_set_flex_flow(info_cont, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(info_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_clear_flag(info_cont, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_move_foreground(panel);
 
-    lv_obj_t * icon_lbl = lv_label_create(info_cont);
-    lv_label_set_text(icon_lbl, icon);
-    lv_obj_set_style_text_color(icon_lbl, current_theme.border_accent, 0);
+    lv_obj_t * content = lv_obj_create(panel);
+    lv_obj_set_size(content, lv_pct(100), lv_pct(100));
+    lv_obj_remove_flag(content, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_opa(content, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(content, 0, 0);
+    lv_obj_set_style_pad_all(content, 10, 0);
+    lv_obj_set_style_pad_row(content, 8, 0);
+    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(content, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    lv_obj_t * msg_lbl = lv_label_create(info_cont);
-    lv_label_set_text(msg_lbl, msg);
-    lv_obj_set_style_text_color(msg_lbl, current_theme.text_main, 0);
+    static lv_image_dsc_t * warn_dsc = NULL;
+    if (!warn_dsc) warn_dsc = assets_get("/assets/icons/warning_icon.bin");
+    if (warn_dsc) {
+        lv_obj_t * icon_img = lv_image_create(content);
+        lv_image_set_src(icon_img, warn_dsc);
+    }
+
+    lv_obj_t * msg_lbl = lv_label_create(content);
+    lv_label_set_text(msg_lbl, msg ? msg : "");
+    lv_obj_set_style_text_color(msg_lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_font(msg_lbl, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_align(msg_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(msg_lbl, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(msg_lbl, 180);
+    lv_obj_set_width(msg_lbl, LCD_H_RES - 40);
 
-    lv_obj_t * btn_cont = lv_obj_create(box);
-    lv_obj_set_size(btn_cont, lv_pct(100), 45);
-    lv_obj_set_style_bg_opa(btn_cont, 0, 0);
-    lv_obj_set_style_border_width(btn_cont, 0, 0);
-    lv_obj_set_flex_flow(btn_cont, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(btn_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_gap(btn_cont, 15, 0);
-    lv_obj_clear_flag(btn_cont, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t * btn_row = lv_obj_create(content);
+    lv_obj_set_size(btn_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_remove_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_opa(btn_row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(btn_row, 0, 0);
+    lv_obj_set_style_pad_all(btn_row, 0, 0);
+    lv_obj_set_style_pad_column(btn_row, 15, 0);
+    lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(btn_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    bool has_ok = (btn_ok != NULL) && (btn_ok[0] != '\0');
-    bool has_cancel = (btn_cancel != NULL) && (btn_cancel[0] != '\0');
-    lv_obj_t * c_btn = NULL;
-    lv_obj_t * o_btn = NULL;
+    bool has_cancel = btn_cancel && btn_cancel[0];
+    bool has_ok = btn_ok && btn_ok[0];
 
-    if(has_cancel) {
-        c_btn = lv_btn_create(btn_cont);
-        lv_obj_set_size(c_btn, 90, 32);
-        lv_obj_add_style(c_btn, &style_btn, 0);
-        lv_obj_set_style_border_color(c_btn, current_theme.border_accent, LV_STATE_FOCUS_KEY);
-        lv_obj_set_style_border_width(c_btn, 2, LV_STATE_FOCUS_KEY);
-        
-        lv_obj_t * c_lbl = lv_label_create(c_btn);
-        lv_label_set_text(c_lbl, btn_cancel);
-        lv_obj_center(c_lbl);
-        lv_obj_add_event_cb(c_btn, btn_event_cb, LV_EVENT_ALL, (void*)false);
+    if (has_cancel) {
+        btn_objs[btn_count] = create_btn(btn_row, btn_cancel);
+        btn_confirms[btn_count] = false;
+        btn_count++;
+    }
+    if (has_ok) {
+        btn_objs[btn_count] = create_btn(btn_row, btn_ok);
+        btn_confirms[btn_count] = true;
+        btn_sel = btn_count;
+        btn_count++;
     }
 
-    if(has_ok) {
-        o_btn = lv_btn_create(btn_cont);
-        lv_obj_set_size(o_btn, 90, 32);
-        lv_obj_add_style(o_btn, &style_btn, 0);
-        lv_obj_set_style_border_color(o_btn, current_theme.border_accent, LV_STATE_FOCUS_KEY);
-        lv_obj_set_style_border_width(o_btn, 2, LV_STATE_FOCUS_KEY);
+    update_btn_selection();
 
-        lv_obj_t * o_lbl = lv_label_create(o_btn);
-        lv_label_set_text(o_lbl, btn_ok);
-        lv_obj_center(o_lbl);
-        lv_obj_add_event_cb(o_btn, btn_event_cb, LV_EVENT_ALL, (void*)true);
-    }
+    int target_y = LCD_V_RES - MSGBOX_H;
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, panel);
+    lv_anim_set_values(&a, LCD_V_RES, target_y);
+    lv_anim_set_duration(&a, ANIM_TIME);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+    lv_anim_set_exec_cb(&a, slide_anim_cb);
+    lv_anim_start(&a);
 
-    if(main_group) {
-        lv_group_remove_all_objs(main_group);
-        if(c_btn) lv_group_add_obj(main_group, c_btn);
-        if(o_btn) {
-            lv_group_add_obj(main_group, o_btn);
-            lv_group_focus_obj(o_btn);
-        }
-        lv_group_set_editing(main_group, true);
-    }
+    if (!msgbox_timer)
+        msgbox_timer = lv_timer_create(msgbox_timer_cb, 50, NULL);
 }
 
 void msgbox_close(void) {
-    if(msgbox_overlay) {
-        if(main_group) {
-            lv_group_set_editing(main_group, false);
-            lv_group_remove_all_objs(main_group);
-        }
-        lv_obj_del_async(msgbox_overlay);
-        msgbox_overlay = NULL;
-        current_cb = NULL;
+    if (panel) {
+        do_close(false);
     }
 }
