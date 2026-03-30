@@ -12,6 +12,7 @@ static const char *TAG = "ASSETS_MANAGER";
 typedef struct asset_node {
     char *path;
     lv_image_dsc_t *dsc;
+    bool from_sd;
     struct asset_node *next;
 } asset_node_t;
 
@@ -84,7 +85,7 @@ static lv_image_dsc_t *load_asset_from_file(const char *path) {
     return dsc;
 }
 
-static void add_asset_to_list(const char *path, lv_image_dsc_t *dsc) {
+static void add_asset_to_list(const char *path, lv_image_dsc_t *dsc, bool from_sd) {
     asset_node_t *node = malloc(sizeof(asset_node_t));
     if (!node) {
         ESP_LOGE(TAG, "Error allocating list node for %s", path);
@@ -92,6 +93,7 @@ static void add_asset_to_list(const char *path, lv_image_dsc_t *dsc) {
     }
     node->path = strdup(path);
     node->dsc = dsc;
+    node->from_sd = from_sd;
     node->next = assets_head;
     assets_head = node;
 }
@@ -116,7 +118,7 @@ static void scan_and_load_recursive(const char *base_path) {
                 if (assets_get(path) == NULL) {
                     lv_image_dsc_t *dsc = load_asset_from_file(path);
                     if (dsc) {
-                        add_asset_to_list(path, dsc);
+                        add_asset_to_list(path, dsc, false);
                     }
                 }
             }
@@ -162,4 +164,89 @@ void assets_manager_free_all(void) {
         curr = next;
     }
     assets_head = NULL;
+}
+
+static void free_node_dsc(asset_node_t *node) {
+    if (node->dsc) {
+        if (node->dsc->data) free((void *)node->dsc->data);
+        free(node->dsc);
+        node->dsc = NULL;
+    }
+}
+
+static bool replace_asset_in_list(const char *key, lv_image_dsc_t *dsc) {
+    asset_node_t *curr = assets_head;
+    while (curr) {
+        if (strcmp(curr->path, key) == 0) {
+            free_node_dsc(curr);
+            curr->dsc = dsc;
+            curr->from_sd = true;
+            return true;
+        }
+        curr = curr->next;
+    }
+    return false;
+}
+
+int assets_load_from_sd(const char *sd_dir, const char *flash_prefix) {
+    if (!sd_dir || !flash_prefix) return 0;
+
+    DIR *dir = opendir(sd_dir);
+    if (!dir) {
+
+
+        return 0;
+    }
+
+    int count = 0;
+    struct dirent *ent;
+    char sd_path[512];
+    char cache_key[512];
+
+    while ((ent = readdir(dir)) != NULL) {
+        if (ent->d_type != DT_REG) continue;
+
+        size_t len = strlen(ent->d_name);
+        if (len <= 4 || strcmp(ent->d_name + len - 4, ".bin") != 0) continue;
+
+        snprintf(sd_path, sizeof(sd_path), "%s/%s", sd_dir, ent->d_name);
+        snprintf(cache_key, sizeof(cache_key), "%s/%s", flash_prefix, ent->d_name);
+
+        lv_image_dsc_t *dsc = load_asset_from_file(sd_path);
+        if (!dsc) continue;
+
+        if (!replace_asset_in_list(cache_key, dsc)) {
+
+
+            
+            add_asset_to_list(cache_key, dsc, true);
+        }
+
+        ESP_LOGI(TAG, "SD override: %s -> %s", sd_path, cache_key);
+        count++;
+    }
+
+    closedir(dir);
+    ESP_LOGI(TAG, "Loaded %d asset(s) from SD dir: %s", count, sd_dir);
+    return count;
+}
+
+void assets_unload_sd(void) {
+    asset_node_t **pp = &assets_head;
+    int removed = 0;
+
+    while (*pp) {
+        asset_node_t *node = *pp;
+        if (node->from_sd) {
+            *pp = node->next;
+            free_node_dsc(node);
+            if (node->path) free(node->path);
+            free(node);
+            removed++;
+        } else {
+            pp = &node->next;
+        }
+    }
+
+    ESP_LOGI(TAG, "Unloaded %d SD asset(s) from cache", removed);
 }
