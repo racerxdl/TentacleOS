@@ -1,6 +1,6 @@
 #include "menu_component_ui.h"
 #include "assets_manager.h"
-#include "src/font/lv_binfont_loader.h"
+#include "lvgl.h"
 #include "st7789.h"
 
 #define BORDER_COLOR     lv_color_make(0x3A, 0x1D, 0x6E)

@@ -11,7 +11,8 @@
 #include <sys/stat.h>
 #include <string.h>
 
-#define INTERFACE_CONFIG_PATH "/assets/config/screen/interface_config.conf"
+#include "tos_flash_paths.h"
+#define INTERFACE_CONFIG_PATH FLASH_CONFIG_INTERFACE
 
 static lv_obj_t * screen_interface = NULL;
 static menu_component_t menu;
@@ -45,7 +46,7 @@ const char * lang_options[] = {"EN", "PT", "ES", "FR"};
 void interface_save_config(void) {
     if (!storage_assets_is_mounted()) return;
     mkdir("/assets/config", 0777);
-    mkdir("/assets/config/screen", 0777);
+    mkdir(FLASH_MOUNT "/config/screen", 0777);
 
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "theme", theme_names[theme_idx]);

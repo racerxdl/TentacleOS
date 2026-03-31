@@ -7,8 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define THEME_CONFIG_PATH "/assets/config/screen/screen_themes.conf"
-#define INTERFACE_CONFIG_PATH "/assets/config/screen/interface_config.conf"
+#include "tos_flash_paths.h"
+#define THEME_CONFIG_PATH FLASH_CONFIG_THEMES
+#define INTERFACE_CONFIG_PATH FLASH_CONFIG_INTERFACE
 
 static const char *TAG = "UI_THEME";
 

@@ -5,7 +5,8 @@
 #include "esp_log.h"
 
 #define FOOTER_HEIGHT 20
-#define INTERFACE_CONFIG_PATH "/assets/config/screen/interface_config.conf"
+#include "tos_flash_paths.h"
+#define INTERFACE_CONFIG_PATH FLASH_CONFIG_INTERFACE
 
 static bool footer_is_hidden(void) {
     bool hidden = false;

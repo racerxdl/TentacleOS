@@ -2,7 +2,6 @@
 #include <string.h>
 #include "core/lv_group.h"
 #include "ui_manager.h"
-#include "buzzer.h"
 #include "lv_port_indev.h"
 #include "st7789.h"
 
@@ -34,12 +33,10 @@ static void kb_event_cb(lv_event_t * e) {
     lv_obj_t * target_kb = lv_event_get_target(e);
 
     if (code == LV_EVENT_VALUE_CHANGED) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
         uint16_t btn_id = lv_keyboard_get_selected_btn(target_kb);
         const char * txt = lv_keyboard_get_btn_text(target_kb, btn_id);
 
         if (txt && (strcmp(txt, LV_SYMBOL_OK) == 0 || strcmp(txt, "Enter") == 0)) {
-            buzzer_play_sound_file("buzzer_hacker_confirm");
             char text_buf[65];
             const char * input = lv_textarea_get_text(kb_ta);
             if (input) {

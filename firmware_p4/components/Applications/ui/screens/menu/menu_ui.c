@@ -4,7 +4,7 @@
 #include "ui_theme.h"
 #include "ui_manager.h"
 #include "lv_port_indev.h"
-#include "src/font/lv_binfont_loader.h"
+#include "lvgl.h"
 #include "esp_log.h"
 #include <stdio.h>
 #include "assets_manager.h"

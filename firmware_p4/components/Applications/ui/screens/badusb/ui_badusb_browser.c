@@ -62,7 +62,8 @@ void ui_badusb_browser_open(void) {
   lv_obj_set_style_border_color(list, lv_palette_main(LV_PALETTE_DEEP_PURPLE), 0);
   lv_obj_set_style_border_width(list, 2, 0);
 
-  DIR* dir = opendir("/assets/storage/bad_usb_scripts/");
+#include "tos_flash_paths.h"
+  DIR* dir = opendir(FLASH_STORAGE_BADUSB);
   if (dir) {
     struct dirent* de;
     while ((de = readdir(dir)) != NULL) {

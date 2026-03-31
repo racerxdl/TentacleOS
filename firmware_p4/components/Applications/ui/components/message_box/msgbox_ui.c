@@ -1,7 +1,6 @@
 #include "msgbox_ui.h"
 #include "assets_manager.h"
 #include "buttons_gpio.h"
-#include "buzzer.h"
 #include "st7789.h"
 
 #define MSGBOX_H        ((LCD_V_RES * 45) / 100)
@@ -55,7 +54,6 @@ static void close_anim_done(lv_anim_t * a) {
 static void do_close(bool confirm) {
     if (!panel) return;
 
-    buzzer_play_sound_file(confirm ? "buzzer_hacker_confirm" : "buzzer_scroll_tick");
     if (current_cb) current_cb(confirm);
     current_cb = NULL;
 

@@ -1,7 +1,7 @@
 #include "header_ui.h"
 #include "wifi_service.h"
 #include "assets_manager.h"
-#include "src/font/lv_binfont_loader.h"
+#include "lvgl.h"
 #include "st7789.h"
 
 #define HEADER_HEIGHT ((LCD_V_RES * 9) / 100)

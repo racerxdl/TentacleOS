@@ -17,7 +17,8 @@ static bool is_random_mode = true;
 
 extern lv_group_t * main_group;
 
-#define DEFAULT_LIST_PATH "/assets/storage/wifi/beacon_list.json"
+#include "tos_flash_paths.h"
+#define DEFAULT_LIST_PATH FLASH_STORAGE_WIFI_BEACONS
 
 static void update_mode_label(void) {
     if (btn_mode) {
