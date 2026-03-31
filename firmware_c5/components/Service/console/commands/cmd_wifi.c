@@ -18,6 +18,7 @@
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include "esp_mac.h"
+#include "tos_flash_paths.h"
 #include <string.h>
 
 // Service Includes
@@ -190,10 +191,10 @@ static int subcmd_spam(int argc, char **argv) {
   }
 
   if (spam_args.list->count > 0) {
-    if (beacon_spam_start_custom("/assets/config/wifi/beacon_list.json")) {
+    if (beacon_spam_start_custom(FLASH_CONFIG_WIFI_BEACONS)) {
       printf("Custom List Beacon Spam started.\n");
     } else {
-      printf("Failed to start Custom Beacon Spam (Check /assets/config/wifi/beacon_list.json).\n");
+      printf("Failed to start Custom Beacon Spam (Check " FLASH_CONFIG_WIFI_BEACONS ").\n");
     }
     return 0;
   }
