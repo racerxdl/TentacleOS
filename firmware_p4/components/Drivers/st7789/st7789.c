@@ -22,7 +22,8 @@
 #define BL_LEDC_CH        LEDC_CHANNEL_0
 #define BL_LEDC_RES       LEDC_TIMER_13_BIT
 #define BL_LEDC_FREQ      5000
-#define DISPLAY_CONFIG_PATH "/assets/config/screen/screen_config.conf"
+#include "tos_flash_paths.h"
+#define DISPLAY_CONFIG_PATH FLASH_CONFIG_SCREEN
 
 static const char *TAG = "ST7789_DRIVER";
 

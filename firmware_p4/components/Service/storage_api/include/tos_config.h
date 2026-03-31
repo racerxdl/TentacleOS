@@ -19,12 +19,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Flash fallback paths (assets partition)
-#define ASSETS_CONFIG_SCREEN  "/assets/config/screen/screen_config.conf"
-#define ASSETS_CONFIG_WIFI    "/assets/config/wifi/wifi_ap.conf"
-#define ASSETS_CONFIG_BLE     "/assets/config/bluetooth/ble_announce.conf"
-#define ASSETS_CONFIG_LORA    "/assets/config/lora/lora.conf"
-#define ASSETS_CONFIG_SYSTEM  "/assets/config/system/system.conf"
+#include "tos_flash_paths.h"
+
+// Flash fallback aliases for tos_config_load_all()
+#define ASSETS_CONFIG_SCREEN  FLASH_CONFIG_SCREEN
+#define ASSETS_CONFIG_WIFI    FLASH_CONFIG_WIFI_AP
+#define ASSETS_CONFIG_BLE     FLASH_CONFIG_BLE
+#define ASSETS_CONFIG_LORA    FLASH_CONFIG_LORA
+#define ASSETS_CONFIG_SYSTEM  FLASH_CONFIG_SYSTEM
 
 typedef struct {
   int  brightness;

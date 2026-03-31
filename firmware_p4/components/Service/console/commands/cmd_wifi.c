@@ -35,6 +35,7 @@
 #include "deauther_detector.h"
 #include "evil_twin.h"
 #include "port_scan.h"
+#include "tos_flash_paths.h"
 
 static const char *TAG = "CMD_WIFI";
 
@@ -190,7 +191,7 @@ static int subcmd_spam(int argc, char **argv) {
   }
 
   if (spam_args.list->count > 0) {
-    if (beacon_spam_start_custom("/assets/config/wifi/beacon_list.json")) {
+    if (beacon_spam_start_custom(FLASH_STORAGE_WIFI_BEACONS)) {
       printf("Custom List Beacon Spam started.\n");
     } else {
       printf("Failed to start Custom Beacon Spam (Check /assets/config/wifi/beacon_list.json).\n");
