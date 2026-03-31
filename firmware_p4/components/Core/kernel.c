@@ -19,7 +19,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
-#include "buzzer.h"
 #include "spi.h"
 #include "i2c_init.h"
 #include "led_control.h"
@@ -66,9 +65,7 @@ void kernel_init(void) {
   tos_config_load_all();
   // tos_theme_load_from_sd(); // TODO: fase 6
 
-  buzzer_init();
   led_rgb_init();
-  buzzer_play_sound_file("buzzer_boot_sequence");
   bq25896_init();
   cc1101_init();
   bridge_manager_init();
@@ -102,7 +99,6 @@ void kernel_init(void) {
 void safeguard_alert(const char* title, const char* message) {
   ESP_LOGE(TAG, "ALERT: %s - %s", title, message);
 
-  buzzer_play_sound_file("buzzer_error");
 
   if (ui_acquire()) {
     msgbox_open(LV_SYMBOL_WARNING, message, "OK", NULL, NULL);
