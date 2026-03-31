@@ -27,6 +27,8 @@ void evil_twin_stop_attack(void);
 void evil_twin_reset_capture(void);
 bool evil_twin_has_password(void);
 void evil_twin_get_last_password(char *out, size_t len);
+bool evil_twin_upload_template(const char *path);
+void evil_twin_save_password(const char *password);
 
 #endif // EVIL_TWIN_H
 

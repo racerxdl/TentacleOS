@@ -416,6 +416,17 @@ spi_status_t wifi_dispatcher_execute(spi_id_t id, const uint8_t *payload, uint8_
             evil_twin_reset_capture();
             return SPI_STATUS_OK;
 
+        case SPI_ID_WIFI_EVIL_TWIN_TMPL_BEGIN: {
+            if (len < 2) return SPI_STATUS_ERROR;
+            uint16_t total_size = (uint16_t)(payload[0] | (payload[1] << 8));
+            evil_twin_tmpl_begin(total_size);
+            return SPI_STATUS_OK;
+        }
+
+        case SPI_ID_WIFI_EVIL_TWIN_TMPL_CHUNK:
+            evil_twin_tmpl_chunk(payload, len);
+            return SPI_STATUS_OK;
+
         case SPI_ID_WIFI_CLIENT_SAVE_FLASH:
             return client_scanner_save_results_to_internal_flash() ? SPI_STATUS_OK : SPI_STATUS_ERROR;
 
