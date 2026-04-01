@@ -47,31 +47,7 @@ idf.py build
 ## Development Workflow
 
 ### Coding Style & Conventions
-We follow the [ESP-IDF Style Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/contribute/style-guide.html) with the following specific conventions:
-
-#### 1. Naming Conventions
-- **Files:** Use `snake_case.c` and `snake_case.h`.
-- **Functions:** Use `snake_case` (e.g., `subghz_receiver_start`).
-- **Variables:** Use `snake_case` (e.g., `decoded_data`).
-- **Types (Structs/Enums):** Use `snake_case_t` suffix (e.g., `subghz_data_t`).
-- **Macros & Constants:** Use `UPPER_SNAKE_CASE` (e.g., `RMT_RESOLUTION_HZ`).
-
-#### 2. Code Structure
-- **Indentation:** Use 4 spaces (preferred) or 2 spaces if consistent with the existing file.
-- **Include Guards:** All headers must use `#ifndef FILENAME_H` guards.
-- **C++ Compatibility:** Header files should include the `extern "C"` block for C++ compatibility.
-- **License Header:** New files should include the Apache 2.0 license header at the top.
-
-#### 3. Logging & Error Handling
-- **Tags:** Define a `static const char *TAG = "MODULE_NAME";` at the top of `.c` files.
-- **Logging:** Use `ESP_LOGI`, `ESP_LOGW`, `ESP_LOGE`, and `ESP_LOGD` for system output.
-- **Errors:** Use `ESP_ERROR_CHECK()` for critical initialization steps.
-
-#### 4. Documentation
-- Use Doxygen-style comments (`/** ... */`) in header files to document public APIs and structures.
-- All comments and documentation must be in **English**.
-
----
+All coding rules, naming conventions, formatting, error handling and reference examples are in [CODING_STANDARDS.md](CODING_STANDARDS.md). Read it before submitting code.
 
 ### Commit Conventions
 We use [Conventional Commits](https://www.conventionalcommits.org/). This is **enforced by a git hook** — commits that don't follow the format will be rejected.
