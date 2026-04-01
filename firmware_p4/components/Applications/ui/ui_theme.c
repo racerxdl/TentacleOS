@@ -2,6 +2,7 @@
 #include "assets_manager.h"
 #include "cJSON.h"
 #include "storage_assets.h"
+#include "tos_config.h"
 #include "esp_log.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -194,7 +195,16 @@ static void parse_theme_conf(const char *data) {
                     key[klen] = '\0';
                     memcpy(val, eq + 1, vlen);
                     val[vlen] = '\0';
-                    apply_conf_color(key, val, section);
+                    /* trim trailing spaces from key */
+                    int ki = klen - 1;
+                    while (ki >= 0 && key[ki] == ' ') key[ki--] = '\0';
+                    /* trim leading spaces from key */
+                    char *kp = key;
+                    while (*kp == ' ') kp++;
+                    /* trim leading spaces from val */
+                    char *vp = val;
+                    while (*vp == ' ') vp++;
+                    apply_conf_color(kp, vp, section);
                 }
             }
         }
@@ -349,7 +359,27 @@ lv_color_t ui_theme_get_accent(void) {
     }
 }
 
+void ui_theme_load_from_sd(void) {
+    const char *name = g_config_screen.theme;
+
+    if (!name || name[0] == '\0') {
+        ESP_LOGI(TAG, "No theme in config, using default from flash");
+        ui_theme_load_idx(0);
+        return;
+    }
+
+    ESP_LOGI(TAG, "Loading theme from config: %s", name);
+    ui_theme_load_from_name(name);
+}
+
 void ui_theme_init(void) {
+    /* If tos_theme_load_from_sd() already loaded a theme from config, keep it */
+    if (g_config_screen.theme[0] != '\0') {
+        ESP_LOGI(TAG, "Theme already loaded from config: %s", g_config_screen.theme);
+        return;
+    }
+
+    /* Fallback: load from legacy interface_config.conf */
     ui_theme_load_settings();
     ui_theme_load_idx(theme_idx);
     ESP_LOGI(TAG, "Theme initialized: %s", theme_names[theme_idx]);

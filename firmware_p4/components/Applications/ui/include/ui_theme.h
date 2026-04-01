@@ -40,6 +40,7 @@ extern ui_theme_t current_theme;
 void ui_theme_init(void);
 void ui_theme_load_idx(int color_idx);
 void ui_theme_load_from_name(const char * theme_name);
+void ui_theme_load_from_sd(void);
 void ui_theme_set_protocol(protocol_id_t protocol);
 lv_color_t ui_theme_get_accent(void);
 
