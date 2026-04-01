@@ -1,14 +1,15 @@
 #include "menu_component_ui.h"
 #include "assets_manager.h"
+#include "ui_theme.h"
 #include "lvgl.h"
 #include "st7789.h"
 
-#define BORDER_COLOR     lv_color_make(0x3A, 0x1D, 0x6E)
-#define ITEM_BORDER      lv_color_make(0xB8, 0x9A, 0xFF)
-#define GRAD_LEFT        lv_color_make(0x3A, 0x1D, 0x6E)
-#define GRAD_RIGHT       lv_color_make(0x0D, 0x08, 0x20)
-#define SEL_BORDER       lv_color_make(0xB8, 0x9A, 0xFF)
-#define SEL_DOT_COLOR    lv_color_make(0xB8, 0x9A, 0xFF)
+#define BORDER_COLOR     current_theme.border_interface
+#define ITEM_BORDER      current_theme.border_accent
+#define GRAD_LEFT        current_theme.bg_primary
+#define GRAD_RIGHT       current_theme.bg_secondary
+#define SEL_BORDER       current_theme.border_accent
+#define SEL_DOT_COLOR    current_theme.border_accent
 
 #define TITLE_W          170
 #define TITLE_H          30
@@ -71,7 +72,7 @@ menu_component_t menu_component_create(lv_obj_t * parent, const char * title, co
     lv_obj_set_size(m.screen, LCD_H_RES, LCD_V_RES);
     lv_obj_align(m.screen, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_remove_flag(m.screen, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(m.screen, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(m.screen, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(m.screen, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(m.screen, 0, 0);
 
@@ -116,7 +117,7 @@ menu_component_t menu_component_create(lv_obj_t * parent, const char * title, co
 
     m.title_label = lv_label_create(m.title_bar);
     lv_label_set_text(m.title_label, title ? title : "");
-    lv_obj_set_style_text_color(m.title_label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(m.title_label, current_theme.text_main, 0);
     lv_obj_set_style_text_font(m.title_label, menu_font ? menu_font : &lv_font_montserrat_14, 0);
     lv_obj_center(m.title_label);
 
@@ -145,7 +146,7 @@ menu_component_t menu_component_create(lv_obj_t * parent, const char * title, co
     lv_obj_t * track = lv_line_create(m.screen);
     lv_line_set_points(track, track_pts, 2);
     lv_obj_set_pos(track, track_x, m.track_y_start);
-    lv_obj_set_style_line_color(track, lv_color_white(), 0);
+    lv_obj_set_style_line_color(track, current_theme.border_inactive, 0);
     lv_obj_set_style_line_opa(track, LV_OPA_COVER, 0);
     lv_obj_set_style_line_width(track, 3, 0);
     lv_obj_set_style_line_dash_width(track, 4, 0);
@@ -197,7 +198,7 @@ lv_obj_t * menu_component_add_item(menu_component_t * menu,
 
     lv_obj_t * lbl = lv_label_create(item);
     lv_label_set_text(lbl, label ? label : "");
-    lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl, current_theme.text_main, 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
     lv_obj_set_flex_grow(lbl, 1);
     lv_obj_set_style_pad_left(lbl, 0, 0);
@@ -240,7 +241,7 @@ lv_obj_t * menu_component_add_selector(menu_component_t * menu,
 
     lv_obj_t * val = lv_label_create(item);
     lv_label_set_text_fmt(val, LV_SYMBOL_LEFT " %s " LV_SYMBOL_RIGHT, initial_value ? initial_value : "");
-    lv_obj_set_style_text_color(val, lv_color_make(0xB8, 0x9A, 0xFF), 0);
+    lv_obj_set_style_text_color(val, current_theme.border_accent, 0);
     lv_obj_set_style_text_font(val, &lv_font_montserrat_12, 0);
     lv_obj_add_flag(val, LV_OBJ_FLAG_FLOATING);
     lv_obj_align(val, LV_ALIGN_RIGHT_MID, -6, 0);

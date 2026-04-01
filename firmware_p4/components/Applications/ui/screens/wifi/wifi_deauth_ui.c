@@ -1,5 +1,6 @@
 // Copyright (c) 2025 HIGH CODE LLC
 #include "wifi_deauth_ui.h"
+#include "ui_theme.h"
 #include "ui_manager.h"
 #include "header_ui.h"
 #include "footer_ui.h"
@@ -29,7 +30,7 @@ static void toggle_attack_handler(lv_event_t * e) {
         if (wifi_deauther_is_running()) {
             wifi_deauther_stop();
             lv_label_set_text(lv_obj_get_child(btn_start, 0), "START ATTACK");
-            lv_obj_set_style_bg_color(btn_start, lv_color_hex(0x004400), 0);
+            lv_obj_set_style_bg_color(btn_start, current_theme.bg_item_top, 0);
             lv_label_set_text(lbl_status, "Status: IDLE");
         } else {
             if (!target_set) {
@@ -39,7 +40,7 @@ static void toggle_attack_handler(lv_event_t * e) {
             // Broadcast Deauth (Reason: Unspecified)
             wifi_deauther_start(&target_ap, DEAUTH_INVALID_AUTH, true);
             lv_label_set_text(lv_obj_get_child(btn_start, 0), "STOP ATTACK");
-            lv_obj_set_style_bg_color(btn_start, lv_color_hex(0x440000), 0);
+            lv_obj_set_style_bg_color(btn_start, current_theme.bg_item_bot, 0);
             lv_label_set_text(lbl_status, "Status: ATTACKING...");
         }
     }
@@ -68,7 +69,7 @@ void ui_wifi_deauth_open(void) {
 
     lv_obj_t * title = lv_label_create(screen_deauth);
     lv_label_set_text(title, "DEAUTH ATTACK");
-    lv_obj_set_style_text_color(title, lv_color_hex(0xFF0000), 0);
+    lv_obj_set_style_text_color(title, current_theme.border_accent, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 30);
 
     lv_obj_t * lbl_target = lv_label_create(screen_deauth);
@@ -84,8 +85,8 @@ void ui_wifi_deauth_open(void) {
     btn_start = lv_btn_create(screen_deauth);
     lv_obj_set_size(btn_start, 140, 40);
     lv_obj_align(btn_start, LV_ALIGN_CENTER, 0, 30);
-    lv_obj_set_style_bg_color(btn_start, lv_color_hex(0x004400), 0);
-    lv_obj_set_style_border_color(btn_start, lv_color_hex(0xFF0000), 0);
+    lv_obj_set_style_bg_color(btn_start, current_theme.bg_item_top, 0);
+    lv_obj_set_style_border_color(btn_start, current_theme.border_accent, 0);
     lv_obj_set_style_border_width(btn_start, 2, 0);
     
     lv_obj_t * lbl_btn = lv_label_create(btn_start);
@@ -94,7 +95,7 @@ void ui_wifi_deauth_open(void) {
 
     lbl_status = lv_label_create(screen_deauth);
     lv_label_set_text(lbl_status, "Status: READY");
-    lv_obj_set_style_text_color(lbl_status, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl_status, current_theme.text_main, 0);
     lv_obj_align(lbl_status, LV_ALIGN_BOTTOM_MID, 0, -30);
 
     lv_obj_add_event_cb(btn_start, toggle_attack_handler, LV_EVENT_KEY, NULL);

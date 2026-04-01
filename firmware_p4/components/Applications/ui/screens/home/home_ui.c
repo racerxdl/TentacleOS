@@ -1,3 +1,4 @@
+#include "ui_theme.h"
 #include "home_ui.h"
 #include "header_ui.h"
 #include "dropdown_ui.h"
@@ -13,7 +14,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 
-#define BG_COLOR lv_color_black()
+#define BG_COLOR current_theme.screen_base
 #define HEADER_HEIGHT_HOME ((LCD_V_RES * 9) / 100)
 static const char *TAG = "HOME_UI";
 

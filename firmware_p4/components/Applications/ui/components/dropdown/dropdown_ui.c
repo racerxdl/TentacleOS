@@ -1,4 +1,5 @@
 #include "dropdown_ui.h"
+#include "ui_theme.h"
 #include "toggle_ui.h"
 #include "page_dots_ui.h"
 #include "assets_manager.h"
@@ -9,7 +10,7 @@
 #define DROPDOWN_HEIGHT_P1 ((LCD_V_RES * 50) / 100)
 #define DROPDOWN_HEIGHT    DROPDOWN_HEIGHT_P0
 #define SEL_ITEMS       5
-#define BORDER_SEL_COLOR lv_color_make(0xB8, 0x9A, 0xFF)
+#define BORDER_SEL_COLOR current_theme.border_accent
 
 static const int page_heights[] = {DROPDOWN_HEIGHT_P0, DROPDOWN_HEIGHT_P1};
 
@@ -72,17 +73,17 @@ static void update_circle(int idx)
 
     if (circles[idx]) {
         if (on) {
-            lv_obj_set_style_bg_color(circles[idx], lv_color_make(0xD4, 0xC0, 0xFF), 0);
-            lv_obj_set_style_bg_grad_color(circles[idx], lv_color_make(0x6A, 0x3C, 0xBF), 0);
+            lv_obj_set_style_bg_color(circles[idx], current_theme.border_accent, 0);
+            lv_obj_set_style_bg_grad_color(circles[idx], current_theme.border_accent, 0);
         } else {
-            lv_obj_set_style_bg_color(circles[idx], lv_color_make(0x05, 0x03, 0x10), 0);
-            lv_obj_set_style_bg_grad_color(circles[idx], lv_color_make(0x0D, 0x08, 0x20), 0);
+            lv_obj_set_style_bg_color(circles[idx], current_theme.bg_item_top, 0);
+            lv_obj_set_style_bg_grad_color(circles[idx], current_theme.bg_secondary, 0);
         }
     }
 
     if (circle_icons_obj[idx]) {
         if (on) {
-            lv_obj_set_style_image_recolor(circle_icons_obj[idx], lv_color_black(), 0);
+            lv_obj_set_style_image_recolor(circle_icons_obj[idx], current_theme.screen_base, 0);
             lv_obj_set_style_image_recolor_opa(circle_icons_obj[idx], LV_OPA_COVER, 0);
         } else {
             lv_obj_set_style_image_recolor_opa(circle_icons_obj[idx], LV_OPA_TRANSP, 0);
@@ -268,11 +269,11 @@ void dropdown_ui_create(lv_obj_t * parent)
     lv_obj_set_style_radius(slide_panel, 12, 0);
     lv_obj_set_style_border_side(slide_panel, LV_BORDER_SIDE_BOTTOM | LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_RIGHT, 0);
     lv_obj_set_style_border_width(slide_panel, 2, 0);
-    lv_obj_set_style_border_color(slide_panel, lv_color_make(0xB8, 0x9A, 0xFF), 0);
+    lv_obj_set_style_border_color(slide_panel, current_theme.border_accent, 0);
     lv_obj_set_style_pad_all(slide_panel, 0, 0);
     lv_obj_set_style_bg_opa(slide_panel, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(slide_panel, lv_color_make(0x0D, 0x08, 0x20), 0);
-    lv_obj_set_style_bg_grad_color(slide_panel, lv_color_make(0x3A, 0x1D, 0x6E), 0);
+    lv_obj_set_style_bg_color(slide_panel, current_theme.bg_secondary, 0);
+    lv_obj_set_style_bg_grad_color(slide_panel, current_theme.border_interface, 0);
     lv_obj_set_style_bg_grad_dir(slide_panel, LV_GRAD_DIR_VER, 0);
 
     page_containers[0] = lv_obj_create(slide_panel);
@@ -309,8 +310,8 @@ void dropdown_ui_create(lv_obj_t * parent)
         lv_obj_remove_flag(circle, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_style_radius(circle, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(circle, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(circle, lv_color_make(0x05, 0x03, 0x10), 0);
-        lv_obj_set_style_bg_grad_color(circle, lv_color_make(0x0D, 0x08, 0x20), 0);
+        lv_obj_set_style_bg_color(circle, current_theme.bg_item_top, 0);
+        lv_obj_set_style_bg_grad_color(circle, current_theme.bg_secondary, 0);
         lv_obj_set_style_bg_grad_dir(circle, LV_GRAD_DIR_VER, 0);
         lv_obj_set_style_border_width(circle, 0, 0);
         circles[i] = circle;
@@ -354,8 +355,8 @@ void dropdown_ui_create(lv_obj_t * parent)
         lv_obj_remove_flag(big_rect, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_style_radius(big_rect, 12, 0);
         lv_obj_set_style_bg_opa(big_rect, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(big_rect, lv_color_make(0x05, 0x03, 0x10), 0);
-        lv_obj_set_style_bg_grad_color(big_rect, lv_color_make(0x0D, 0x08, 0x20), 0);
+        lv_obj_set_style_bg_color(big_rect, current_theme.bg_item_top, 0);
+        lv_obj_set_style_bg_grad_color(big_rect, current_theme.bg_secondary, 0);
         lv_obj_set_style_bg_grad_dir(big_rect, LV_GRAD_DIR_VER, 0);
         lv_obj_set_style_border_width(big_rect, 0, 0);
         lv_obj_set_style_pad_all(big_rect, 0, 0);
@@ -367,8 +368,8 @@ void dropdown_ui_create(lv_obj_t * parent)
         lv_obj_remove_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_style_radius(bar, 12, 0);
         lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(bar, lv_color_make(0xD4, 0xC0, 0xFF), 0);
-        lv_obj_set_style_bg_grad_color(bar, lv_color_make(0x6A, 0x3C, 0xBF), 0);
+        lv_obj_set_style_bg_color(bar, current_theme.border_accent, 0);
+        lv_obj_set_style_bg_grad_color(bar, current_theme.border_accent, 0);
         lv_obj_set_style_bg_grad_dir(bar, LV_GRAD_DIR_HOR, 0);
         lv_obj_set_style_border_width(bar, 0, 0);
         lv_obj_set_style_pad_all(bar, 0, 0);
@@ -411,9 +412,9 @@ void dropdown_ui_create(lv_obj_t * parent)
     lv_obj_remove_flag(avatar, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(avatar, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_opa(avatar, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(avatar, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(avatar, current_theme.screen_base, 0);
     lv_obj_set_style_border_width(avatar, 2, 0);
-    lv_obj_set_style_border_color(avatar, lv_color_make(0xB8, 0x9A, 0xFF), 0);
+    lv_obj_set_style_border_color(avatar, current_theme.border_accent, 0);
     lv_obj_set_style_pad_all(avatar, 0, 0);
 
     static lv_image_dsc_t * portrait_dsc = NULL;
@@ -429,7 +430,7 @@ void dropdown_ui_create(lv_obj_t * parent)
     lv_obj_remove_flag(tag, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(tag, 7, 0);
     lv_obj_set_style_bg_opa(tag, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(tag, lv_color_make(0xD4, 0xC0, 0xFF), 0);
+    lv_obj_set_style_bg_color(tag, current_theme.border_accent, 0);
     lv_obj_set_style_border_width(tag, 0, 0);
     lv_obj_set_style_pad_all(tag, 0, 0);
     lv_obj_align(tag, LV_ALIGN_TOP_RIGHT, 2, -2);
@@ -437,7 +438,7 @@ void dropdown_ui_create(lv_obj_t * parent)
 
     lv_obj_t * tag_lbl = lv_label_create(tag);
     lv_label_set_text(tag_lbl, "octo");
-    lv_obj_set_style_text_color(tag_lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_color(tag_lbl, current_theme.text_main, 0);
     lv_obj_set_style_text_font(tag_lbl, &lv_font_montserrat_12, 0);
     lv_obj_center(tag_lbl);
 
@@ -457,7 +458,7 @@ void dropdown_ui_create(lv_obj_t * parent)
         lv_obj_remove_flag(bar_bg, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_style_radius(bar_bg, 5, 0);
         lv_obj_set_style_bg_opa(bar_bg, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(bar_bg, lv_color_make(0x05, 0x03, 0x10), 0);
+        lv_obj_set_style_bg_color(bar_bg, current_theme.bg_item_top, 0);
         lv_obj_set_style_border_width(bar_bg, 0, 0);
         lv_obj_set_style_pad_all(bar_bg, 0, 0);
 
@@ -466,8 +467,8 @@ void dropdown_ui_create(lv_obj_t * parent)
         lv_obj_remove_flag(bar_fill, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_style_radius(bar_fill, 5, 0);
         lv_obj_set_style_bg_opa(bar_fill, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(bar_fill, lv_color_make(0xD4, 0xC0, 0xFF), 0);
-        lv_obj_set_style_bg_grad_color(bar_fill, lv_color_make(0x6A, 0x3C, 0xBF), 0);
+        lv_obj_set_style_bg_color(bar_fill, current_theme.border_accent, 0);
+        lv_obj_set_style_bg_grad_color(bar_fill, current_theme.border_accent, 0);
         lv_obj_set_style_bg_grad_dir(bar_fill, LV_GRAD_DIR_HOR, 0);
         lv_obj_set_style_border_width(bar_fill, 0, 0);
         lv_obj_set_style_pad_all(bar_fill, 0, 0);

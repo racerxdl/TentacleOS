@@ -1,4 +1,5 @@
 #include "wifi_probe_flood_ui.h"
+#include "ui_theme.h"
 #include "header_ui.h"
 #include "footer_ui.h"
 #include "ui_theme.h"
@@ -26,7 +27,7 @@ static void update_ui(void) {
     }
     if (btn_toggle) {
         lv_label_set_text(lv_obj_get_child(btn_toggle, 0), is_running ? "STOP" : "START");
-        lv_obj_set_style_bg_color(btn_toggle, lv_color_hex(0x5A2CA0), 0);
+        lv_obj_set_style_bg_color(btn_toggle, current_theme.border_accent, 0);
     }
 }
 
@@ -83,7 +84,7 @@ void ui_wifi_probe_flood_open(void) {
     btn_toggle = lv_btn_create(screen_probe_flood);
     lv_obj_set_size(btn_toggle, 140, 40);
     lv_obj_align(btn_toggle, LV_ALIGN_CENTER, 0, 45);
-    lv_obj_set_style_bg_color(btn_toggle, lv_color_hex(0x5A2CA0), 0);
+    lv_obj_set_style_bg_color(btn_toggle, current_theme.border_accent, 0);
     lv_obj_set_style_border_color(btn_toggle, ui_theme_get_accent(), 0);
     lv_obj_set_style_border_width(btn_toggle, 2, 0);
 

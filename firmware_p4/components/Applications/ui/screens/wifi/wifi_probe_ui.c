@@ -1,5 +1,6 @@
 // Copyright (c) 2025 HIGH CODE LLC
 #include "wifi_probe_ui.h"
+#include "ui_theme.h"
 #include "ui_manager.h"
 #include "header_ui.h"
 #include "footer_ui.h"
@@ -50,14 +51,14 @@ static void toggle_handler(lv_event_t * e) {
             probe_monitor_stop();
             is_running = false;
             lv_label_set_text(lv_obj_get_child(btn_toggle, 0), "START MONITOR");
-            lv_obj_set_style_bg_color(btn_toggle, lv_color_hex(0x004400), 0);
+            lv_obj_set_style_bg_color(btn_toggle, current_theme.bg_item_top, 0);
             if (update_timer) lv_timer_pause(update_timer);
         } else {
             probe_monitor_start();
             is_running = true;
             last_count = 0;
             lv_label_set_text(lv_obj_get_child(btn_toggle, 0), "STOP MONITOR");
-            lv_obj_set_style_bg_color(btn_toggle, lv_color_hex(0x440000), 0);
+            lv_obj_set_style_bg_color(btn_toggle, current_theme.bg_item_bot, 0);
             lv_textarea_set_text(ta_log, "Listening...\n");
             if (update_timer) lv_timer_resume(update_timer);
         }
@@ -92,26 +93,26 @@ void ui_wifi_probe_open(void) {
 
     lv_obj_t * title = lv_label_create(screen_probe);
     lv_label_set_text(title, "PROBE MONITOR");
-    lv_obj_set_style_text_color(title, lv_color_hex(0xFF00FF), 0); // Magenta
+    lv_obj_set_style_text_color(title, current_theme.text_main, 0); // Magenta
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 30);
 
     lbl_count = lv_label_create(screen_probe);
     lv_label_set_text(lbl_count, "Devices: 0");
-    lv_obj_set_style_text_color(lbl_count, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl_count, current_theme.text_main, 0);
     lv_obj_align(lbl_count, LV_ALIGN_TOP_RIGHT, -10, 30);
 
     ta_log = lv_textarea_create(screen_probe);
     lv_obj_set_size(ta_log, 220, 100);
     lv_obj_align(ta_log, LV_ALIGN_CENTER, 0, -10);
     lv_obj_set_style_text_font(ta_log, &lv_font_montserrat_14, 0); // Small font
-    lv_obj_set_style_bg_color(ta_log, lv_color_black(), 0);
-    lv_obj_set_style_text_color(ta_log, lv_color_hex(0x00FF00), 0);
+    lv_obj_set_style_bg_color(ta_log, current_theme.screen_base, 0);
+    lv_obj_set_style_text_color(ta_log, current_theme.border_accent, 0);
     lv_textarea_set_text(ta_log, "Ready.");
 
     btn_toggle = lv_btn_create(screen_probe);
     lv_obj_set_size(btn_toggle, 140, 30);
     lv_obj_align(btn_toggle, LV_ALIGN_BOTTOM_MID, 0, -35);
-    lv_obj_set_style_bg_color(btn_toggle, lv_color_hex(0x004400), 0);
+    lv_obj_set_style_bg_color(btn_toggle, current_theme.bg_item_top, 0);
     
     lv_obj_t * lbl_btn = lv_label_create(btn_toggle);
     lv_label_set_text(lbl_btn, "START MONITOR");

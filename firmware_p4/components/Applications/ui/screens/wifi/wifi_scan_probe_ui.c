@@ -1,4 +1,5 @@
 #include "wifi_scan_probe_ui.h"
+#include "ui_theme.h"
 #include "ui_manager.h"
 #include "header_ui.h"
 #include "footer_ui.h"
@@ -76,20 +77,20 @@ void ui_wifi_scan_probe_open(void) {
 
     lbl_count = lv_label_create(screen_probe_scan);
     lv_label_set_text(lbl_count, "Probes: 0");
-    lv_obj_set_style_text_color(lbl_count, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl_count, current_theme.text_main, 0);
     lv_obj_align(lbl_count, LV_ALIGN_TOP_MID, 0, 30);
 
     ta_log = lv_textarea_create(screen_probe_scan);
     lv_obj_set_size(ta_log, 230, 150);
     lv_obj_align(ta_log, LV_ALIGN_CENTER, 0, 10);
     lv_obj_set_style_text_font(ta_log, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_bg_color(ta_log, lv_color_black(), 0);
-    lv_obj_set_style_text_color(ta_log, lv_color_hex(0x00FF00), 0);
+    lv_obj_set_style_bg_color(ta_log, current_theme.screen_base, 0);
+    lv_obj_set_style_text_color(ta_log, current_theme.border_accent, 0);
     lv_obj_set_style_radius(ta_log, 0, 0);
     lv_obj_set_style_border_width(ta_log, 1, 0);
-    lv_obj_set_style_border_color(ta_log, lv_color_hex(0x00FF00), 0);
+    lv_obj_set_style_border_color(ta_log, current_theme.border_accent, 0);
     lv_obj_set_style_border_width(ta_log, 1, LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_border_color(ta_log, lv_color_hex(0x00FF00), LV_STATE_FOCUS_KEY);
+    lv_obj_set_style_border_color(ta_log, current_theme.border_accent, LV_STATE_FOCUS_KEY);
     lv_obj_set_style_outline_width(ta_log, 0, LV_STATE_FOCUS_KEY);
     lv_textarea_set_text(ta_log, "Listening...\n");
 

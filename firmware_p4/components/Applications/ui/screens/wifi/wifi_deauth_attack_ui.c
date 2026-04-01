@@ -1,4 +1,5 @@
 #include "wifi_deauth_attack_ui.h"
+#include "ui_theme.h"
 #include "header_ui.h"
 #include "footer_ui.h"
 #include "ui_theme.h"
@@ -131,7 +132,7 @@ static void update_attack_labels(void) {
     }
     if (btn_attack) {
         lv_label_set_text(lv_obj_get_child(btn_attack, 0), is_attacking ? "ATTACKING..." : "START ATTACK");
-        lv_obj_set_style_bg_color(btn_attack, is_attacking ? lv_color_hex(0x3A0F66) : lv_color_hex(0x5A2CA0), 0);
+        lv_obj_set_style_bg_color(btn_attack, is_attacking ? current_theme.bg_item_top : current_theme.border_accent, 0);
     }
 }
 
@@ -204,7 +205,7 @@ static void show_attack_view(void) {
     btn_attack = lv_btn_create(screen_deauth);
     lv_obj_set_size(btn_attack, 170, 45);
     lv_obj_align(btn_attack, LV_ALIGN_CENTER, 0, 10);
-    lv_obj_set_style_bg_color(btn_attack, lv_color_hex(0x5A2CA0), 0);
+    lv_obj_set_style_bg_color(btn_attack, current_theme.border_accent, 0);
     lv_obj_set_style_border_width(btn_attack, 2, 0);
     lv_obj_set_style_border_color(btn_attack, ui_theme_get_accent(), 0);
 

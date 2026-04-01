@@ -1,3 +1,4 @@
+#include "ui_theme.h"
 #include "connection_settings_ui.h"
 #include "menu_component_ui.h"
 #include "ui_manager.h"
@@ -55,6 +56,7 @@ static void nav_timer_cb(lv_timer_t * t) {
         nav_timer = NULL;
         return;
     }
+    if (ui_input_is_locked()) return;
     bool up    = up_button_is_down();
     bool down  = down_button_is_down();
     bool left  = left_button_is_down();
@@ -120,7 +122,7 @@ void ui_connection_settings_open(void) {
     bool wifi_active = wifi_service_is_active();
 
     screen_conn = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_conn, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(screen_conn, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(screen_conn, LV_OPA_COVER, 0);
     lv_obj_remove_flag(screen_conn, LV_OBJ_FLAG_SCROLLABLE);
 

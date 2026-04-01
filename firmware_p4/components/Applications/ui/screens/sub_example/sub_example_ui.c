@@ -1,3 +1,4 @@
+#include "ui_theme.h"
 #include "sub_example_ui.h"
 #include "header_ui.h"
 #include "footer_ui.h"
@@ -7,7 +8,7 @@
 #include "lv_port_indev.h"
 #include "esp_log.h"
 
-#define BG_COLOR            lv_color_black()
+#define BG_COLOR            current_theme.screen_base
 #define COLOR_BORDER        0x834EC6
 #define COLOR_GRADIENT_TOP  0x000000
 #define COLOR_GRADIENT_BOT  0x2E0157

@@ -1,4 +1,5 @@
 #include "intensity_bar_ui.h"
+#include "ui_theme.h"
 
 #define BAR_W       8
 #define BAR_H       20
@@ -7,9 +8,9 @@
 #define CONT_W      ((BAR_W + BAR_GAP) * INTENSITY_BAR_STEPS + BAR_GAP)
 #define CONT_H      (BAR_H + 8)
 
-#define COLOR_ON_L  lv_color_make(0xD4, 0xC0, 0xFF)
-#define COLOR_ON_R  lv_color_make(0x6A, 0x3C, 0xBF)
-#define COLOR_OFF   lv_color_make(0x15, 0x0C, 0x30)
+#define COLOR_ON_L  current_theme.border_accent
+#define COLOR_ON_R  current_theme.border_accent
+#define COLOR_OFF   current_theme.border_inactive
 
 void intensity_bar_create(intensity_bar_t * ib, lv_obj_t * parent)
 {
@@ -20,9 +21,9 @@ void intensity_bar_create(intensity_bar_t * ib, lv_obj_t * parent)
     lv_obj_remove_flag(ib->obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(ib->obj, 8, 0);
     lv_obj_set_style_bg_opa(ib->obj, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(ib->obj, lv_color_make(0x05, 0x03, 0x10), 0);
+    lv_obj_set_style_bg_color(ib->obj, current_theme.bg_item_top, 0);
     lv_obj_set_style_border_width(ib->obj, 1, 0);
-    lv_obj_set_style_border_color(ib->obj, lv_color_make(0xB8, 0x9A, 0xFF), 0);
+    lv_obj_set_style_border_color(ib->obj, current_theme.border_accent, 0);
     lv_obj_set_style_pad_all(ib->obj, 3, 0);
     lv_obj_set_flex_flow(ib->obj, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(ib->obj, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);

@@ -1,4 +1,5 @@
 #include "wifi_auth_flood_ui.h"
+#include "ui_theme.h"
 #include "header_ui.h"
 #include "footer_ui.h"
 #include "ui_theme.h"
@@ -91,7 +92,7 @@ static void update_attack_labels(void) {
     }
     if (btn_attack) {
         lv_label_set_text(lv_obj_get_child(btn_attack, 0), is_running ? "FLOODING..." : "START FLOOD");
-        lv_obj_set_style_bg_color(btn_attack, lv_color_hex(0x5A2CA0), 0);
+        lv_obj_set_style_bg_color(btn_attack, current_theme.border_accent, 0);
     }
 }
 

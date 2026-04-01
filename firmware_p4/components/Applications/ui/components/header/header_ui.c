@@ -1,4 +1,5 @@
 #include "header_ui.h"
+#include "ui_theme.h"
 #include "wifi_service.h"
 #include "assets_manager.h"
 #include "lvgl.h"
@@ -113,8 +114,8 @@ void header_ui_create(lv_obj_t * parent)
     lv_obj_set_style_pad_all(header, 0, 0);
 
     lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(header, lv_color_make(0x32, 0x1A, 0x5E), 0);
-    lv_obj_set_style_bg_grad_color(header, lv_color_make(0x28, 0x15, 0x50), 0);
+    lv_obj_set_style_bg_color(header, current_theme.bg_primary, 0);
+    lv_obj_set_style_bg_grad_color(header, current_theme.bg_secondary, 0);
     lv_obj_set_style_bg_grad_dir(header, LV_GRAD_DIR_HOR, 0);
 
     if (!inter_font) {
@@ -123,7 +124,7 @@ void header_ui_create(lv_obj_t * parent)
 
     lv_obj_t * lbl_time = lv_label_create(header);
     lv_label_set_text(lbl_time, "12:00");
-    lv_obj_set_style_text_color(lbl_time, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl_time, current_theme.text_main, 0);
     lv_obj_set_style_text_font(lbl_time, inter_font ? inter_font : &lv_font_montserrat_12, 0);
     lv_obj_align(lbl_time, LV_ALIGN_LEFT_MID, 6, 6);
 

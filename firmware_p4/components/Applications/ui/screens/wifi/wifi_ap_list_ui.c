@@ -64,7 +64,7 @@ void ui_wifi_ap_list_open(void) {
     list_obj = lv_list_create(screen_list);
     lv_obj_set_size(list_obj, 220, 150);
     lv_obj_align(list_obj, LV_ALIGN_CENTER, 0, 10);
-    lv_obj_set_style_bg_color(list_obj, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(list_obj, current_theme.screen_base, 0);
     lv_obj_set_style_border_color(list_obj, ui_theme_get_accent(), 0);
 
     // Get results from Scanner
@@ -76,8 +76,8 @@ void ui_wifi_ap_list_open(void) {
             snprintf(buf, sizeof(buf), "%s (%d) %ddBm", current_results[i].ssid, current_results[i].primary, current_results[i].rssi);
             
             lv_obj_t * btn = lv_list_add_button(list_obj, LV_SYMBOL_WIFI, buf);
-            lv_obj_set_style_text_color(btn, lv_color_white(), 0);
-            lv_obj_set_style_bg_color(btn, lv_color_black(), 0);
+            lv_obj_set_style_text_color(btn, current_theme.text_main, 0);
+            lv_obj_set_style_bg_color(btn, current_theme.screen_base, 0);
             
             // Pass the AP record pointer directly
             lv_obj_add_event_cb(btn, ap_action_handler, LV_EVENT_KEY, &current_results[i]);

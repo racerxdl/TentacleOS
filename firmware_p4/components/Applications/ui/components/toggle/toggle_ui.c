@@ -1,13 +1,14 @@
 #include "toggle_ui.h"
+#include "ui_theme.h"
 
 #define DOT_SIZE        19
 #define TOGGLE_W        52
 #define TOGGLE_H        24
 
-#define COLOR_OFF_TOP   lv_color_make(0x05, 0x03, 0x10)
-#define COLOR_OFF_BOT   lv_color_make(0x0D, 0x08, 0x20)
-#define COLOR_ON_TOP    lv_color_make(0x6A, 0x3C, 0xBF)
-#define COLOR_ON_BOT    lv_color_make(0xD4, 0xC0, 0xFF)
+#define COLOR_OFF_TOP   current_theme.bg_item_top
+#define COLOR_OFF_BOT   current_theme.bg_secondary
+#define COLOR_ON_TOP    current_theme.border_accent
+#define COLOR_ON_BOT    current_theme.border_accent
 
 static void apply_style(toggle_ui_t * toggle)
 {

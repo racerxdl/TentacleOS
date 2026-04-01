@@ -1,4 +1,5 @@
 #include "wifi_scan_monitor_ui.h"
+#include "ui_theme.h"
 #include "header_ui.h"
 #include "footer_ui.h"
 #include "ui_manager.h"
@@ -40,9 +41,9 @@ static void update_monitor_cb(lv_timer_t * t) {
     if (lbl_deauth) {
         lv_label_set_text_fmt(lbl_deauth, "Deauths: %lu", (unsigned long)deauth_count);
         if (deauth_count > 0) {
-            lv_obj_set_style_text_color(lbl_deauth, lv_color_hex(0xFF3333), 0);
+            lv_obj_set_style_text_color(lbl_deauth, current_theme.border_inactive, 0);
         } else {
-            lv_obj_set_style_text_color(lbl_deauth, lv_color_white(), 0);
+            lv_obj_set_style_text_color(lbl_deauth, current_theme.text_main, 0);
         }
     }
 }
@@ -90,31 +91,31 @@ void ui_wifi_scan_monitor_open(void) {
 
     lv_obj_set_style_bg_color(chart, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(chart, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(chart, lv_color_hex(0x00CC66), 0);
+    lv_obj_set_style_border_color(chart, current_theme.border_accent, 0);
     lv_obj_set_style_border_width(chart, 1, 0);
     lv_obj_set_style_radius(chart, 0, 0);
 
     lv_obj_set_style_line_width(chart, 1, LV_PART_ITEMS); 
-    lv_obj_set_style_line_color(chart, lv_color_hex(0x00CC66), LV_PART_ITEMS);
+    lv_obj_set_style_line_color(chart, current_theme.border_accent, LV_PART_ITEMS);
     lv_obj_set_style_line_rounded(chart, false, LV_PART_ITEMS); 
     
     lv_obj_set_style_size(chart, 0, 0, LV_PART_INDICATOR);
     lv_obj_set_style_line_width(chart, 0, LV_PART_INDICATOR);
 
-    lv_obj_set_style_line_color(chart, lv_color_hex(0x003322), LV_PART_MAIN);
+    lv_obj_set_style_line_color(chart, current_theme.border_inactive, LV_PART_MAIN);
     lv_obj_set_style_line_width(chart, 1, LV_PART_MAIN);
     lv_obj_set_style_line_rounded(chart, false, LV_PART_MAIN);
 
-    ser_pps = lv_chart_add_series(chart, lv_color_hex(0x00CC66), LV_CHART_AXIS_PRIMARY_Y);
+    ser_pps = lv_chart_add_series(chart, current_theme.border_accent, LV_CHART_AXIS_PRIMARY_Y);
 
     lbl_pkts = lv_label_create(screen_monitor);
     lv_label_set_text(lbl_pkts, "Pkts: 0");
-    lv_obj_set_style_text_color(lbl_pkts, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl_pkts, current_theme.text_main, 0);
     lv_obj_align(lbl_pkts, LV_ALIGN_BOTTOM_LEFT, 6, -35);
 
     lbl_deauth = lv_label_create(screen_monitor);
     lv_label_set_text(lbl_deauth, "Deauths: 0");
-    lv_obj_set_style_text_color(lbl_deauth, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl_deauth, current_theme.text_main, 0);
     lv_obj_align(lbl_deauth, LV_ALIGN_BOTTOM_RIGHT, -6, -35);
 
     update_timer = lv_timer_create(update_monitor_cb, 1000, NULL);

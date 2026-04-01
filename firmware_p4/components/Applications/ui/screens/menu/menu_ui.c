@@ -219,8 +219,16 @@ static void ev(lv_event_t * e) {
 void ui_menu_open(void) {
   if (scr) { lv_obj_del(scr); scr = NULL; }
   animating = false;
+
+  /* Invalidate cached asset pointers — they may be stale after theme change */
+  for (int i = 0; i < (int)N; i++) {
+    for (int f = 0; f < 3; f++) {
+      menu_data[i].icon_dscs[f] = NULL;
+      menu_data[i].base_dscs[f] = NULL;
+    }
+  }
   scr = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(scr, lv_color_black(), 0);
+  lv_obj_set_style_bg_color(scr, current_theme.screen_base, 0);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
   lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -238,7 +246,7 @@ void ui_menu_open(void) {
 
   lbl = lv_label_create(scr);
   lv_obj_align(lbl, LV_ALIGN_BOTTOM_MID, 0, -40);
-  lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+  lv_obj_set_style_text_color(lbl, current_theme.text_main, 0);
   lv_obj_set_style_text_font(lbl, fnt ? fnt : &lv_font_montserrat_14, 0);
 
   pg_dots = page_dots_create(scr, N, LV_ALIGN_BOTTOM_MID, 0, -20);

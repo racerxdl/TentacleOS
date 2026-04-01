@@ -1,4 +1,5 @@
 #include "page_dots_ui.h"
+#include "ui_theme.h"
 
 static const int DOT_PATTERN[] = {4, 7, 12, 7, 4};
 #define PATTERN_LEN 5
@@ -26,7 +27,7 @@ page_dots_t page_dots_create(lv_obj_t * parent, int total, lv_align_t align, int
         lv_obj_set_size(pd.dots[i], 4, 4);
         lv_obj_set_style_radius(pd.dots[i], LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(pd.dots[i], LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(pd.dots[i], lv_color_white(), 0);
+        lv_obj_set_style_bg_color(pd.dots[i], current_theme.text_main, 0);
         lv_obj_set_style_border_width(pd.dots[i], 0, 0);
         lv_obj_remove_flag(pd.dots[i], LV_OBJ_FLAG_SCROLLABLE);
     }

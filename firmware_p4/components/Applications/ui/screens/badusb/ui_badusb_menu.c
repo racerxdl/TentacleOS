@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "ui_theme.h"
 #include "ui_badusb_menu.h"
 #include "menu_component_ui.h"
 #include "ui_manager.h"
@@ -47,6 +48,7 @@ static void nav_timer_cb(lv_timer_t * t) {
         nav_timer = NULL;
         return;
     }
+    if (ui_input_is_locked()) return;
     bool up    = up_button_is_down();
     bool down  = down_button_is_down();
     bool left  = left_button_is_down();
@@ -82,7 +84,7 @@ void ui_badusb_menu_open(void) {
     if (screen) { lv_obj_del(screen); screen = NULL; }
 
     screen = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(screen, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
     lv_obj_remove_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
 

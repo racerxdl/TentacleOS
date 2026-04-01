@@ -1,19 +1,20 @@
 #include "keyboard_ui.h"
+#include "ui_theme.h"
 #include <string.h>
 #include "core/lv_group.h"
 #include "ui_manager.h"
 #include "lv_port_indev.h"
 #include "st7789.h"
 
-#define BORDER_COLOR    lv_color_make(0x3A, 0x1D, 0x6E)
-#define ITEM_BORDER     lv_color_make(0xB8, 0x9A, 0xFF)
-#define KB_BG_TOP       lv_color_make(0x0D, 0x08, 0x20)
-#define KB_BG_BOT       lv_color_make(0x1E, 0x10, 0x40)
-#define KB_BTN_BG       lv_color_make(0x1A, 0x0E, 0x33)
-#define KB_BTN_GRAD     lv_color_make(0x2A, 0x18, 0x50)
-#define KB_BTN_BORDER   lv_color_make(0x3A, 0x1D, 0x6E)
-#define KB_BTN_FOCUS    lv_color_make(0x6A, 0x3C, 0xBF)
-#define KB_TA_BG        lv_color_make(0x0A, 0x05, 0x18)
+#define BORDER_COLOR    current_theme.border_interface
+#define ITEM_BORDER     current_theme.border_accent
+#define KB_BG_TOP       current_theme.bg_secondary
+#define KB_BG_BOT       current_theme.bg_item_bot
+#define KB_BTN_BG       current_theme.bg_item_bot
+#define KB_BTN_GRAD     current_theme.border_inactive
+#define KB_BTN_BORDER   current_theme.border_interface
+#define KB_BTN_FOCUS    current_theme.border_accent
+#define KB_TA_BG        current_theme.screen_base
 
 #define OUTER_BORDER    4
 #define TOP_BORDER_H    46
@@ -66,7 +67,7 @@ void keyboard_open(lv_obj_t * target_textarea, keyboard_submit_cb_t cb, void * u
     lv_obj_set_size(kb_screen, LCD_H_RES, LCD_V_RES);
     lv_obj_align(kb_screen, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_remove_flag(kb_screen, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(kb_screen, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(kb_screen, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(kb_screen, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(kb_screen, 0, 0);
     lv_obj_set_style_border_width(kb_screen, OUTER_BORDER, 0);
@@ -91,15 +92,15 @@ void keyboard_open(lv_obj_t * target_textarea, keyboard_submit_cb_t cb, void * u
     lv_obj_remove_flag(title_bar, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(title_bar, 12, 0);
     lv_obj_set_style_bg_opa(title_bar, LV_OPA_COVER, 0);
-    lv_obj_set_style_bg_color(title_bar, lv_color_make(0x3A, 0x1D, 0x6E), 0);
-    lv_obj_set_style_bg_grad_color(title_bar, lv_color_make(0x0D, 0x08, 0x20), 0);
+    lv_obj_set_style_bg_color(title_bar, current_theme.border_interface, 0);
+    lv_obj_set_style_bg_grad_color(title_bar, current_theme.bg_secondary, 0);
     lv_obj_set_style_bg_grad_dir(title_bar, LV_GRAD_DIR_HOR, 0);
     lv_obj_set_style_border_width(title_bar, 2, 0);
     lv_obj_set_style_border_color(title_bar, ITEM_BORDER, 0);
 
     lv_obj_t * title_lbl = lv_label_create(title_bar);
     lv_label_set_text(title_lbl, "KEYBOARD");
-    lv_obj_set_style_text_color(title_lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_color(title_lbl, current_theme.text_main, 0);
     lv_obj_set_style_text_font(title_lbl, &lv_font_montserrat_12, 0);
     lv_obj_center(title_lbl);
 
@@ -119,7 +120,7 @@ void keyboard_open(lv_obj_t * target_textarea, keyboard_submit_cb_t cb, void * u
     lv_obj_set_style_border_width(kb_ta, 2, 0);
     lv_obj_set_style_border_color(kb_ta, ITEM_BORDER, 0);
     lv_obj_set_style_radius(kb_ta, 10, 0);
-    lv_obj_set_style_text_color(kb_ta, lv_color_white(), 0);
+    lv_obj_set_style_text_color(kb_ta, current_theme.text_main, 0);
     lv_obj_set_style_text_font(kb_ta, &lv_font_montserrat_14, 0);
     lv_obj_set_style_pad_left(kb_ta, 10, 0);
 
@@ -145,18 +146,18 @@ void keyboard_open(lv_obj_t * target_textarea, keyboard_submit_cb_t cb, void * u
     lv_obj_set_style_border_width(kb_obj, 1, LV_PART_ITEMS);
     lv_obj_set_style_border_color(kb_obj, KB_BTN_BORDER, LV_PART_ITEMS);
     lv_obj_set_style_radius(kb_obj, 8, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(kb_obj, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(kb_obj, current_theme.text_main, LV_PART_ITEMS);
     lv_obj_set_style_text_font(kb_obj, &lv_font_montserrat_12, LV_PART_ITEMS);
 
     lv_obj_set_style_bg_color(kb_obj, KB_BTN_FOCUS, LV_PART_ITEMS | LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_bg_grad_color(kb_obj, lv_color_make(0xB8, 0x9A, 0xFF), LV_PART_ITEMS | LV_STATE_FOCUS_KEY);
+    lv_obj_set_style_bg_grad_color(kb_obj, current_theme.border_accent, LV_PART_ITEMS | LV_STATE_FOCUS_KEY);
     lv_obj_set_style_bg_grad_dir(kb_obj, LV_GRAD_DIR_VER, LV_PART_ITEMS | LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_border_color(kb_obj, lv_color_make(0xB8, 0x9A, 0xFF), LV_PART_ITEMS | LV_STATE_FOCUS_KEY);
+    lv_obj_set_style_border_color(kb_obj, current_theme.border_accent, LV_PART_ITEMS | LV_STATE_FOCUS_KEY);
     lv_obj_set_style_border_width(kb_obj, 2, LV_PART_ITEMS | LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_text_color(kb_obj, lv_color_white(), LV_PART_ITEMS | LV_STATE_FOCUS_KEY);
+    lv_obj_set_style_text_color(kb_obj, current_theme.text_main, LV_PART_ITEMS | LV_STATE_FOCUS_KEY);
 
-    lv_obj_set_style_bg_color(kb_obj, lv_color_make(0xD4, 0xC0, 0xFF), LV_PART_ITEMS | LV_STATE_PRESSED);
-    lv_obj_set_style_text_color(kb_obj, lv_color_black(), LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(kb_obj, current_theme.border_accent, LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(kb_obj, current_theme.screen_base, LV_PART_ITEMS | LV_STATE_PRESSED);
 
     lv_keyboard_set_textarea(kb_obj, kb_ta);
     lv_obj_add_event_cb(kb_obj, kb_event_cb, LV_EVENT_ALL, NULL);

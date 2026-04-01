@@ -13,6 +13,7 @@
 // limitations under the License.
 
 
+#include "ui_theme.h"
 #include "ui_badusb_browser.h"
 #include "ui_manager.h"
 #include "ui_badusb_running.h"
@@ -49,7 +50,7 @@ void ui_badusb_browser_open(void) {
   if (screen_browser) lv_obj_del(screen_browser);
 
   screen_browser = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(screen_browser, lv_color_black(), 0);
+  lv_obj_set_style_bg_color(screen_browser, current_theme.screen_base, 0);
   lv_obj_remove_flag(screen_browser, LV_OBJ_FLAG_SCROLLABLE);
 
   header_ui_create(screen_browser);
@@ -57,8 +58,8 @@ void ui_badusb_browser_open(void) {
   lv_obj_t * list = lv_list_create(screen_browser);
   lv_obj_set_size(list, 220, 180);
   lv_obj_center(list);
-  lv_obj_set_style_bg_color(list, lv_color_black(), 0);
-  lv_obj_set_style_text_color(list, lv_color_white(), 0);
+  lv_obj_set_style_bg_color(list, current_theme.screen_base, 0);
+  lv_obj_set_style_text_color(list, current_theme.text_main, 0);
   lv_obj_set_style_border_color(list, lv_palette_main(LV_PALETTE_DEEP_PURPLE), 0);
   lv_obj_set_style_border_width(list, 2, 0);
 
@@ -70,15 +71,15 @@ void ui_badusb_browser_open(void) {
       if (de->d_type == DT_REG) { // Only list files
         lv_obj_t* btn = lv_list_add_button(list, LV_SYMBOL_FILE, de->d_name);
         lv_obj_add_event_cb(btn, file_select_event_handler, LV_EVENT_KEY, NULL);
-        lv_obj_set_style_bg_color(btn, lv_color_black(), 0);
-        lv_obj_set_style_text_color(btn, lv_color_white(), 0);
+        lv_obj_set_style_bg_color(btn, current_theme.screen_base, 0);
+        lv_obj_set_style_text_color(btn, current_theme.text_main, 0);
       }
     }
     closedir(dir);
   } else {
     lv_obj_t* btn = lv_list_add_button(list, LV_SYMBOL_WARNING, "Directory not found");
-    lv_obj_set_style_bg_color(btn, lv_color_black(), 0);
-    lv_obj_set_style_text_color(btn, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(btn, current_theme.screen_base, 0);
+    lv_obj_set_style_text_color(btn, current_theme.text_main, 0);
   }
 
   footer_ui_create(screen_browser);

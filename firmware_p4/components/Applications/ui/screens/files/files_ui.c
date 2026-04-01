@@ -1,3 +1,4 @@
+#include "ui_theme.h"
 #include "files_ui.h"
 #include "text_viewer_ui.h"
 #include "ui_manager.h"
@@ -11,11 +12,11 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
-#define BORDER_COLOR     lv_color_make(0x3A, 0x1D, 0x6E)
-#define ITEM_BORDER      lv_color_make(0xB8, 0x9A, 0xFF)
-#define GRAD_LEFT        lv_color_make(0x3A, 0x1D, 0x6E)
-#define GRAD_RIGHT       lv_color_make(0x0D, 0x08, 0x20)
-#define SEL_BORDER       lv_color_make(0xB8, 0x9A, 0xFF)
+#define BORDER_COLOR     current_theme.border_interface
+#define ITEM_BORDER      current_theme.border_accent
+#define GRAD_LEFT        current_theme.border_interface
+#define GRAD_RIGHT       current_theme.bg_secondary
+#define SEL_BORDER       current_theme.border_accent
 #define OUTER_BORDER     4
 #define TOP_BORDER_H     46
 #define ITEM_H           50
@@ -196,7 +197,7 @@ static void build_file_list(void) {
 
         lv_obj_t * lbl = lv_label_create(item);
         lv_label_set_text(lbl, entry_names[i]);
-        lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+        lv_obj_set_style_text_color(lbl, current_theme.text_main, 0);
         lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
         lv_obj_set_flex_grow(lbl, 1);
         lv_label_set_long_mode(lbl, LV_LABEL_LONG_SCROLL_CIRCULAR);
@@ -204,7 +205,7 @@ static void build_file_list(void) {
         if (entry_is_dir[i]) {
             lv_obj_t * arrow = lv_label_create(item);
             lv_label_set_text(arrow, LV_SYMBOL_REFRESH);
-            lv_obj_set_style_text_color(arrow, lv_color_make(0xB8, 0x9A, 0xFF), 0);
+            lv_obj_set_style_text_color(arrow, current_theme.border_accent, 0);
             lv_obj_set_style_text_font(arrow, &lv_font_montserrat_12, 0);
         }
 
@@ -214,7 +215,7 @@ static void build_file_list(void) {
     if (entry_count == 0) {
         lv_obj_t * empty = lv_label_create(items_cont);
         lv_label_set_text(empty, "Empty folder");
-        lv_obj_set_style_text_color(empty, lv_color_make(0x60, 0x60, 0x60), 0);
+        lv_obj_set_style_text_color(empty, current_theme.border_inactive, 0);
         lv_obj_set_style_text_font(empty, &lv_font_montserrat_12, 0);
     }
 
@@ -227,6 +228,7 @@ static void nav_timer_cb(lv_timer_t * t) {
         nav_timer = NULL;
         return;
     }
+    if (ui_input_is_locked()) return;
 
     bool up    = up_button_is_down();
     bool down  = down_button_is_down();
@@ -278,7 +280,7 @@ static void nav_timer_cb(lv_timer_t * t) {
 void ui_files_open(void) {
     if (screen_files) { lv_obj_del(screen_files); screen_files = NULL; }
     screen_files = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_files, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(screen_files, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(screen_files, LV_OPA_COVER, 0);
     lv_obj_remove_flag(screen_files, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -327,14 +329,14 @@ void ui_files_open(void) {
 
     lv_obj_t * title_lbl = lv_label_create(title_bar);
     lv_label_set_text(title_lbl, "Files");
-    lv_obj_set_style_text_color(title_lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_color(title_lbl, current_theme.text_main, 0);
     lv_obj_set_style_text_font(title_lbl, file_font ? file_font : &lv_font_montserrat_14, 0);
     lv_obj_center(title_lbl);
 
     int content_y = TOP_BORDER_H + 4;
     path_label = lv_label_create(screen_files);
     lv_label_set_text(path_label, current_path);
-    lv_obj_set_style_text_color(path_label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(path_label, current_theme.text_main, 0);
     lv_obj_set_style_text_font(path_label, &lv_font_montserrat_12, 0);
     lv_obj_set_width(path_label, LCD_H_RES - OUTER_BORDER * 2 - 30);
     lv_label_set_long_mode(path_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
@@ -365,7 +367,7 @@ void ui_files_open(void) {
     lv_obj_t * track = lv_line_create(screen_files);
     lv_line_set_points(track, track_pts, 2);
     lv_obj_set_pos(track, track_x, track_y_start);
-    lv_obj_set_style_line_color(track, lv_color_white(), 0);
+    lv_obj_set_style_line_color(track, current_theme.text_main, 0);
     lv_obj_set_style_line_opa(track, LV_OPA_COVER, 0);
     lv_obj_set_style_line_width(track, 3, 0);
     lv_obj_set_style_line_dash_width(track, 4, 0);

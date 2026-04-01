@@ -1,14 +1,15 @@
 #include "text_viewer_ui.h"
 #include "assets_manager.h"
+#include "ui_theme.h"
 #include "st7789.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define BORDER_COLOR    lv_color_make(0x3A, 0x1D, 0x6E)
-#define ITEM_BORDER     lv_color_make(0xB8, 0x9A, 0xFF)
-#define GRAD_LEFT       lv_color_make(0x3A, 0x1D, 0x6E)
-#define GRAD_RIGHT      lv_color_make(0x0D, 0x08, 0x20)
+#define BORDER_COLOR    current_theme.border_interface
+#define ITEM_BORDER     current_theme.border_accent
+#define GRAD_LEFT       current_theme.bg_primary
+#define GRAD_RIGHT      current_theme.bg_secondary
 #define OUTER_BORDER    4
 #define TOP_BORDER_H    46
 
@@ -38,7 +39,7 @@ text_viewer_t text_viewer_create(lv_obj_t * parent, const char * filename)
     lv_obj_set_size(tv.screen, LCD_H_RES, LCD_V_RES);
     lv_obj_align(tv.screen, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_remove_flag(tv.screen, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(tv.screen, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(tv.screen, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(tv.screen, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(tv.screen, 0, 0);
     lv_obj_set_style_border_width(tv.screen, OUTER_BORDER, 0);
@@ -70,13 +71,13 @@ text_viewer_t text_viewer_create(lv_obj_t * parent, const char * filename)
 
     tv.title_label = lv_label_create(title_bar);
     lv_label_set_text(tv.title_label, filename ? filename : "File");
-    lv_obj_set_style_text_color(tv.title_label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(tv.title_label, current_theme.text_main, 0);
     lv_obj_set_style_text_font(tv.title_label, &lv_font_montserrat_12, 0);
     lv_obj_center(tv.title_label);
 
     tv.line_label = lv_label_create(tv.screen);
     lv_label_set_text(tv.line_label, "");
-    lv_obj_set_style_text_color(tv.line_label, lv_color_make(0xB8, 0x9A, 0xFF), 0);
+    lv_obj_set_style_text_color(tv.line_label, current_theme.border_accent, 0);
     lv_obj_set_style_text_font(tv.line_label, &lv_font_montserrat_12, 0);
     lv_obj_align(tv.line_label, LV_ALIGN_TOP_MID, 0, TOP_BORDER_H + 2);
 
@@ -102,7 +103,7 @@ text_viewer_t text_viewer_create(lv_obj_t * parent, const char * filename)
     lv_obj_t * track = lv_line_create(tv.screen);
     lv_line_set_points(track, track_pts, 2);
     lv_obj_set_pos(track, track_x, tv.track_y_start);
-    lv_obj_set_style_line_color(track, lv_color_white(), 0);
+    lv_obj_set_style_line_color(track, current_theme.text_main, 0);
     lv_obj_set_style_line_opa(track, LV_OPA_COVER, 0);
     lv_obj_set_style_line_width(track, 3, 0);
     lv_obj_set_style_line_dash_width(track, 4, 0);
@@ -128,7 +129,7 @@ void text_viewer_load_file(text_viewer_t * tv, const char * path)
     if (!f) {
         lv_obj_t * lbl = lv_label_create(tv->text_area);
         lv_label_set_text(lbl, "Failed to open file");
-        lv_obj_set_style_text_color(lbl, lv_color_make(0xFF, 0x40, 0x40), 0);
+        lv_obj_set_style_text_color(lbl, current_theme.border_accent, 0);
         lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
         return;
     }
@@ -158,7 +159,7 @@ void text_viewer_set_text(text_viewer_t * tv, const char * text)
 
     lv_obj_t * lbl = lv_label_create(tv->text_area);
     lv_label_set_text(lbl, text ? text : "");
-    lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl, current_theme.text_main, 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
     lv_obj_set_width(lbl, LCD_H_RES - OUTER_BORDER * 2 - 36);
     lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);

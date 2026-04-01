@@ -1,10 +1,11 @@
 #include "button_ui.h"
 #include "assets_manager.h"
+#include "ui_theme.h"
 
-#define BTN_BG          lv_color_make(0x3A, 0x1D, 0x6E)
-#define BTN_GRAD        lv_color_make(0x6A, 0x3C, 0xBF)
-#define BTN_BORDER      lv_color_make(0x3A, 0x1D, 0x6E)
-#define BTN_SEL_BORDER  lv_color_make(0xB8, 0x9A, 0xFF)
+#define BTN_BG          current_theme.bg_primary
+#define BTN_GRAD        current_theme.bg_secondary
+#define BTN_BORDER      current_theme.border_interface
+#define BTN_SEL_BORDER  current_theme.border_accent
 
 button_ui_t button_ui_create(lv_obj_t * parent,
                              lv_coord_t width,
@@ -51,7 +52,7 @@ button_ui_t button_ui_create(lv_obj_t * parent,
 
     b.label = lv_label_create(b.obj);
     lv_label_set_text(b.label, text ? text : "");
-    lv_obj_set_style_text_color(b.label, lv_color_white(), 0);
+    lv_obj_set_style_text_color(b.label, current_theme.text_main, 0);
     lv_obj_set_style_text_font(b.label, &lv_font_montserrat_12, 0);
 
     return b;

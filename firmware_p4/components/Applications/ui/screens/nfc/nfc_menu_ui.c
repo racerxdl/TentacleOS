@@ -1,3 +1,4 @@
+#include "ui_theme.h"
 #include "nfc_menu_ui.h"
 #include "menu_component_ui.h"
 #include "ui_manager.h"
@@ -34,6 +35,7 @@ static void nav_timer_cb(lv_timer_t * t) {
         nav_timer = NULL;
         return;
     }
+    if (ui_input_is_locked()) return;
     bool up    = up_button_is_down();
     bool down  = down_button_is_down();
     bool left  = left_button_is_down();
@@ -63,7 +65,7 @@ static void nav_timer_cb(lv_timer_t * t) {
 void ui_nfc_menu_open(void) {
     if (screen_nfc) { lv_obj_del(screen_nfc); screen_nfc = NULL; }
     screen_nfc = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_nfc, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(screen_nfc, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(screen_nfc, LV_OPA_COVER, 0);
     lv_obj_remove_flag(screen_nfc, LV_OBJ_FLAG_SCROLLABLE);
 

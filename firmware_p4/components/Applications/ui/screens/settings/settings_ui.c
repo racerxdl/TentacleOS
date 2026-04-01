@@ -1,3 +1,4 @@
+#include "ui_theme.h"
 #include "settings_ui.h"
 #include "menu_component_ui.h"
 #include "ui_manager.h"
@@ -37,6 +38,7 @@ static void nav_timer_cb(lv_timer_t * t) {
         nav_timer = NULL;
         return;
     }
+    if (ui_input_is_locked()) return;
     bool up    = up_button_is_down();
     bool down  = down_button_is_down();
     bool left  = left_button_is_down();
@@ -72,7 +74,7 @@ void ui_settings_open(void) {
     if (screen_settings) { lv_obj_del(screen_settings); screen_settings = NULL; }
 
     screen_settings = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_settings, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(screen_settings, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(screen_settings, LV_OPA_COVER, 0);
     lv_obj_remove_flag(screen_settings, LV_OBJ_FLAG_SCROLLABLE);
 

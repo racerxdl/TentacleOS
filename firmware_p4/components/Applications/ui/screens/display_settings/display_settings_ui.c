@@ -1,3 +1,4 @@
+#include "ui_theme.h"
 #include "display_settings_ui.h"
 #include "menu_component_ui.h"
 #include "ui_manager.h"
@@ -41,6 +42,7 @@ static void nav_timer_cb(lv_timer_t * t) {
         nav_timer = NULL;
         return;
     }
+    if (ui_input_is_locked()) return;
     bool up    = up_button_is_down();
     bool down  = down_button_is_down();
     bool left  = left_button_is_down();
@@ -101,7 +103,7 @@ void ui_display_settings_open(void) {
     rotation_val = lcd_get_rotation();
 
     screen_display = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_display, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(screen_display, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(screen_display, LV_OPA_COVER, 0);
     lv_obj_remove_flag(screen_display, LV_OBJ_FLAG_SCROLLABLE);
 

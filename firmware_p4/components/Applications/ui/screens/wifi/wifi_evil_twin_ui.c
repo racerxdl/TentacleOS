@@ -1,5 +1,6 @@
 // Copyright (c) 2025 HIGH CODE LLC
 #include "wifi_evil_twin_ui.h"
+#include "ui_theme.h"
 #include "ui_manager.h"
 #include "header_ui.h"
 #include "footer_ui.h"
@@ -181,13 +182,13 @@ static void show_monitor_view(void) {
     lv_obj_set_size(ta_term, 230, 125);
     lv_obj_align(ta_term, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_text_font(ta_term, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_bg_color(ta_term, lv_color_black(), 0);
-    lv_obj_set_style_text_color(ta_term, lv_color_hex(0x00FF00), 0);
+    lv_obj_set_style_bg_color(ta_term, current_theme.screen_base, 0);
+    lv_obj_set_style_text_color(ta_term, current_theme.border_accent, 0);
     lv_obj_set_style_radius(ta_term, 0, 0);
     lv_obj_set_style_border_width(ta_term, 1, 0);
-    lv_obj_set_style_border_color(ta_term, lv_color_hex(0x00FF00), 0);
+    lv_obj_set_style_border_color(ta_term, current_theme.border_accent, 0);
     lv_obj_set_style_border_width(ta_term, 1, LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_border_color(ta_term, lv_color_hex(0x00FF00), LV_STATE_FOCUS_KEY);
+    lv_obj_set_style_border_color(ta_term, current_theme.border_accent, LV_STATE_FOCUS_KEY);
     lv_obj_set_style_outline_width(ta_term, 0, LV_STATE_FOCUS_KEY);
 
     evil_twin_reset_capture();

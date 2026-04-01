@@ -1,13 +1,14 @@
 #include "msgbox_ui.h"
+#include "ui_theme.h"
 #include "assets_manager.h"
 #include "buttons_gpio.h"
 #include "st7789.h"
 
 #define MSGBOX_H        ((LCD_V_RES * 45) / 100)
 #define ANIM_TIME       300
-#define BORDER_COLOR    lv_color_make(0xB8, 0x9A, 0xFF)
-#define GRAD_TOP        lv_color_make(0x3A, 0x1D, 0x6E)
-#define GRAD_BOT        lv_color_make(0x0D, 0x08, 0x20)
+#define BORDER_COLOR    current_theme.border_accent
+#define GRAD_TOP        current_theme.border_interface
+#define GRAD_BOT        current_theme.bg_secondary
 #define BTN_W           80
 #define BTN_H           28
 
@@ -33,7 +34,7 @@ static void update_btn_selection(void) {
             lv_obj_set_style_border_color(btn_objs[i], BORDER_COLOR, 0);
         } else {
             lv_obj_set_style_border_width(btn_objs[i], 1, 0);
-            lv_obj_set_style_border_color(btn_objs[i], lv_color_make(0x3A, 0x1D, 0x6E), 0);
+            lv_obj_set_style_border_color(btn_objs[i], current_theme.border_interface, 0);
         }
     }
 }
@@ -121,12 +122,12 @@ static lv_obj_t * create_btn(lv_obj_t * parent, const char * text) {
     lv_obj_set_style_bg_grad_color(btn, GRAD_TOP, 0);
     lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_VER, 0);
     lv_obj_set_style_border_width(btn, 1, 0);
-    lv_obj_set_style_border_color(btn, lv_color_make(0x3A, 0x1D, 0x6E), 0);
+    lv_obj_set_style_border_color(btn, current_theme.border_interface, 0);
     lv_obj_set_style_pad_all(btn, 0, 0);
 
     lv_obj_t * lbl = lv_label_create(btn);
     lv_label_set_text(lbl, text);
-    lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl, current_theme.text_main, 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
     lv_obj_center(lbl);
 
@@ -178,7 +179,7 @@ void msgbox_open(const char * icon, const char * msg, const char * btn_ok, const
 
     lv_obj_t * msg_lbl = lv_label_create(content);
     lv_label_set_text(msg_lbl, msg ? msg : "");
-    lv_obj_set_style_text_color(msg_lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_color(msg_lbl, current_theme.text_main, 0);
     lv_obj_set_style_text_font(msg_lbl, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_align(msg_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(msg_lbl, LV_LABEL_LONG_WRAP);

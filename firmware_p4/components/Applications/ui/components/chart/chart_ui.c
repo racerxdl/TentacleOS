@@ -1,14 +1,15 @@
 #include "chart_ui.h"
+#include "ui_theme.h"
 #include "st7789.h"
 
-#define BORDER_COLOR    lv_color_make(0x3A, 0x1D, 0x6E)
-#define ITEM_BORDER     lv_color_make(0xB8, 0x9A, 0xFF)
-#define BAR_COLOR       lv_color_make(0xB8, 0x9A, 0xFF)
-#define GRAD_TOP        lv_color_make(0x3A, 0x1D, 0x6E)
-#define GRAD_BOT        lv_color_make(0x0D, 0x08, 0x20)
-#define BTN_BG          lv_color_make(0x3A, 0x1D, 0x6E)
-#define BTN_GRAD        lv_color_make(0x6A, 0x3C, 0xBF)
-#define SEL_BORDER      lv_color_make(0xB8, 0x9A, 0xFF)
+#define BORDER_COLOR    current_theme.border_interface
+#define ITEM_BORDER     current_theme.border_accent
+#define BAR_COLOR       current_theme.border_accent
+#define GRAD_TOP        current_theme.border_interface
+#define GRAD_BOT        current_theme.bg_secondary
+#define BTN_BG          current_theme.border_interface
+#define BTN_GRAD        current_theme.border_accent
+#define SEL_BORDER      current_theme.border_accent
 
 #define OUTER_BORDER    4
 #define PANEL_H         80
@@ -37,7 +38,7 @@ chart_ui_t chart_ui_create(lv_obj_t * parent, const char * title)
     lv_obj_set_size(ch.screen, LCD_H_RES, LCD_V_RES);
     lv_obj_align(ch.screen, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_remove_flag(ch.screen, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(ch.screen, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(ch.screen, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(ch.screen, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(ch.screen, 0, 0);
     lv_obj_set_style_border_width(ch.screen, 0, 0);
@@ -55,7 +56,7 @@ chart_ui_t chart_ui_create(lv_obj_t * parent, const char * title)
     lv_chart_set_range(ch.chart, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
     lv_chart_set_div_line_count(ch.chart, 4, 0);
 
-    lv_obj_set_style_bg_color(ch.chart, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(ch.chart, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(ch.chart, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(ch.chart, 1, 0);
     lv_obj_set_style_border_color(ch.chart, BORDER_COLOR, 0);
@@ -63,7 +64,7 @@ chart_ui_t chart_ui_create(lv_obj_t * parent, const char * title)
     lv_obj_set_style_pad_all(ch.chart, 4, 0);
     lv_obj_set_style_pad_left(ch.chart, 28, 0);
     lv_obj_set_style_pad_bottom(ch.chart, 15, 0);
-    lv_obj_set_style_line_color(ch.chart, lv_color_make(0x2A, 0x18, 0x50), 0);
+    lv_obj_set_style_line_color(ch.chart, current_theme.border_inactive, 0);
     lv_obj_set_style_line_width(ch.chart, 1, 0);
 
     static const char * y_labels[] = {"100", "75", "50", "25", "0"};
@@ -72,7 +73,7 @@ chart_ui_t chart_ui_create(lv_obj_t * parent, const char * title)
     for (int i = 0; i < 5; i++) {
         lv_obj_t * yl = lv_label_create(ch.screen);
         lv_label_set_text(yl, y_labels[i]);
-        lv_obj_set_style_text_color(yl, lv_color_white(), 0);
+        lv_obj_set_style_text_color(yl, current_theme.text_main, 0);
         lv_obj_set_style_text_font(yl, &lv_font_montserrat_12, 0);
         int py = chart_y + 4 + (chart_inner_h * y_positions[i]) / 100;
         lv_obj_set_pos(yl, OUTER_BORDER + 2, py - 5);
@@ -136,7 +137,7 @@ void chart_ui_add_btn(chart_ui_t * ch, const char * label, lv_color_t dot_color)
 
     lv_obj_t * lbl = lv_label_create(btn);
     lv_label_set_text(lbl, label ? label : "");
-    lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl, current_theme.text_main, 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
 
     ch->btns[idx] = btn;

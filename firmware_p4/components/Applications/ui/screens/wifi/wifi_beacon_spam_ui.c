@@ -1,5 +1,6 @@
 // Copyright (c) 2025 HIGH CODE LLC
 #include "wifi_beacon_spam_ui.h"
+#include "ui_theme.h"
 #include "ui_manager.h"
 #include "header_ui.h"
 #include "footer_ui.h"
@@ -40,7 +41,7 @@ static void toggle_start_handler(lv_event_t * e) {
         if (beacon_spam_is_running()) {
             beacon_spam_stop();
             lv_label_set_text(lv_obj_get_child(btn_start, 0), "START SPAM");
-            lv_obj_set_style_bg_color(btn_start, lv_color_hex(0x004400), 0);
+            lv_obj_set_style_bg_color(btn_start, current_theme.bg_item_top, 0);
             lv_label_set_text(lbl_status, "Status: STOPPED");
             if (btn_mode) lv_obj_clear_state(btn_mode, LV_STATE_DISABLED);
         } else {
@@ -53,7 +54,7 @@ static void toggle_start_handler(lv_event_t * e) {
 
             if (success) {
                 lv_label_set_text(lv_obj_get_child(btn_start, 0), "STOP SPAM");
-                lv_obj_set_style_bg_color(btn_start, lv_color_hex(0x440000), 0);
+                lv_obj_set_style_bg_color(btn_start, current_theme.bg_item_bot, 0);
                 lv_label_set_text(lbl_status, "Status: SPAMMING...");
                 if (btn_mode) lv_obj_add_state(btn_mode, LV_STATE_DISABLED);
             } else {
@@ -86,7 +87,7 @@ void ui_wifi_beacon_spam_open(void) {
 
     lv_obj_t * title = lv_label_create(screen_spam);
     lv_label_set_text(title, "BEACON SPAM");
-    lv_obj_set_style_text_color(title, lv_color_hex(0x00FFFF), 0); // Cyan
+    lv_obj_set_style_text_color(title, current_theme.text_main, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 30);
 
     btn_mode = lv_btn_create(screen_spam);
@@ -100,7 +101,7 @@ void ui_wifi_beacon_spam_open(void) {
     btn_start = lv_btn_create(screen_spam);
     lv_obj_set_size(btn_start, 160, 40);
     lv_obj_align(btn_start, LV_ALIGN_CENTER, 0, 30);
-    lv_obj_set_style_bg_color(btn_start, lv_color_hex(0x004400), 0);
+    lv_obj_set_style_bg_color(btn_start, current_theme.bg_item_top, 0);
     
     lv_obj_t * lbl_btn = lv_label_create(btn_start);
     lv_label_set_text(lbl_btn, "START SPAM");
@@ -108,7 +109,7 @@ void ui_wifi_beacon_spam_open(void) {
 
     lbl_status = lv_label_create(screen_spam);
     lv_label_set_text(lbl_status, "Status: READY");
-    lv_obj_set_style_text_color(lbl_status, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl_status, current_theme.text_main, 0);
     lv_obj_align(lbl_status, LV_ALIGN_BOTTOM_MID, 0, -30);
 
     lv_obj_add_event_cb(btn_mode, toggle_mode_handler, LV_EVENT_KEY, NULL);

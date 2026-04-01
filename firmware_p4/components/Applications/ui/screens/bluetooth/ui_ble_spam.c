@@ -14,6 +14,7 @@
 
 
 #include "ui_ble_spam.h"
+#include "ui_theme.h"
 #include "canned_spam.h"
 #include "ui_manager.h"
 #include "header_ui.h"
@@ -22,7 +23,7 @@
 #include "esp_log.h"
 #include <stdio.h>
 
-#define BG_COLOR lv_color_black()
+#define BG_COLOR current_theme.screen_base
 
 static lv_obj_t * screen_spam = NULL;
 static char current_spam_name[32] = "Unknown";
@@ -61,19 +62,19 @@ void ui_ble_spam_open(void) {
   lv_label_set_text_fmt(lbl_title, "SPAM RUNNING:\n#FF0000 %s#", current_spam_name);
   lv_label_set_recolor(lbl_title, true);
   lv_obj_set_style_text_align(lbl_title, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_color(lbl_title, lv_color_white(), 0);
+  lv_obj_set_style_text_color(lbl_title, current_theme.text_main, 0);
   lv_obj_center(lbl_title);
   lv_obj_set_y(lbl_title, -20);
 
   lv_obj_t * lbl_instr = lv_label_create(screen_spam);
   lv_label_set_text(lbl_instr, "Press BACK to Stop");
-  lv_obj_set_style_text_color(lbl_instr, lv_color_white(), 0);
+  lv_obj_set_style_text_color(lbl_instr, current_theme.text_main, 0);
   lv_obj_align(lbl_instr, LV_ALIGN_CENTER, 0, 40);
 
   lv_obj_t * spinner = lv_spinner_create(screen_spam);
   lv_obj_set_size(spinner, 15, 15);
   lv_obj_align(spinner, LV_ALIGN_BOTTOM_MID, 0, -40);
-  lv_obj_set_style_arc_color(spinner, lv_color_hex(0xFF0000), LV_PART_INDICATOR);
+  lv_obj_set_style_arc_color(spinner, current_theme.border_accent, LV_PART_INDICATOR);
 
   lv_obj_add_event_cb(screen_spam, spam_event_cb, LV_EVENT_KEY, NULL);
 

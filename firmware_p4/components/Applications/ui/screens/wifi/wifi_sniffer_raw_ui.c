@@ -1,4 +1,5 @@
 #include "wifi_sniffer_raw_ui.h"
+#include "ui_theme.h"
 #include "header_ui.h"
 #include "footer_ui.h"
 #include "ui_theme.h"
@@ -172,13 +173,13 @@ void ui_wifi_sniffer_raw_open(void) {
     lv_obj_set_size(ta_term, 230, 125);
     lv_obj_align(ta_term, LV_ALIGN_TOP_MID, 0, 30);
     lv_obj_set_style_text_font(ta_term, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_bg_color(ta_term, lv_color_black(), 0);
-    lv_obj_set_style_text_color(ta_term, lv_color_hex(0x00FF00), 0);
+    lv_obj_set_style_bg_color(ta_term, current_theme.screen_base, 0);
+    lv_obj_set_style_text_color(ta_term, current_theme.border_accent, 0);
     lv_obj_set_style_radius(ta_term, 0, 0);
     lv_obj_set_style_border_width(ta_term, 1, 0);
-    lv_obj_set_style_border_color(ta_term, lv_color_hex(0x00FF00), 0);
+    lv_obj_set_style_border_color(ta_term, current_theme.border_accent, 0);
     lv_obj_set_style_border_width(ta_term, 1, LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_border_color(ta_term, lv_color_hex(0x00FF00), LV_STATE_FOCUS_KEY);
+    lv_obj_set_style_border_color(ta_term, current_theme.border_accent, LV_STATE_FOCUS_KEY);
     lv_obj_set_style_outline_width(ta_term, 0, LV_STATE_FOCUS_KEY);
     lv_textarea_set_text(ta_term, "Listening...\n");
 
@@ -191,7 +192,7 @@ void ui_wifi_sniffer_raw_open(void) {
     lv_obj_set_style_border_width(btn_save, 1, 0);
     lv_obj_set_style_border_color(btn_save, current_theme.border_inactive, 0);
     lv_obj_set_style_radius(btn_save, 4, 0);
-    lv_obj_set_style_text_color(btn_save, lv_color_white(), 0);
+    lv_obj_set_style_text_color(btn_save, current_theme.text_main, 0);
     lv_obj_set_style_border_color(btn_save, current_theme.border_accent, LV_STATE_FOCUS_KEY);
     lv_obj_set_style_border_width(btn_save, 2, LV_STATE_FOCUS_KEY);
 

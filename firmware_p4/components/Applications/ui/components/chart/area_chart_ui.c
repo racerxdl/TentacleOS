@@ -1,16 +1,17 @@
 #include "area_chart_ui.h"
+#include "ui_theme.h"
 #include "st7789.h"
 
-#define BORDER_COLOR    lv_color_make(0x3A, 0x1D, 0x6E)
-#define ITEM_BORDER     lv_color_make(0xB8, 0x9A, 0xFF)
-#define GRAD_TOP        lv_color_make(0x3A, 0x1D, 0x6E)
-#define GRAD_BOT        lv_color_make(0x0D, 0x08, 0x20)
-#define LINE_COLOR      lv_color_make(0x9A, 0x7A, 0xEF)
-#define AREA_TOP_COLOR  lv_color_make(0x9A, 0x7A, 0xEF)
-#define AREA_BOT_COLOR  lv_color_make(0xD4, 0xC0, 0xFF)
-#define BTN_BG          lv_color_make(0x3A, 0x1D, 0x6E)
-#define BTN_GRAD        lv_color_make(0x6A, 0x3C, 0xBF)
-#define SEL_BORDER      lv_color_make(0xB8, 0x9A, 0xFF)
+#define BORDER_COLOR    current_theme.border_interface
+#define ITEM_BORDER     current_theme.border_accent
+#define GRAD_TOP        current_theme.border_interface
+#define GRAD_BOT        current_theme.bg_secondary
+#define LINE_COLOR      current_theme.border_accent
+#define AREA_TOP_COLOR  current_theme.border_accent
+#define AREA_BOT_COLOR  current_theme.border_accent
+#define BTN_BG          current_theme.border_interface
+#define BTN_GRAD        current_theme.border_accent
+#define SEL_BORDER      current_theme.border_accent
 
 #define OUTER_BORDER    4
 #define PANEL_H         80
@@ -39,7 +40,7 @@ area_chart_ui_t area_chart_ui_create(lv_obj_t * parent)
     lv_obj_set_size(ch.screen, LCD_H_RES, LCD_V_RES);
     lv_obj_align(ch.screen, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_remove_flag(ch.screen, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(ch.screen, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(ch.screen, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(ch.screen, LV_OPA_COVER, 0);
     lv_obj_set_style_pad_all(ch.screen, 0, 0);
     lv_obj_set_style_border_width(ch.screen, 0, 0);
@@ -57,13 +58,13 @@ area_chart_ui_t area_chart_ui_create(lv_obj_t * parent)
     lv_chart_set_range(ch.chart, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
     lv_chart_set_div_line_count(ch.chart, 4, 0);
 
-    lv_obj_set_style_bg_color(ch.chart, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(ch.chart, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(ch.chart, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(ch.chart, 1, 0);
     lv_obj_set_style_border_color(ch.chart, BORDER_COLOR, 0);
     lv_obj_set_style_radius(ch.chart, 0, 0);
     lv_obj_set_style_pad_all(ch.chart, 8, 0);
-    lv_obj_set_style_line_color(ch.chart, lv_color_make(0x1A, 0x0E, 0x33), 0);
+    lv_obj_set_style_line_color(ch.chart, current_theme.bg_item_bot, 0);
     lv_obj_set_style_line_width(ch.chart, 1, 0);
 
     lv_obj_set_style_line_color(ch.chart, LINE_COLOR, LV_PART_ITEMS);
@@ -128,7 +129,7 @@ void area_chart_ui_add_btn(area_chart_ui_t * ch, const char * label, lv_color_t 
 
     lv_obj_t * lbl = lv_label_create(btn);
     lv_label_set_text(lbl, label ? label : "");
-    lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl, current_theme.text_main, 0);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_12, 0);
 
     ch->btns[idx] = btn;

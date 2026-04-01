@@ -13,6 +13,7 @@
 // limitations under the License.
 
 
+#include "ui_theme.h"
 #include "ui_badusb_running.h"
 #include "ui_manager.h"
 #include "header_ui.h"
@@ -81,7 +82,7 @@ void ui_badusb_running_open(void) {
   if (screen_running) lv_obj_del(screen_running);
 
   screen_running = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(screen_running, lv_color_black(), 0);
+  lv_obj_set_style_bg_color(screen_running, current_theme.screen_base, 0);
   lv_obj_remove_flag(screen_running, LV_OBJ_FLAG_SCROLLABLE);
 
   header_ui_create(screen_running);

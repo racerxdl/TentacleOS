@@ -1,4 +1,5 @@
 #include "subghz_spectrum_ui.h"
+#include "ui_theme.h"
 #include "header_ui.h"
 #include "footer_ui.h"
 #include "subghz_spectrum.h"
@@ -51,9 +52,9 @@ static void update_spectrum_cb(lv_timer_t * t) {
         lv_label_set_text(lbl_rssi_info, buf);
 
         if (max_dbm > -60) {
-            lv_obj_set_style_text_color(lbl_rssi_info, lv_color_hex(0xFFFF00), 0);
+            lv_obj_set_style_text_color(lbl_rssi_info, current_theme.border_accent, 0);
         } else {
-            lv_obj_set_style_text_color(lbl_rssi_info, lv_color_hex(0x00FF00), 0);
+            lv_obj_set_style_text_color(lbl_rssi_info, current_theme.border_accent, 0);
         }
     }
 
@@ -100,7 +101,7 @@ void ui_subghz_spectrum_open(void) {
     }
 
     screen_spectrum = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_spectrum, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(screen_spectrum, current_theme.screen_base, 0);
     lv_obj_remove_flag(screen_spectrum, LV_OBJ_FLAG_SCROLLABLE);
 
     /* --- CHART --- */
@@ -117,31 +118,31 @@ void ui_subghz_spectrum_open(void) {
     lv_obj_set_style_height(chart, 0, LV_PART_INDICATOR);
     lv_obj_set_style_line_width(chart, 2, LV_PART_ITEMS);
 
-    lv_obj_set_style_bg_color(chart, lv_color_hex(0x110022), 0);
-    lv_obj_set_style_border_color(chart, lv_color_hex(0x5500AA), 0);
+    lv_obj_set_style_bg_color(chart, current_theme.bg_primary, 0);
+    lv_obj_set_style_border_color(chart, current_theme.border_interface, 0);
     lv_obj_set_style_border_width(chart, 1, 0);
 
-    ser_rssi = lv_chart_add_series(chart, lv_color_hex(0x00FF00), LV_CHART_AXIS_PRIMARY_Y);
+    ser_rssi = lv_chart_add_series(chart, current_theme.border_accent, LV_CHART_AXIS_PRIMARY_Y);
 
     lv_obj_set_style_bg_opa(chart, 80, LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(chart, lv_color_hex(0x00FF00), LV_PART_ITEMS);
-    lv_obj_set_style_bg_grad_color(chart, lv_color_hex(0x220044), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(chart, current_theme.border_accent, LV_PART_ITEMS);
+    lv_obj_set_style_bg_grad_color(chart, current_theme.bg_secondary, LV_PART_ITEMS);
     lv_obj_set_style_bg_grad_dir(chart, LV_GRAD_DIR_VER, LV_PART_ITEMS);
 
     lv_obj_set_style_line_dash_width(chart, 0, LV_PART_MAIN);
-    lv_obj_set_style_line_color(chart, lv_color_hex(0x440066), LV_PART_MAIN);
+    lv_obj_set_style_line_color(chart, current_theme.border_inactive, LV_PART_MAIN);
 
     /* --- INFO LABELS --- */
     lbl_freq_info = lv_label_create(screen_spectrum);
     lv_label_set_text(lbl_freq_info, "433.92 MHz");
     lv_obj_set_style_text_font(lbl_freq_info, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_freq_info, lv_color_hex(0xCC88FF), 0);
+    lv_obj_set_style_text_color(lbl_freq_info, current_theme.text_main, 0);
     lv_obj_align(lbl_freq_info, LV_ALIGN_BOTTOM_LEFT, 0, -35);
 
     lbl_rssi_info = lv_label_create(screen_spectrum);
     lv_label_set_text(lbl_rssi_info, "Peak: --- dBm");
     lv_obj_set_style_text_font(lbl_rssi_info, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_rssi_info, lv_color_hex(0x00FF00), 0);
+    lv_obj_set_style_text_color(lbl_rssi_info, current_theme.border_accent, 0);
     lv_obj_align(lbl_rssi_info, LV_ALIGN_BOTTOM_RIGHT, 0, -35);
 
     /* --- COMMON UI --- */

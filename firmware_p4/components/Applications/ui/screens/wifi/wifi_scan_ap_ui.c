@@ -1,4 +1,5 @@
 #include "wifi_scan_ap_ui.h"
+#include "ui_theme.h"
 #include "header_ui.h"
 #include "footer_ui.h"
 #include "ui_theme.h"
@@ -147,9 +148,9 @@ static void add_ap_item(const wifi_ap_record_t * ap) {
     lv_label_set_long_mode(line2, LV_LABEL_LONG_SCROLL_CIRCULAR);
 
     if (ap->authmode == WIFI_AUTH_OPEN) {
-        lv_obj_set_style_text_color(line2, lv_color_hex(0x00FF00), 0);
+        lv_obj_set_style_text_color(line2, current_theme.border_accent, 0);
     } else {
-        lv_obj_set_style_text_color(line2, lv_color_hex(0xFF3333), 0);
+        lv_obj_set_style_text_color(line2, current_theme.border_inactive, 0);
     }
 
     lv_obj_add_event_cb(item, item_focus_cb, LV_EVENT_ALL, NULL);

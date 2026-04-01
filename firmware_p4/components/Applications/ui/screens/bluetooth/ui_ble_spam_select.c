@@ -13,6 +13,7 @@
 // limitations under the License.
 
 
+#include "ui_theme.h"
 #include "ui_ble_spam_select.h"
 #include "canned_spam.h"
 #include "header_ui.h"
@@ -23,7 +24,7 @@
 #include "esp_log.h"
 #include "font/lv_symbol_def.h"
 
-#define BG_COLOR            lv_color_black()
+#define BG_COLOR            current_theme.screen_base
 #define COLOR_BORDER        0x834EC6
 #define COLOR_GRADIENT_TOP  0x000000
 #define COLOR_GRADIENT_BOT  0x2E0157
