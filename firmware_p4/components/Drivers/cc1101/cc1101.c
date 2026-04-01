@@ -463,8 +463,8 @@ void cc1101_enable_async_mode(uint32_t freq_hz) {
 
   // SmartRC defaults for ASK/OOK Async
   cc1101_write_reg(CC1101_FSCTRL1,  0x06);
-  cc1101_write_reg(CC1101_IOCFG2,   0x0D); // Serial Data Output
-  cc1101_write_reg(CC1101_IOCFG0,   0x2E); // High Impedance (GDO2 is used for RMT)
+  cc1101_write_reg(CC1101_IOCFG0,   0x0D); // Serial Data Output (RX via GDO0/GPIO8)
+  cc1101_write_reg(CC1101_IOCFG2,   0x2E); // High Impedance (GDO2 free for TX)
   cc1101_write_reg(CC1101_PKTCTRL0, 0x32); // Async mode, Infinite packet length
   cc1101_write_reg(CC1101_PKTCTRL1, 0x04); // No addr check
 
@@ -501,7 +501,7 @@ void cc1101_enable_async_mode(uint32_t freq_hz) {
   cc1101_write_reg(CC1101_TEST1,    0x35);
   cc1101_write_reg(CC1101_TEST0,    0x09);
 
-  ESP_LOGI(TAG, "CC1101 configurado em Async Mode (GDO2 Active High)");
+  ESP_LOGI(TAG, "CC1101 configurado em Async Mode (GDO0 Serial Out)");
   cc1101_strobe(CC1101_SRX);
 }
 
@@ -515,8 +515,8 @@ void cc1101_enable_fsk_mode(uint32_t freq_hz) {
   vTaskDelay(pdMS_TO_TICKS(5));
 
   cc1101_write_reg(CC1101_FSCTRL1,  0x06);
-  cc1101_write_reg(CC1101_IOCFG2,   0x0D);
-  cc1101_write_reg(CC1101_IOCFG0,   0x2E);
+  cc1101_write_reg(CC1101_IOCFG0,   0x0D); // Serial Data Output (RX via GDO0/GPIO8)
+  cc1101_write_reg(CC1101_IOCFG2,   0x2E); // High Impedance (GDO2 free for TX)
   cc1101_write_reg(CC1101_PKTCTRL0, 0x32);
   cc1101_write_reg(CC1101_PKTCTRL1, 0x04);
   cc1101_write_reg(CC1101_PKTLEN,   0x00);
