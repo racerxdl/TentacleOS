@@ -1,6 +1,6 @@
+#include "ui_theme.h"
 #include "interface_settings_ui.h"
 #include "menu_component_ui.h"
-#include "ui_theme.h"
 #include "ui_manager.h"
 #include "lv_port_indev.h"
 #include "buttons_gpio.h"
@@ -22,17 +22,8 @@ static bool btn_up_last = false;
 static bool btn_down_last = false;
 static bool btn_left_last = false;
 static bool btn_right_last = false;
+static bool btn_ok_last = false;
 static bool btn_back_last = false;
-
-/* External variables managed by ui_theme.c */
-extern int theme_idx;
-extern const char * theme_names[];
-
-const char * theme_options[] = {
-    "DEFAULT", "MATRIX", "CYBER", "BLOOD", "TOXIC", "GHOST",
-    "NEON", "AMBER", "TERM", "ICE", "PURPLE", "MIDNIGHT"
-};
-#define THEME_COUNT 12
 
 int header_idx = 0;
 const char * header_options[] = {"DEFAULT", "GD TOP", "GD BOT", "MINIMAL"};
@@ -49,7 +40,6 @@ void interface_save_config(void) {
     mkdir(FLASH_MOUNT "/config/screen", 0777);
 
     cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "theme", theme_names[theme_idx]);
     cJSON_AddNumberToObject(root, "header_idx", header_idx);
     cJSON_AddBoolToObject(root, "hide_footer", hide_footer);
     cJSON_AddNumberToObject(root, "lang_idx", lang_idx);
@@ -103,10 +93,12 @@ static void nav_timer_cb(lv_timer_t * t) {
         nav_timer = NULL;
         return;
     }
+    if (ui_input_is_locked()) return;
     bool up    = up_button_is_down();
     bool down  = down_button_is_down();
     bool left  = left_button_is_down();
     bool right = right_button_is_down();
+    bool ok    = ok_button_is_down();
     bool back  = back_button_is_down();
 
     /* DOWN / UP — navigate between items */
@@ -124,6 +116,16 @@ static void nav_timer_cb(lv_timer_t * t) {
         return;
     }
 
+    /* OK — open theme selector screen */
+    if (ok && !btn_ok_last) {
+        int sel = menu_component_get_selected(&menu);
+        if (sel == ITEM_THEME) {
+            btn_ok_last = ok;
+            ui_switch_screen(SCREEN_THEME_SELECTOR);
+            return;
+        }
+    }
+
     /* LEFT / RIGHT — change selector values */
     if ((left && !btn_left_last) || (right && !btn_right_last)) {
         int sel = menu_component_get_selected(&menu);
@@ -131,10 +133,7 @@ static void nav_timer_cb(lv_timer_t * t) {
 
         switch (sel) {
         case ITEM_THEME:
-            theme_idx = (theme_idx + dir + THEME_COUNT) % THEME_COUNT;
-            menu_component_set_selector_value(&menu, ITEM_THEME, theme_options[theme_idx]);
-            ui_theme_load_idx(theme_idx);
-            interface_save_config();
+            /* Theme is now selected via dedicated screen (OK button) */
             break;
 
         case ITEM_HEADER:
@@ -158,6 +157,7 @@ static void nav_timer_cb(lv_timer_t * t) {
     btn_down_last  = down;
     btn_left_last  = left;
     btn_right_last = right;
+    btn_ok_last    = ok;
     btn_back_last  = back;
 }
 
@@ -167,13 +167,13 @@ void ui_interface_settings_open(void) {
     if (screen_interface) { lv_obj_del(screen_interface); screen_interface = NULL; }
 
     screen_interface = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_interface, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(screen_interface, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(screen_interface, LV_OPA_COVER, 0);
     lv_obj_remove_flag(screen_interface, LV_OBJ_FLAG_SCROLLABLE);
 
     menu = menu_component_create(screen_interface, "INTERFACE", NULL);
 
-    menu_component_add_selector(&menu, "/assets/icons/theme_menu_icon.bin", "THEME", theme_options[theme_idx]);
+    menu_component_add_item(&menu, "/assets/icons/theme_menu_icon.bin", "THEME");
     menu_component_add_selector(&menu, "/assets/icons/header_menu_icon.bin", "HEADER", header_options[header_idx]);
     menu_component_add_toggle(&menu, NULL, "FOOTER", !hide_footer);
 
