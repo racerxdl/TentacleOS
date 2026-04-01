@@ -32,6 +32,8 @@
 #include "storage_assets.h"
 #include "tos_first_boot.h"
 #include "tos_config.h"
+#include "tos_theme.h"
+#include "tos_log.h"
 #include "lv_port_disp.h"
 #include "lv_port_indev.h"
 #include "ui_manager.h"
@@ -63,7 +65,9 @@ void kernel_init(void) {
 
   tos_first_boot_setup();
   tos_config_load_all();
-  // tos_theme_load_from_sd(); // TODO: fase 6
+  tos_log_init();
+  tos_theme_load_from_sd();
+  TOS_LOGI("kernel", "TentacleOS booted successfully");
 
   led_rgb_init();
   bq25896_init();
