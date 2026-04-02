@@ -63,14 +63,13 @@ Captures RF signals via the CC1101 GDO0 pin routed to the ESP32 RMT RX periphera
 #### API
 
 ```c
-void subghz_receiver_start(subghz_mode_t mode, cc1101_preset_t preset, uint32_t freq);
+esp_err_t subghz_receiver_start(subghz_mode_t mode, cc1101_preset_t preset, uint32_t freq);
 void subghz_receiver_stop(void);
 bool subghz_receiver_is_running(void);
 ```
 - `freq = 0` enables frequency hopping mode.
+- Returns `ESP_OK` on success, `ESP_ERR_INVALID_STATE` if already running, `ESP_ERR_NO_MEM` on task creation failure.
 - Task stack: 8192 bytes, priority 5, Core 1.
-
----
 
 ### Transmitter (`subghz_transmitter`)
 
@@ -81,16 +80,16 @@ Asynchronous queue-based transmitter. Converts signed pulse timings to RMT symbo
 #### API
 
 ```c
-void subghz_tx_init(void);
+esp_err_t subghz_tx_init(void);
 void subghz_tx_stop(void);
-void subghz_tx_send_raw(const int32_t *timings, size_t count);
+esp_err_t subghz_tx_send_raw(const int32_t *timings, size_t count);
 ```
+- `subghz_tx_init` returns `ESP_OK` on success, `ESP_ERR_NO_MEM` on queue creation failure.
+- `subghz_tx_send_raw` returns `ESP_OK` on success, `ESP_ERR_INVALID_ARG` if not running or invalid params, `ESP_ERR_NO_MEM` on allocation failure, `ESP_ERR_TIMEOUT` if queue is full.
 - Queue depth: 10 items. Drops packets if full.
 - Timing data is copied internally; caller retains ownership of the original buffer.
 - Max RMT symbol duration: 32767 us per pulse.
 - Task stack: 4096 bytes, priority 5, Core 1.
-
----
 
 ### Spectrum Analyzer (`subghz_spectrum`)
 
@@ -105,12 +104,12 @@ Sweeps across a frequency span by stepping the CC1101 through discrete frequenci
 
 ```c
 typedef struct {
-    uint32_t center_freq;
-    uint32_t span_hz;
-    uint32_t start_freq;
-    uint32_t step_hz;
-    float dbm_values[80];   // RSSI in dBm per bin
-    uint64_t timestamp;
+  uint32_t center_freq;
+  uint32_t span_hz;
+  uint32_t start_freq;
+  uint32_t step_hz;
+  float dbm_values[SPECTRUM_SAMPLES];
+  uint64_t timestamp;
 } subghz_spectrum_line_t;
 ```
 
@@ -119,12 +118,10 @@ typedef struct {
 ```c
 void subghz_spectrum_start(uint32_t center_freq, uint32_t span_hz);
 void subghz_spectrum_stop(void);
-bool subghz_spectrum_get_line(subghz_spectrum_line_t* out_line);
+bool subghz_spectrum_get_line(subghz_spectrum_line_t *out_line);
 ```
 - Task stack: 4096 bytes, priority 1, Core 1.
 - Thread-safe reads via `subghz_spectrum_get_line`.
-
----
 
 ### Signal Analyzer (`subghz_analyzer`)
 
@@ -140,24 +137,22 @@ Analyzes unknown signals by building a pulse duration histogram to estimate modu
 
 ```c
 typedef struct {
-    uint32_t estimated_te;       // Base time element (us)
-    uint32_t pulse_min;
-    uint32_t pulse_max;
-    size_t pulse_count;
-    const char* modulation_hint; // "PWM", "Manchester" or "Unknown"
-    uint8_t bitstream[128];      // Recovered bits
-    size_t bitstream_len;
+  uint32_t estimated_te;
+  uint32_t pulse_min;
+  uint32_t pulse_max;
+  size_t pulse_count;
+  const char *modulation_hint;
+  uint8_t bitstream[128];
+  size_t bitstream_len;
 } subghz_analyzer_result_t;
 ```
 
 #### API
 
 ```c
-bool subghz_analyzer_process(const int32_t* pulses, size_t count, subghz_analyzer_result_t* out_result);
+bool subghz_analyzer_process(const int32_t *pulses, size_t count, subghz_analyzer_result_t *out_result);
 ```
 - Requires minimum 10 pulses. Filters durations < 50 us as noise.
-
----
 
 ### Protocol Serializer (`subghz_protocol_serializer`)
 
@@ -185,26 +180,23 @@ RAW_Data: 350 -700 350 -350 700 -350 ...
 
 ```c
 uint8_t subghz_protocol_get_preset_id(void);
-size_t subghz_protocol_serialize_decoded(const subghz_data_t* data, uint32_t frequency, uint32_t te, char* out_buf, size_t out_size);
-size_t subghz_protocol_serialize_raw(const int32_t* pulses, size_t count, uint32_t frequency, char* out_buf, size_t out_size);
-size_t subghz_protocol_parse_raw(const char* content, int32_t* out_pulses, size_t max_count, uint32_t* out_frequency, uint8_t* out_preset);
+size_t subghz_protocol_serialize_decoded(const subghz_data_t *data, uint32_t frequency, uint32_t te, char *out_buf, size_t out_size);
+size_t subghz_protocol_serialize_raw(const int32_t *pulses, size_t count, uint32_t frequency, char *out_buf, size_t out_size);
+size_t subghz_protocol_parse_raw(const char *content, int32_t *out_pulses, size_t max_count, uint32_t *out_frequency, uint8_t *out_preset);
 ```
-
----
 
 ### Storage (`subghz_storage`)
 
-Saves captured signals to persistent storage using the serializer. Currently operates in placeholder mode (outputs to stdout).
+Saves captured signals to persistent storage using the serializer. Currently operates in placeholder mode (outputs to log).
 
 #### API
 
 ```c
-void subghz_storage_init(void);
-void subghz_storage_save_decoded(const char* name, const subghz_data_t* data, uint32_t frequency, uint32_t te);
-void subghz_storage_save_raw(const char* name, const int32_t* pulses, size_t count, uint32_t frequency);
+esp_err_t subghz_storage_init(void);
+esp_err_t subghz_storage_save_decoded(const char *name, const subghz_data_t *data, uint32_t frequency, uint32_t te);
+esp_err_t subghz_storage_save_raw(const char *name, const int32_t *pulses, size_t count, uint32_t frequency);
 ```
-
----
+- Returns `ESP_OK` on success, `ESP_ERR_INVALID_ARG` on null arguments, `ESP_ERR_NO_MEM` on allocation failure.
 
 ## Protocol Plugins (`protocols/`)
 
@@ -216,9 +208,9 @@ Every protocol plugin must export a `subghz_protocol_t` struct with two function
 
 ```c
 typedef struct {
-    const char* name;
-    bool (*decode)(const int32_t* pulses, size_t count, subghz_data_t* out_data);
-    size_t (*encode)(const subghz_data_t* data, int32_t* pulses, size_t max_count);
+  const char *name;
+  bool (*decode)(const int32_t *pulses, size_t count, subghz_data_t *out_data);
+  size_t (*encode)(const subghz_data_t *data, int32_t *pulses, size_t max_count);
 } subghz_protocol_t;
 ```
 
@@ -239,7 +231,7 @@ typedef struct {
 3. Export: `subghz_protocol_t protocol_mydevice = { .name = "MyDevice", .decode = ..., .encode = ... };`
 4. Register in `subghz_protocol_registry.c`:
    - Add `extern subghz_protocol_t protocol_mydevice;`
-   - Add `&protocol_mydevice` to the `protocols[]` array
+   - Add `&protocol_mydevice` to the `s_protocols[]` array
 
 ### Registered Plugins
 
@@ -268,19 +260,19 @@ Helper functions available to all plugins for pulse timing validation with perce
 
 ```c
 void subghz_protocol_registry_init(void);
-bool subghz_protocol_registry_decode_all(const int32_t* pulses, size_t count, subghz_data_t* out_data);
-const subghz_protocol_t* subghz_protocol_registry_get_by_name(const char* name);
+bool subghz_protocol_registry_decode_all(const int32_t *pulses, size_t count, subghz_data_t *out_data);
+const subghz_protocol_t *subghz_protocol_registry_get_by_name(const char *name);
 ```
 
 ## Common Types (`subghz_types.h`)
 
 ```c
 typedef struct {
-    const char* protocol_name;
-    uint32_t serial;
-    uint8_t btn;
-    uint8_t bit_count;
-    uint32_t raw_value;
+  const char *protocol_name;
+  uint32_t serial;
+  uint8_t btn;
+  uint8_t bit_count;
+  uint32_t raw_value;
 } subghz_data_t;
 ```
 
