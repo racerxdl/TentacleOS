@@ -75,13 +75,13 @@ Returns the ID of the currently active preset.
 ```c
 void cc1101_enable_async_mode(uint32_t freq_hz);
 ```
-Configures the CC1101 for **ASK/OOK async serial output** on GDO2 (for RMT-based sniffing). Sets infinite packet length, max sensitivity AGC, 812 kHz RX bandwidth, and enters RX.
+Configures the CC1101 for **ASK/OOK async serial output** on GDO0 (for RMT-based sniffing). Sets infinite packet length, max sensitivity AGC, 812 kHz RX bandwidth, and enters RX.
 
 #### `cc1101_enable_fsk_mode`
 ```c
 void cc1101_enable_fsk_mode(uint32_t freq_hz);
 ```
-Configures the CC1101 for **2-FSK async serial output** on GDO2. Same async architecture as OOK mode but with FSK modulation.
+Configures the CC1101 for **2-FSK async serial output** on GDO0. Same async architecture as OOK mode but with FSK modulation.
 
 #### `cc1101_enter_rx_mode` / `cc1101_enter_tx_mode`
 ```c
