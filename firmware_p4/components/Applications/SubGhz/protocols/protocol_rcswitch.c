@@ -30,25 +30,34 @@
 
 typedef struct {
   uint16_t pulseLength;
-  struct { uint8_t high; uint8_t low; } syncFactor;
-  struct { uint8_t high; uint8_t low; } zero;
-  struct { uint8_t high; uint8_t low; } one;
+  struct {
+    uint8_t high;
+    uint8_t low;
+  } syncFactor;
+  struct {
+    uint8_t high;
+    uint8_t low;
+  } zero;
+  struct {
+    uint8_t high;
+    uint8_t low;
+  } one;
   bool invertedSignal;
 } rcswitch_proto_t;
 
 static const rcswitch_proto_t s_proto[] = {
-  { 350, {  1, 31 }, {  1,  3 }, {  3,  1 }, false },
-  { 650, {  1, 10 }, {  1,  2 }, {  2,  1 }, false },
-  { 100, { 30, 71 }, {  4, 11 }, {  9,  6 }, false },
-  { 380, {  1,  6 }, {  1,  3 }, {  3,  1 }, false },
-  { 500, {  6, 14 }, {  1,  2 }, {  2,  1 }, false },
-  { 450, { 23,  1 }, {  1,  2 }, {  2,  1 }, true  },
-  { 150, {  2, 62 }, {  1,  6 }, {  6,  1 }, false },
-  { 200, {  3, 130}, {  7, 16 }, {  3, 16 }, false },
-  { 200, { 130, 7 }, { 16,  7 }, { 16,  3 }, true  },
-  { 365, { 18,  1 }, {  3,  1 }, {  1,  3 }, true  },
-  { 270, { 36,  1 }, {  1,  2 }, {  2,  1 }, true  },
-  { 320, { 36,  1 }, {  1,  2 }, {  2,  1 }, true  },
+    {350, {1, 31}, {1, 3}, {3, 1}, false},
+    {650, {1, 10}, {1, 2}, {2, 1}, false},
+    {100, {30, 71}, {4, 11}, {9, 6}, false},
+    {380, {1, 6}, {1, 3}, {3, 1}, false},
+    {500, {6, 14}, {1, 2}, {2, 1}, false},
+    {450, {23, 1}, {1, 2}, {2, 1}, true},
+    {150, {2, 62}, {1, 6}, {6, 1}, false},
+    {200, {3, 130}, {7, 16}, {3, 16}, false},
+    {200, {130, 7}, {16, 7}, {16, 3}, true},
+    {365, {18, 1}, {3, 1}, {1, 3}, true},
+    {270, {36, 1}, {1, 2}, {2, 1}, true},
+    {320, {36, 1}, {1, 2}, {2, 1}, true},
 };
 
 #define RCSWITCH_PROTO_COUNT     (sizeof(s_proto) / sizeof(s_proto[0]))
@@ -63,8 +72,8 @@ static const rcswitch_proto_t s_proto[] = {
 #define RCSWITCH_SYNC_OVERHEAD   2
 #define RCSWITCH_SSCANF_EXPECTED 1
 
-static bool protocol_rcswitch_decode(const int32_t *raw_data, size_t count,
-                                     subghz_data_t *out_data) {
+static bool
+protocol_rcswitch_decode(const int32_t *raw_data, size_t count, subghz_data_t *out_data) {
   if (count < RCSWITCH_MIN_PULSES) {
     return false;
   }
@@ -89,8 +98,8 @@ static bool protocol_rcswitch_decode(const int32_t *raw_data, size_t count,
       uint32_t dur1 = (uint32_t)abs(raw_data[i]);
       uint32_t dur2 = (uint32_t)abs(raw_data[i + 1]);
 
-      uint32_t sync_long_factor = (pro->syncFactor.low > pro->syncFactor.high)
-                                    ? pro->syncFactor.low : pro->syncFactor.high;
+      uint32_t sync_long_factor =
+          (pro->syncFactor.low > pro->syncFactor.high) ? pro->syncFactor.low : pro->syncFactor.high;
       uint32_t dur_long = (pro->syncFactor.low > pro->syncFactor.high) ? dur2 : dur1;
 
       if (sync_long_factor == 0) {
@@ -101,10 +110,9 @@ static bool protocol_rcswitch_decode(const int32_t *raw_data, size_t count,
         continue;
       }
 
-      if (!subghz_check_pulse(raw_data[i], delay * pro->syncFactor.high,
-                              RCSWITCH_TOLERANCE_PCT) ||
-          !subghz_check_pulse(raw_data[i + 1], delay * pro->syncFactor.low,
-                              RCSWITCH_TOLERANCE_PCT)) {
+      if (!subghz_check_pulse(raw_data[i], delay * pro->syncFactor.high, RCSWITCH_TOLERANCE_PCT) ||
+          !subghz_check_pulse(
+              raw_data[i + 1], delay * pro->syncFactor.low, RCSWITCH_TOLERANCE_PCT)) {
         continue;
       }
 
@@ -126,16 +134,13 @@ static bool protocol_rcswitch_decode(const int32_t *raw_data, size_t count,
           }
         }
 
-        if (subghz_check_pulse(raw_data[k], delay * pro->zero.high,
-                               RCSWITCH_TOLERANCE_PCT) &&
-            subghz_check_pulse(raw_data[k + 1], delay * pro->zero.low,
-                               RCSWITCH_TOLERANCE_PCT)) {
+        if (subghz_check_pulse(raw_data[k], delay * pro->zero.high, RCSWITCH_TOLERANCE_PCT) &&
+            subghz_check_pulse(raw_data[k + 1], delay * pro->zero.low, RCSWITCH_TOLERANCE_PCT)) {
           code <<= 1;
           bit_count++;
-        } else if (subghz_check_pulse(raw_data[k], delay * pro->one.high,
-                                      RCSWITCH_TOLERANCE_PCT) &&
-                   subghz_check_pulse(raw_data[k + 1], delay * pro->one.low,
-                                      RCSWITCH_TOLERANCE_PCT)) {
+        } else if (subghz_check_pulse(raw_data[k], delay * pro->one.high, RCSWITCH_TOLERANCE_PCT) &&
+                   subghz_check_pulse(
+                       raw_data[k + 1], delay * pro->one.low, RCSWITCH_TOLERANCE_PCT)) {
           code = (code << 1) | 1;
           bit_count++;
         } else {
@@ -160,8 +165,8 @@ static bool protocol_rcswitch_decode(const int32_t *raw_data, size_t count,
   return false;
 }
 
-static size_t protocol_rcswitch_encode(const subghz_data_t *data, int32_t *pulses,
-                                       size_t max_count) {
+static size_t
+protocol_rcswitch_encode(const subghz_data_t *data, int32_t *pulses, size_t max_count) {
   int p_idx = -1;
   if (data->protocol_name != NULL &&
       sscanf(data->protocol_name, "RCSwitch(P%d)", &p_idx) == RCSWITCH_SSCANF_EXPECTED) {
@@ -213,7 +218,4 @@ static size_t protocol_rcswitch_encode(const subghz_data_t *data, int32_t *pulse
 }
 
 subghz_protocol_t protocol_rcswitch = {
-  .name = "RCSwitch",
-  .decode = protocol_rcswitch_decode,
-  .encode = protocol_rcswitch_encode
-};
+    .name = "RCSwitch", .decode = protocol_rcswitch_decode, .encode = protocol_rcswitch_encode};

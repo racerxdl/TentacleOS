@@ -15,17 +15,16 @@
 #include "subghz_protocol_decoder.h"
 #include "subghz_protocol_utils.h"
 
-#define LINEAR_SHORT_US        500
-#define LINEAR_LONG_US         1500
-#define LINEAR_TOLERANCE_PCT   40
-#define LINEAR_BIT_COUNT       10
-#define LINEAR_MIN_RAW_COUNT   10
-#define LINEAR_MIN_VALID_BITS  8
-#define LINEAR_STEP_SIZE       2
-#define LINEAR_BIT_INVALID     (-1)
+#define LINEAR_SHORT_US       500
+#define LINEAR_LONG_US        1500
+#define LINEAR_TOLERANCE_PCT  40
+#define LINEAR_BIT_COUNT      10
+#define LINEAR_MIN_RAW_COUNT  10
+#define LINEAR_MIN_VALID_BITS 8
+#define LINEAR_STEP_SIZE      2
+#define LINEAR_BIT_INVALID    (-1)
 
-static bool protocol_linear_decode(const int32_t *raw_data, size_t count,
-                                   subghz_data_t *out_data) {
+static bool protocol_linear_decode(const int32_t *raw_data, size_t count, subghz_data_t *out_data) {
   if (count < LINEAR_MIN_RAW_COUNT) {
     return false;
   }
@@ -77,7 +76,4 @@ static bool protocol_linear_decode(const int32_t *raw_data, size_t count,
 }
 
 subghz_protocol_t protocol_linear = {
-  .name = "Linear",
-  .decode = protocol_linear_decode,
-  .encode = NULL
-};
+    .name = "Linear", .decode = protocol_linear_decode, .encode = NULL};

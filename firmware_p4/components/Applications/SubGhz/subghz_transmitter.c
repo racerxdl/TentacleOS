@@ -29,20 +29,20 @@
 
 static const char *TAG = "SUBGHZ_TX";
 
-#define RMT_TX_GPIO            GPIO_SCL_PIN
-#define RMT_RESOLUTION_HZ      1000000
-#define TX_QUEUE_SIZE           10
-#define TX_QUEUE_RECV_MS        200
-#define TX_QUEUE_SEND_MS        100
-#define TX_WAIT_TIMEOUT_MS      2000
-#define TX_TASK_STACK_SIZE      4096
-#define TX_TASK_PRIORITY        5
-#define TX_TASK_CORE            1
-#define TX_STOP_DELAY_MS        100
-#define RMT_MEM_BLOCK_SYMBOLS   64
-#define RMT_TRANS_QUEUE_DEPTH   4
-#define RMT_MAX_DURATION        32767
-#define TX_DEFAULT_FREQ         433920000
+#define RMT_TX_GPIO           GPIO_SCL_PIN
+#define RMT_RESOLUTION_HZ     1000000
+#define TX_QUEUE_SIZE         10
+#define TX_QUEUE_RECV_MS      200
+#define TX_QUEUE_SEND_MS      100
+#define TX_WAIT_TIMEOUT_MS    2000
+#define TX_TASK_STACK_SIZE    4096
+#define TX_TASK_PRIORITY      5
+#define TX_TASK_CORE          1
+#define TX_STOP_DELAY_MS      100
+#define RMT_MEM_BLOCK_SYMBOLS 64
+#define RMT_TRANS_QUEUE_DEPTH 4
+#define RMT_MAX_DURATION      32767
+#define TX_DEFAULT_FREQ       433920000
 
 typedef struct {
   int32_t *timings;
@@ -68,8 +68,8 @@ static void subghz_tx_task(void *pvParameters) {
     ESP_LOGI(TAG, "Processing TX item: %d symbols", (int)item.count);
 
     size_t num_words = (item.count + 1) / 2;
-    rmt_symbol_word_t *symbols = heap_caps_malloc(num_words * sizeof(rmt_symbol_word_t),
-                                                  MALLOC_CAP_DEFAULT);
+    rmt_symbol_word_t *symbols =
+        heap_caps_malloc(num_words * sizeof(rmt_symbol_word_t), MALLOC_CAP_DEFAULT);
 
     if (symbols == NULL) {
       ESP_LOGE(TAG, "Failed to allocate symbol buffer");
@@ -106,11 +106,11 @@ static void subghz_tx_task(void *pvParameters) {
     cc1101_enter_tx_mode();
 
     rmt_transmit_config_t tx_config = {
-      .loop_count = 0,
+        .loop_count = 0,
     };
 
-    ESP_ERROR_CHECK(rmt_transmit(s_tx_channel, s_copy_encoder, symbols,
-                                 num_words * sizeof(rmt_symbol_word_t), &tx_config));
+    ESP_ERROR_CHECK(rmt_transmit(
+        s_tx_channel, s_copy_encoder, symbols, num_words * sizeof(rmt_symbol_word_t), &tx_config));
 
     esp_err_t wait_err = rmt_tx_wait_all_done(s_tx_channel, TX_WAIT_TIMEOUT_MS);
     if (wait_err != ESP_OK) {
@@ -141,12 +141,12 @@ esp_err_t subghz_tx_init(void) {
   cc1101_strobe(CC1101_SIDLE);
 
   rmt_tx_channel_config_t tx_channel_cfg = {
-    .clk_src = RMT_CLK_SRC_DEFAULT,
-    .resolution_hz = RMT_RESOLUTION_HZ,
-    .mem_block_symbols = RMT_MEM_BLOCK_SYMBOLS,
-    .trans_queue_depth = RMT_TRANS_QUEUE_DEPTH,
-    .gpio_num = RMT_TX_GPIO,
-    .flags.invert_out = false,
+      .clk_src = RMT_CLK_SRC_DEFAULT,
+      .resolution_hz = RMT_RESOLUTION_HZ,
+      .mem_block_symbols = RMT_MEM_BLOCK_SYMBOLS,
+      .trans_queue_depth = RMT_TRANS_QUEUE_DEPTH,
+      .gpio_num = RMT_TX_GPIO,
+      .flags.invert_out = false,
   };
   ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_channel_cfg, &s_tx_channel));
 
@@ -165,8 +165,13 @@ esp_err_t subghz_tx_init(void) {
   }
 
   s_is_running = true;
-  xTaskCreatePinnedToCore(subghz_tx_task, "subghz_tx", TX_TASK_STACK_SIZE,
-                          NULL, TX_TASK_PRIORITY, &s_tx_task_handle, TX_TASK_CORE);
+  xTaskCreatePinnedToCore(subghz_tx_task,
+                          "subghz_tx",
+                          TX_TASK_STACK_SIZE,
+                          NULL,
+                          TX_TASK_PRIORITY,
+                          &s_tx_task_handle,
+                          TX_TASK_CORE);
   return ESP_OK;
 }
 
@@ -220,8 +225,8 @@ esp_err_t subghz_tx_send_raw(const int32_t *timings, size_t count) {
   memcpy(timings_copy, timings, count * sizeof(int32_t));
 
   tx_item_t item = {
-    .timings = timings_copy,
-    .count = count,
+      .timings = timings_copy,
+      .count = count,
   };
 
   if (xQueueSend(s_tx_queue, &item, pdMS_TO_TICKS(TX_QUEUE_SEND_MS)) != pdPASS) {

@@ -15,19 +15,18 @@
 #include "subghz_protocol_decoder.h"
 #include "subghz_protocol_utils.h"
 
-#define HOLTEK_SHORT_US        430
-#define HOLTEK_LONG_US         870
-#define HOLTEK_TOLERANCE_PCT   40
-#define HOLTEK_BIT_COUNT       12
-#define HOLTEK_MIN_RAW_COUNT   24
-#define HOLTEK_MIN_VALID_BITS  8
-#define HOLTEK_STEP_SIZE       2
-#define HOLTEK_BIT_INVALID     (-1)
-#define HOLTEK_ADDR_SHIFT      4
-#define HOLTEK_DATA_MASK       0x0F
+#define HOLTEK_SHORT_US       430
+#define HOLTEK_LONG_US        870
+#define HOLTEK_TOLERANCE_PCT  40
+#define HOLTEK_BIT_COUNT      12
+#define HOLTEK_MIN_RAW_COUNT  24
+#define HOLTEK_MIN_VALID_BITS 8
+#define HOLTEK_STEP_SIZE      2
+#define HOLTEK_BIT_INVALID    (-1)
+#define HOLTEK_ADDR_SHIFT     4
+#define HOLTEK_DATA_MASK      0x0F
 
-static bool protocol_holtek_decode(const int32_t *raw_data, size_t count,
-                                   subghz_data_t *out_data) {
+static bool protocol_holtek_decode(const int32_t *raw_data, size_t count, subghz_data_t *out_data) {
   if (count < HOLTEK_MIN_RAW_COUNT) {
     return false;
   }
@@ -79,7 +78,4 @@ static bool protocol_holtek_decode(const int32_t *raw_data, size_t count,
 }
 
 subghz_protocol_t protocol_holtek = {
-  .name = "Holtek",
-  .decode = protocol_holtek_decode,
-  .encode = NULL
-};
+    .name = "Holtek", .decode = protocol_holtek_decode, .encode = NULL};

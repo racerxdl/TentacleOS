@@ -22,17 +22,19 @@
 
 static const char *TAG = "SUBGHZ_ANALYZER";
 
-#define HIST_BIN_SIZE       50
-#define HIST_MAX_VAL        5000
-#define HIST_BINS           (HIST_MAX_VAL / HIST_BIN_SIZE)
-#define NOISE_FLOOR_US      50
-#define MIN_PULSE_COUNT     10
-#define PEAK_THRESHOLD      2
-#define MODULATION_DIVISOR  10
-#define MAX_BITSTREAM_BITS  1024
-#define MIN_TE_THRESHOLD    50
+#define HIST_BIN_SIZE      50
+#define HIST_MAX_VAL       5000
+#define HIST_BINS          (HIST_MAX_VAL / HIST_BIN_SIZE)
+#define NOISE_FLOOR_US     50
+#define MIN_PULSE_COUNT    10
+#define PEAK_THRESHOLD     2
+#define MODULATION_DIVISOR 10
+#define MAX_BITSTREAM_BITS 1024
+#define MIN_TE_THRESHOLD   50
 
-bool subghz_analyzer_process(const int32_t *pulses, size_t count, subghz_analyzer_result_t *out_result) {
+bool subghz_analyzer_process(const int32_t *pulses,
+                             size_t count,
+                             subghz_analyzer_result_t *out_result) {
   if (count < MIN_PULSE_COUNT || out_result == NULL) {
     return false;
   }
@@ -76,8 +78,8 @@ bool subghz_analyzer_process(const int32_t *pulses, size_t count, subghz_analyze
 
   int distinct_peaks = 0;
   for (int i = 1; i < HIST_BINS - 1; i++) {
-    if (bins[i] > (uint32_t)(count / MODULATION_DIVISOR) &&
-        bins[i] >= bins[i - 1] && bins[i] >= bins[i + 1]) {
+    if (bins[i] > (uint32_t)(count / MODULATION_DIVISOR) && bins[i] >= bins[i - 1] &&
+        bins[i] >= bins[i + 1]) {
       distinct_peaks++;
     }
   }
@@ -122,9 +124,12 @@ bool subghz_analyzer_process(const int32_t *pulses, size_t count, subghz_analyze
     out_result->bitstream_len = bit_idx;
   }
 
-  ESP_LOGI(TAG, "Analysis Complete: TE ~%lu us, Peaks: %d, Hint: %s, Bits: %d",
-           (unsigned long)out_result->estimated_te, distinct_peaks,
-           out_result->modulation_hint, (int)out_result->bitstream_len);
+  ESP_LOGI(TAG,
+           "Analysis Complete: TE ~%lu us, Peaks: %d, Hint: %s, Bits: %d",
+           (unsigned long)out_result->estimated_te,
+           distinct_peaks,
+           out_result->modulation_hint,
+           (int)out_result->bitstream_len);
 
   return true;
 }

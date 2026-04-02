@@ -44,7 +44,9 @@ typedef struct {
  * @param out_result  Pointer to store the analysis result.
  * @return true if analysis succeeded, false otherwise.
  */
-bool subghz_analyzer_process(const int32_t *pulses, size_t count, subghz_analyzer_result_t *out_result);
+bool subghz_analyzer_process(const int32_t *pulses,
+                             size_t count,
+                             subghz_analyzer_result_t *out_result);
 
 #ifdef __cplusplus
 }

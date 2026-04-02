@@ -27,17 +27,17 @@
 
 static const char *TAG = "SUBGHZ_SPECTRUM";
 
-#define STABILIZATION_DELAY_US  400
-#define RSSI_SAMPLE_DELAY_US    20
-#define RSSI_SAMPLE_COUNT       3
-#define RSSI_MIN_DBM            (-130.0f)
-#define YIELD_INTERVAL          16
-#define SWEEP_DELAY_MS          5
-#define MUTEX_TIMEOUT_MS        10
-#define GET_LINE_TIMEOUT_MS     5
-#define SPECTRUM_TASK_STACK     4096
-#define SPECTRUM_TASK_PRIORITY  1
-#define SPECTRUM_TASK_CORE      1
+#define STABILIZATION_DELAY_US 400
+#define RSSI_SAMPLE_DELAY_US   20
+#define RSSI_SAMPLE_COUNT      3
+#define RSSI_MIN_DBM           (-130.0f)
+#define YIELD_INTERVAL         16
+#define SWEEP_DELAY_MS         5
+#define MUTEX_TIMEOUT_MS       10
+#define GET_LINE_TIMEOUT_MS    5
+#define SPECTRUM_TASK_STACK    4096
+#define SPECTRUM_TASK_PRIORITY 1
+#define SPECTRUM_TASK_CORE     1
 
 static TaskHandle_t s_spectrum_task_handle = NULL;
 static SemaphoreHandle_t s_spectrum_mutex = NULL;
@@ -61,8 +61,11 @@ static void subghz_spectrum_task(void *pvParameters) {
   uint32_t step = span / SPECTRUM_SAMPLES;
   uint32_t start = center - (span / 2);
 
-  ESP_LOGI(TAG, "Spectrum Task Started: Center=%lu, Span=%lu, Step=%lu",
-           (unsigned long)center, (unsigned long)span, (unsigned long)step);
+  ESP_LOGI(TAG,
+           "Spectrum Task Started: Center=%lu, Span=%lu, Step=%lu",
+           (unsigned long)center,
+           (unsigned long)span,
+           (unsigned long)step);
 
   while (!s_stop_requested) {
     float current_sweep[SPECTRUM_SAMPLES];
@@ -129,9 +132,13 @@ void subghz_spectrum_start(uint32_t center_freq, uint32_t span_hz) {
 
   s_stop_requested = false;
 
-  xTaskCreatePinnedToCore(subghz_spectrum_task, "subghz_spectrum",
-                          SPECTRUM_TASK_STACK, NULL, SPECTRUM_TASK_PRIORITY,
-                          &s_spectrum_task_handle, SPECTRUM_TASK_CORE);
+  xTaskCreatePinnedToCore(subghz_spectrum_task,
+                          "subghz_spectrum",
+                          SPECTRUM_TASK_STACK,
+                          NULL,
+                          SPECTRUM_TASK_PRIORITY,
+                          &s_spectrum_task_handle,
+                          SPECTRUM_TASK_CORE);
 }
 
 void subghz_spectrum_stop(void) {

@@ -42,7 +42,10 @@ esp_err_t subghz_storage_init(void);
  * @param te         Base time element in microseconds.
  * @return esp_err_t ESP_OK on success, or an error code on failure.
  */
-esp_err_t subghz_storage_save_decoded(const char *name, const subghz_data_t *data, uint32_t frequency, uint32_t te);
+esp_err_t subghz_storage_save_decoded(const char *name,
+                                      const subghz_data_t *data,
+                                      uint32_t frequency,
+                                      uint32_t te);
 
 /**
  * @brief Save raw pulse data to persistent storage.
@@ -53,7 +56,8 @@ esp_err_t subghz_storage_save_decoded(const char *name, const subghz_data_t *dat
  * @param frequency  Center frequency in Hz.
  * @return esp_err_t ESP_OK on success, or an error code on failure.
  */
-esp_err_t subghz_storage_save_raw(const char *name, const int32_t *pulses, size_t count, uint32_t frequency);
+esp_err_t
+subghz_storage_save_raw(const char *name, const int32_t *pulses, size_t count, uint32_t frequency);
 
 #ifdef __cplusplus
 }

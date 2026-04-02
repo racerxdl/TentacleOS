@@ -15,17 +15,17 @@
 #include "subghz_protocol_decoder.h"
 #include "subghz_protocol_utils.h"
 
-#define CHAMBERLAIN_SHORT_US        430
-#define CHAMBERLAIN_LONG_US         870
-#define CHAMBERLAIN_TOLERANCE_PCT   40
-#define CHAMBERLAIN_BIT_COUNT       9
-#define CHAMBERLAIN_MIN_RAW_COUNT   16
-#define CHAMBERLAIN_MIN_VALID_BITS  7
-#define CHAMBERLAIN_STEP_SIZE       2
-#define CHAMBERLAIN_BIT_INVALID     (-1)
+#define CHAMBERLAIN_SHORT_US       430
+#define CHAMBERLAIN_LONG_US        870
+#define CHAMBERLAIN_TOLERANCE_PCT  40
+#define CHAMBERLAIN_BIT_COUNT      9
+#define CHAMBERLAIN_MIN_RAW_COUNT  16
+#define CHAMBERLAIN_MIN_VALID_BITS 7
+#define CHAMBERLAIN_STEP_SIZE      2
+#define CHAMBERLAIN_BIT_INVALID    (-1)
 
-static bool protocol_chamberlain_decode(const int32_t *raw_data, size_t count,
-                                        subghz_data_t *out_data) {
+static bool
+protocol_chamberlain_decode(const int32_t *raw_data, size_t count, subghz_data_t *out_data) {
   if (count < CHAMBERLAIN_MIN_RAW_COUNT) {
     return false;
   }
@@ -77,7 +77,4 @@ static bool protocol_chamberlain_decode(const int32_t *raw_data, size_t count,
 }
 
 subghz_protocol_t protocol_chamberlain = {
-  .name = "Chamberlain",
-  .decode = protocol_chamberlain_decode,
-  .encode = NULL
-};
+    .name = "Chamberlain", .decode = protocol_chamberlain_decode, .encode = NULL};

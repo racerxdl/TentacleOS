@@ -45,8 +45,7 @@ static bool is_long(int32_t val) {
   return (a >= ROSSI_LONG_MIN_US && a <= ROSSI_LONG_MAX_US);
 }
 
-static bool protocol_rossi_decode(const int32_t *raw_data, size_t count,
-                                  subghz_data_t *out_data) {
+static bool protocol_rossi_decode(const int32_t *raw_data, size_t count, subghz_data_t *out_data) {
   if (count < ROSSI_MIN_RAW_COUNT) {
     return false;
   }
@@ -92,7 +91,4 @@ static bool protocol_rossi_decode(const int32_t *raw_data, size_t count,
 }
 
 subghz_protocol_t protocol_rossi = {
-  .name = "Rossi",
-  .decode = protocol_rossi_decode,
-  .encode = NULL
-};
+    .name = "Rossi", .decode = protocol_rossi_decode, .encode = NULL};

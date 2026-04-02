@@ -19,18 +19,17 @@
  * CAME 12bit / 24bit Protocol Implementation
  */
 
-#define CAME_SHORT_US          320
-#define CAME_LONG_US           640
-#define CAME_TOLERANCE_PCT     60
-#define CAME_MIN_BITS          12
-#define CAME_MAX_BITS          24
-#define CAME_MIN_RAW_COUNT     24
-#define CAME_STEP_SIZE         2
-#define CAME_STOP_GAP_MULT     20
-#define CAME_ENCODE_OVERHEAD   1
+#define CAME_SHORT_US        320
+#define CAME_LONG_US         640
+#define CAME_TOLERANCE_PCT   60
+#define CAME_MIN_BITS        12
+#define CAME_MAX_BITS        24
+#define CAME_MIN_RAW_COUNT   24
+#define CAME_STEP_SIZE       2
+#define CAME_STOP_GAP_MULT   20
+#define CAME_ENCODE_OVERHEAD 1
 
-static bool protocol_came_decode(const int32_t *raw_data, size_t count,
-                                 subghz_data_t *out_data) {
+static bool protocol_came_decode(const int32_t *raw_data, size_t count, subghz_data_t *out_data) {
   if (count < CAME_MIN_RAW_COUNT) {
     return false;
   }
@@ -65,8 +64,7 @@ static bool protocol_came_decode(const int32_t *raw_data, size_t count,
         if (k >= count - 1 ||
             (!subghz_check_pulse(raw_data[k], CAME_SHORT_US, CAME_TOLERANCE_PCT) &&
              !subghz_check_pulse(raw_data[k], CAME_LONG_US, CAME_TOLERANCE_PCT))) {
-          out_data->protocol_name = (bits_found == CAME_MIN_BITS)
-                                      ? "CAME 12bit" : "CAME 24bit";
+          out_data->protocol_name = (bits_found == CAME_MIN_BITS) ? "CAME 12bit" : "CAME 24bit";
           out_data->bit_count = bits_found;
           out_data->raw_value = decoded_data;
           out_data->serial = decoded_data;
@@ -80,8 +78,7 @@ static bool protocol_came_decode(const int32_t *raw_data, size_t count,
   return false;
 }
 
-static size_t protocol_came_encode(const subghz_data_t *data, int32_t *pulses,
-                                   size_t max_count) {
+static size_t protocol_came_encode(const subghz_data_t *data, int32_t *pulses, size_t max_count) {
   if (data->bit_count != CAME_MIN_BITS && data->bit_count != CAME_MAX_BITS) {
     return 0;
   }
@@ -108,7 +105,4 @@ static size_t protocol_came_encode(const subghz_data_t *data, int32_t *pulses,
 }
 
 subghz_protocol_t protocol_came = {
-  .name = "CAME",
-  .decode = protocol_came_decode,
-  .encode = protocol_came_encode
-};
+    .name = "CAME", .decode = protocol_came_decode, .encode = protocol_came_encode};

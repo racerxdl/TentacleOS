@@ -30,41 +30,39 @@
 
 static const char *TAG = "SUBGHZ_RX";
 
-#define RMT_RX_GPIO            ((gpio_num_t)GPIO_SDA_PIN)
-#define RMT_RESOLUTION_HZ      1000000
-#define RX_BUFFER_SIZE          1024
-#define DECODE_BUFFER_FACTOR    2
-#define MIN_PULSE_NS            1000
-#define SOFTWARE_FILTER_US      15
-#define MAX_PULSE_NS            10000000
-#define RMT_MEM_BLOCK_SYMBOLS   256
-#define RMT_DMA_ALIGNMENT       64
-#define RX_QUEUE_DEPTH          1
-#define RX_QUEUE_TIMEOUT_MS     100
-#define HOP_INTERVAL_MS         5000
-#define RX_TASK_STACK_SIZE      8192
-#define RX_TASK_PRIORITY        5
-#define RX_TASK_CORE            1
-#define FILENAME_BUF_SIZE       32
-#define HEX_BUF_SIZE            65
-#define MAX_HEX_BYTES           32
-#define RAW_PREVIEW_COUNT       20
-#define DEFAULT_FREQ            433920000
+#define RMT_RX_GPIO           ((gpio_num_t)GPIO_SDA_PIN)
+#define RMT_RESOLUTION_HZ     1000000
+#define RX_BUFFER_SIZE        1024
+#define DECODE_BUFFER_FACTOR  2
+#define MIN_PULSE_NS          1000
+#define SOFTWARE_FILTER_US    15
+#define MAX_PULSE_NS          10000000
+#define RMT_MEM_BLOCK_SYMBOLS 256
+#define RMT_DMA_ALIGNMENT     64
+#define RX_QUEUE_DEPTH        1
+#define RX_QUEUE_TIMEOUT_MS   100
+#define HOP_INTERVAL_MS       5000
+#define RX_TASK_STACK_SIZE    8192
+#define RX_TASK_PRIORITY      5
+#define RX_TASK_CORE          1
+#define FILENAME_BUF_SIZE     32
+#define HEX_BUF_SIZE          65
+#define MAX_HEX_BYTES         32
+#define RAW_PREVIEW_COUNT     20
+#define DEFAULT_FREQ          433920000
 
-static const uint32_t HOP_FREQUENCIES[] = {
-  433920000,
-  868350000,
-  315000000,
-  300000000,
-  390000000,
-  418000000,
-  915000000,
-  302750000,
-  303870000,
-  304250000,
-  310000000,
-  318000000
-};
+static const uint32_t HOP_FREQUENCIES[] = {433920000,
+                                           868350000,
+                                           315000000,
+                                           300000000,
+                                           390000000,
+                                           418000000,
+                                           915000000,
+                                           302750000,
+                                           303870000,
+                                           304250000,
+                                           310000000,
+                                           318000000};
 #define HOP_FREQUENCIES_COUNT (sizeof(HOP_FREQUENCIES) / sizeof(HOP_FREQUENCIES[0]))
 
 static TaskHandle_t s_rx_task_handle = NULL;
@@ -138,8 +136,8 @@ static void log_recovered_bitstream(const subghz_analyzer_result_t *analysis) {
   size_t offset = 0;
 
   for (size_t b = 0; b < bytes_to_show; b++) {
-    int written = snprintf(&hex_buf[offset], sizeof(hex_buf) - offset,
-                           "%02X", analysis->bitstream[b]);
+    int written =
+        snprintf(&hex_buf[offset], sizeof(hex_buf) - offset, "%02X", analysis->bitstream[b]);
     if (written > 0) {
       offset += (size_t)written;
     }
@@ -153,9 +151,13 @@ static void handle_scan_mode(const int32_t *decode_buffer, size_t decode_idx) {
   subghz_data_t decoded = {0};
 
   if (subghz_protocol_registry_decode_all(decode_buffer, decode_idx, &decoded)) {
-    ESP_LOGI(TAG, "DECODED: Protocol: %s | Serial: 0x%lX | Btn: 0x%X | Bits: %d | Freq: %lu",
-             decoded.protocol_name, decoded.serial, decoded.btn,
-             decoded.bit_count, (unsigned long)s_rx_freq);
+    ESP_LOGI(TAG,
+             "DECODED: Protocol: %s | Serial: 0x%lX | Btn: 0x%X | Bits: %d | Freq: %lu",
+             decoded.protocol_name,
+             decoded.serial,
+             decoded.btn,
+             decoded.bit_count,
+             (unsigned long)s_rx_freq);
 
     subghz_analyzer_result_t analysis = {0};
     subghz_analyzer_process(decode_buffer, decode_idx, &analysis);
@@ -166,9 +168,12 @@ static void handle_scan_mode(const int32_t *decode_buffer, size_t decode_idx) {
 
   subghz_analyzer_result_t analysis = {0};
   if (subghz_analyzer_process(decode_buffer, decode_idx, &analysis)) {
-    ESP_LOGW(TAG, "Unknown Signal: TE ~%luus | Peaks: %s | Count: %d | Freq: %lu",
-             (unsigned long)analysis.estimated_te, analysis.modulation_hint,
-             (int)decode_idx, (unsigned long)s_rx_freq);
+    ESP_LOGW(TAG,
+             "Unknown Signal: TE ~%luus | Peaks: %s | Count: %d | Freq: %lu",
+             (unsigned long)analysis.estimated_te,
+             analysis.modulation_hint,
+             (int)decode_idx,
+             (unsigned long)s_rx_freq);
 
     get_dynamic_filename(filename, sizeof(filename), "UNK");
     subghz_storage_save_raw(filename, decode_buffer, decode_idx, s_rx_freq);
@@ -204,24 +209,26 @@ static void handle_frequency_hopping(TickType_t *last_hop_time, TickType_t hop_i
 }
 
 static void subghz_rx_task(void *pvParameters) {
-  ESP_LOGI(TAG, "Starting RMT RX Task - Mode: %s, Preset: %d, Freq: %lu",
+  ESP_LOGI(TAG,
+           "Starting RMT RX Task - Mode: %s, Preset: %d, Freq: %lu",
            s_rx_mode == SUBGHZ_MODE_RAW ? "RAW" : "SCAN",
-           (int)s_rx_preset, (unsigned long)s_rx_freq);
+           (int)s_rx_preset,
+           (unsigned long)s_rx_freq);
 
   rmt_rx_channel_config_t rx_channel_cfg = {
-    .clk_src = RMT_CLK_SRC_DEFAULT,
-    .resolution_hz = RMT_RESOLUTION_HZ,
-    .mem_block_symbols = RMT_MEM_BLOCK_SYMBOLS,
-    .gpio_num = RMT_RX_GPIO,
-    .flags.invert_in = false,
-    .flags.with_dma = true,
+      .clk_src = RMT_CLK_SRC_DEFAULT,
+      .resolution_hz = RMT_RESOLUTION_HZ,
+      .mem_block_symbols = RMT_MEM_BLOCK_SYMBOLS,
+      .gpio_num = RMT_RX_GPIO,
+      .flags.invert_in = false,
+      .flags.with_dma = true,
   };
 
   ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_channel_cfg, &s_rx_channel));
 
   s_rx_queue = xQueueCreate(RX_QUEUE_DEPTH, sizeof(rmt_rx_done_event_data_t));
   rmt_rx_event_callbacks_t cbs = {
-    .on_recv_done = subghz_rx_done_callback,
+      .on_recv_done = subghz_rx_done_callback,
   };
   ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(s_rx_channel, &cbs, s_rx_queue));
   ESP_ERROR_CHECK(rmt_enable(s_rx_channel));
@@ -232,8 +239,8 @@ static void subghz_rx_task(void *pvParameters) {
   ESP_LOGI(TAG, "Waiting for signals...");
 
   rmt_receive_config_t receive_config = {
-    .signal_range_min_ns = MIN_PULSE_NS,
-    .signal_range_max_ns = MAX_PULSE_NS,
+      .signal_range_min_ns = MIN_PULSE_NS,
+      .signal_range_max_ns = MAX_PULSE_NS,
   };
 
   rmt_rx_done_event_data_t rx_data;
@@ -241,8 +248,8 @@ static void subghz_rx_task(void *pvParameters) {
   int32_t *decode_buffer = NULL;
 
   size_t raw_symbols_size = sizeof(rmt_symbol_word_t) * RX_BUFFER_SIZE;
-  raw_symbols = heap_caps_aligned_alloc(RMT_DMA_ALIGNMENT, raw_symbols_size,
-                                        MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+  raw_symbols = heap_caps_aligned_alloc(
+      RMT_DMA_ALIGNMENT, raw_symbols_size, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
   if (raw_symbols == NULL) {
     ESP_LOGE(TAG, "Failed to allocate RMT RX buffer");
     goto cleanup;
@@ -323,9 +330,12 @@ esp_err_t subghz_receiver_start(subghz_mode_t mode, cc1101_preset_t preset, uint
     s_rx_freq = freq;
   }
 
-  BaseType_t ret = xTaskCreatePinnedToCore(subghz_rx_task, "subghz_rx",
-                                           RX_TASK_STACK_SIZE, NULL,
-                                           RX_TASK_PRIORITY, &s_rx_task_handle,
+  BaseType_t ret = xTaskCreatePinnedToCore(subghz_rx_task,
+                                           "subghz_rx",
+                                           RX_TASK_STACK_SIZE,
+                                           NULL,
+                                           RX_TASK_PRIORITY,
+                                           &s_rx_task_handle,
                                            RX_TASK_CORE);
   if (ret != pdPASS) {
     ESP_LOGE(TAG, "Failed to create RX task");

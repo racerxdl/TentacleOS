@@ -29,12 +29,12 @@ extern "C" {
  * @brief Single spectrum sweep result.
  */
 typedef struct {
-  uint32_t center_freq;                /**< @brief Center frequency in Hz. */
-  uint32_t span_hz;                    /**< @brief Total span width in Hz. */
-  uint32_t start_freq;                 /**< @brief Start frequency in Hz. */
-  uint32_t step_hz;                    /**< @brief Frequency step between bins in Hz. */
-  float dbm_values[SPECTRUM_SAMPLES];  /**< @brief RSSI values in dBm per bin. */
-  uint64_t timestamp;                  /**< @brief Capture timestamp in microseconds. */
+  uint32_t center_freq;               /**< @brief Center frequency in Hz. */
+  uint32_t span_hz;                   /**< @brief Total span width in Hz. */
+  uint32_t start_freq;                /**< @brief Start frequency in Hz. */
+  uint32_t step_hz;                   /**< @brief Frequency step between bins in Hz. */
+  float dbm_values[SPECTRUM_SAMPLES]; /**< @brief RSSI values in dBm per bin. */
+  uint64_t timestamp;                 /**< @brief Capture timestamp in microseconds. */
 } subghz_spectrum_line_t;
 
 /**

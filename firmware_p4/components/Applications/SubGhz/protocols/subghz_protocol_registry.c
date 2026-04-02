@@ -29,28 +29,27 @@ extern subghz_protocol_t protocol_linear;
 extern subghz_protocol_t protocol_rossi;
 
 static const subghz_protocol_t *s_protocols[] = {
-  &protocol_rcswitch,
-  &protocol_came,
-  &protocol_nice_flo,
-  &protocol_princeton,
-  &protocol_ansonic,
-  &protocol_chamberlain,
-  &protocol_holtek,
-  &protocol_liftmaster,
-  &protocol_linear,
-  &protocol_rossi,
+    &protocol_rcswitch,
+    &protocol_came,
+    &protocol_nice_flo,
+    &protocol_princeton,
+    &protocol_ansonic,
+    &protocol_chamberlain,
+    &protocol_holtek,
+    &protocol_liftmaster,
+    &protocol_linear,
+    &protocol_rossi,
 };
 
 #define PROTOCOLS_COUNT (sizeof(s_protocols) / sizeof(s_protocols[0]))
 
-void subghz_protocol_registry_init(void) {
-}
+void subghz_protocol_registry_init(void) {}
 
-bool subghz_protocol_registry_decode_all(const int32_t *pulses, size_t count,
+bool subghz_protocol_registry_decode_all(const int32_t *pulses,
+                                         size_t count,
                                          subghz_data_t *out_data) {
   for (size_t i = 0; i < PROTOCOLS_COUNT; i++) {
-    if (s_protocols[i]->decode != NULL &&
-        s_protocols[i]->decode(pulses, count, out_data)) {
+    if (s_protocols[i]->decode != NULL && s_protocols[i]->decode(pulses, count, out_data)) {
       return true;
     }
   }
@@ -62,8 +61,7 @@ const subghz_protocol_t *subghz_protocol_registry_get_by_name(const char *name) 
     return NULL;
   }
   for (size_t i = 0; i < PROTOCOLS_COUNT; i++) {
-    if (strcmp(s_protocols[i]->name, "RCSwitch") == 0 &&
-        strstr(name, "RCSwitch") != NULL) {
+    if (strcmp(s_protocols[i]->name, "RCSwitch") == 0 && strstr(name, "RCSwitch") != NULL) {
       return s_protocols[i];
     }
     if (strcmp(s_protocols[i]->name, name) == 0) {

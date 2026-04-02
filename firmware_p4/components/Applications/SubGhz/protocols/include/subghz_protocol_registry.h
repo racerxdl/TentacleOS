@@ -34,7 +34,9 @@ void subghz_protocol_registry_init(void);
  * @param out_data  Pointer to store decoded results.
  * @return true if a protocol claimed the signal.
  */
-bool subghz_protocol_registry_decode_all(const int32_t *pulses, size_t count, subghz_data_t *out_data);
+bool subghz_protocol_registry_decode_all(const int32_t *pulses,
+                                         size_t count,
+                                         subghz_data_t *out_data);
 
 /**
  * @brief Find a protocol by name.

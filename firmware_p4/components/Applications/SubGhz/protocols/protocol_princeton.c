@@ -28,8 +28,8 @@
 #define PRINCETON_BTN_SHIFT     4
 #define PRINCETON_STEP_SIZE     2
 
-static bool protocol_princeton_decode(const int32_t *raw_data, size_t count,
-                                      subghz_data_t *out_data) {
+static bool
+protocol_princeton_decode(const int32_t *raw_data, size_t count, subghz_data_t *out_data) {
   if (count < PRINCETON_MAX_BITS) {
     return false;
   }
@@ -78,7 +78,4 @@ static bool protocol_princeton_decode(const int32_t *raw_data, size_t count,
 }
 
 subghz_protocol_t protocol_princeton = {
-  .name = "Princeton",
-  .decode = protocol_princeton_decode,
-  .encode = NULL
-};
+    .name = "Princeton", .decode = protocol_princeton_decode, .encode = NULL};

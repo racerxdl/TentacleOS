@@ -15,17 +15,17 @@
 #include "subghz_protocol_decoder.h"
 #include "subghz_protocol_utils.h"
 
-#define ANSONIC_SHORT_US        555
-#define ANSONIC_LONG_US         1111
-#define ANSONIC_TOLERANCE_PCT   40
-#define ANSONIC_BIT_COUNT       12
-#define ANSONIC_MIN_RAW_COUNT   20
-#define ANSONIC_MIN_VALID_BITS  10
-#define ANSONIC_STEP_SIZE       2
-#define ANSONIC_BIT_INVALID     (-1)
+#define ANSONIC_SHORT_US       555
+#define ANSONIC_LONG_US        1111
+#define ANSONIC_TOLERANCE_PCT  40
+#define ANSONIC_BIT_COUNT      12
+#define ANSONIC_MIN_RAW_COUNT  20
+#define ANSONIC_MIN_VALID_BITS 10
+#define ANSONIC_STEP_SIZE      2
+#define ANSONIC_BIT_INVALID    (-1)
 
-static bool protocol_ansonic_decode(const int32_t *raw_data, size_t count,
-                                    subghz_data_t *out_data) {
+static bool
+protocol_ansonic_decode(const int32_t *raw_data, size_t count, subghz_data_t *out_data) {
   if (count < ANSONIC_MIN_RAW_COUNT) {
     return false;
   }
@@ -77,7 +77,4 @@ static bool protocol_ansonic_decode(const int32_t *raw_data, size_t count,
 }
 
 subghz_protocol_t protocol_ansonic = {
-  .name = "Ansonic",
-  .decode = protocol_ansonic_decode,
-  .encode = NULL
-};
+    .name = "Ansonic", .decode = protocol_ansonic_decode, .encode = NULL};

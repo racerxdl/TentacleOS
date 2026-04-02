@@ -23,16 +23,18 @@
 
 static const char *TAG = "SUBGHZ_STORAGE";
 
-#define DECODED_BUF_SIZE  1024
-#define RAW_BUF_SIZE      4096
+#define DECODED_BUF_SIZE 1024
+#define RAW_BUF_SIZE     4096
 
 esp_err_t subghz_storage_init(void) {
   ESP_LOGI(TAG, "Storage API Initialized (Placeholder Mode)");
   return ESP_OK;
 }
 
-esp_err_t subghz_storage_save_decoded(const char *name, const subghz_data_t *data,
-                                      uint32_t frequency, uint32_t te) {
+esp_err_t subghz_storage_save_decoded(const char *name,
+                                      const subghz_data_t *data,
+                                      uint32_t frequency,
+                                      uint32_t te) {
   if (name == NULL || data == NULL) {
     ESP_LOGE(TAG, "Invalid arguments to save_decoded");
     return ESP_ERR_INVALID_ARG;
@@ -53,8 +55,8 @@ esp_err_t subghz_storage_save_decoded(const char *name, const subghz_data_t *dat
   return ESP_OK;
 }
 
-esp_err_t subghz_storage_save_raw(const char *name, const int32_t *pulses,
-                                  size_t count, uint32_t frequency) {
+esp_err_t
+subghz_storage_save_raw(const char *name, const int32_t *pulses, size_t count, uint32_t frequency) {
   if (name == NULL || pulses == NULL || count == 0) {
     ESP_LOGE(TAG, "Invalid arguments to save_raw");
     return ESP_ERR_INVALID_ARG;

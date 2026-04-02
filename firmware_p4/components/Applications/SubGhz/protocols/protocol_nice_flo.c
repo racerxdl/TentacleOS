@@ -19,17 +19,17 @@
  * Nice Flo 12bit Protocol Implementation
  */
 
-#define NICE_FLO_SHORT_US        700
-#define NICE_FLO_LONG_US         1400
-#define NICE_FLO_TOLERANCE_PCT   60
-#define NICE_FLO_BIT_COUNT       12
-#define NICE_FLO_MIN_RAW_COUNT   24
-#define NICE_FLO_STEP_SIZE       2
-#define NICE_FLO_SERIAL_SHIFT    2
-#define NICE_FLO_BTN_MASK        0x03
+#define NICE_FLO_SHORT_US      700
+#define NICE_FLO_LONG_US       1400
+#define NICE_FLO_TOLERANCE_PCT 60
+#define NICE_FLO_BIT_COUNT     12
+#define NICE_FLO_MIN_RAW_COUNT 24
+#define NICE_FLO_STEP_SIZE     2
+#define NICE_FLO_SERIAL_SHIFT  2
+#define NICE_FLO_BTN_MASK      0x03
 
-static bool protocol_nice_flo_decode(const int32_t *raw_data, size_t count,
-                                     subghz_data_t *out_data) {
+static bool
+protocol_nice_flo_decode(const int32_t *raw_data, size_t count, subghz_data_t *out_data) {
   if (count < NICE_FLO_MIN_RAW_COUNT) {
     return false;
   }
@@ -78,7 +78,4 @@ static bool protocol_nice_flo_decode(const int32_t *raw_data, size_t count,
 }
 
 subghz_protocol_t protocol_nice_flo = {
-  .name = "Nice Flo",
-  .decode = protocol_nice_flo_decode,
-  .encode = NULL
-};
+    .name = "Nice Flo", .decode = protocol_nice_flo_decode, .encode = NULL};

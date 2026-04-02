@@ -31,15 +31,16 @@ uint8_t subghz_protocol_get_preset_id(void) {
   return cc1101_get_active_preset_id();
 }
 
-size_t subghz_protocol_serialize_decoded(const subghz_data_t *data, uint32_t frequency,
-                                         uint32_t te, char *out_buf, size_t out_size) {
+size_t subghz_protocol_serialize_decoded(
+    const subghz_data_t *data, uint32_t frequency, uint32_t te, char *out_buf, size_t out_size) {
   if (data == NULL || out_buf == NULL) {
     return 0;
   }
 
   uint32_t val = data->raw_value;
 
-  return (size_t)snprintf(out_buf, out_size,
+  return (size_t)snprintf(out_buf,
+                          out_size,
                           "Filetype: High Boy SubGhz File\n"
                           "Version 1\n"
                           "Frequency: %lu\n"
@@ -59,13 +60,14 @@ size_t subghz_protocol_serialize_decoded(const subghz_data_t *data, uint32_t fre
                           (unsigned long)te);
 }
 
-size_t subghz_protocol_serialize_raw(const int32_t *pulses, size_t count,
-                                     uint32_t frequency, char *out_buf, size_t out_size) {
+size_t subghz_protocol_serialize_raw(
+    const int32_t *pulses, size_t count, uint32_t frequency, char *out_buf, size_t out_size) {
   if (pulses == NULL || out_buf == NULL) {
     return 0;
   }
 
-  int written = snprintf(out_buf, out_size,
+  int written = snprintf(out_buf,
+                         out_size,
                          "Filetype: High Boy SubGhz File\n"
                          "Version 1\n"
                          "Frequency: %lu\n"
@@ -97,8 +99,11 @@ size_t subghz_protocol_serialize_raw(const int32_t *pulses, size_t count,
   return offset;
 }
 
-size_t subghz_protocol_parse_raw(const char *content, int32_t *out_pulses, size_t max_count,
-                                 uint32_t *out_frequency, uint8_t *out_preset) {
+size_t subghz_protocol_parse_raw(const char *content,
+                                 int32_t *out_pulses,
+                                 size_t max_count,
+                                 uint32_t *out_frequency,
+                                 uint8_t *out_preset) {
   if (content == NULL || out_pulses == NULL || max_count == 0) {
     return 0;
   }

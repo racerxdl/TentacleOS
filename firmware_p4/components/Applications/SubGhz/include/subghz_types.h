@@ -25,11 +25,11 @@ extern "C" {
  * @brief Decoded Sub-GHz signal data.
  */
 typedef struct {
-  const char *protocol_name;  /**< @brief Name of the decoded protocol. */
-  uint32_t serial;            /**< @brief Device serial number. */
-  uint8_t btn;                /**< @brief Button code. */
-  uint8_t bit_count;          /**< @brief Number of bits in the raw value. */
-  uint32_t raw_value;         /**< @brief Raw decoded value. */
+  const char *protocol_name; /**< @brief Name of the decoded protocol. */
+  uint32_t serial;           /**< @brief Device serial number. */
+  uint8_t btn;               /**< @brief Button code. */
+  uint8_t bit_count;         /**< @brief Number of bits in the raw value. */
+  uint32_t raw_value;        /**< @brief Raw decoded value. */
 } subghz_data_t;
 
 #ifdef __cplusplus

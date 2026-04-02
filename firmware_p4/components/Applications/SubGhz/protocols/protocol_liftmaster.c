@@ -15,17 +15,17 @@
 #include "subghz_protocol_decoder.h"
 #include "subghz_protocol_utils.h"
 
-#define LIFTMASTER_SHORT_US        400
-#define LIFTMASTER_LONG_US         800
-#define LIFTMASTER_TOLERANCE_PCT   40
-#define LIFTMASTER_BIT_COUNT       12
-#define LIFTMASTER_MIN_RAW_COUNT   20
-#define LIFTMASTER_MIN_VALID_BITS  8
-#define LIFTMASTER_STEP_SIZE       2
-#define LIFTMASTER_BIT_INVALID     (-1)
+#define LIFTMASTER_SHORT_US       400
+#define LIFTMASTER_LONG_US        800
+#define LIFTMASTER_TOLERANCE_PCT  40
+#define LIFTMASTER_BIT_COUNT      12
+#define LIFTMASTER_MIN_RAW_COUNT  20
+#define LIFTMASTER_MIN_VALID_BITS 8
+#define LIFTMASTER_STEP_SIZE      2
+#define LIFTMASTER_BIT_INVALID    (-1)
 
-static bool protocol_liftmaster_decode(const int32_t *raw_data, size_t count,
-                                       subghz_data_t *out_data) {
+static bool
+protocol_liftmaster_decode(const int32_t *raw_data, size_t count, subghz_data_t *out_data) {
   if (count < LIFTMASTER_MIN_RAW_COUNT) {
     return false;
   }
@@ -77,7 +77,4 @@ static bool protocol_liftmaster_decode(const int32_t *raw_data, size_t count,
 }
 
 subghz_protocol_t protocol_liftmaster = {
-  .name = "Liftmaster",
-  .decode = protocol_liftmaster_decode,
-  .encode = NULL
-};
+    .name = "Liftmaster", .decode = protocol_liftmaster_decode, .encode = NULL};

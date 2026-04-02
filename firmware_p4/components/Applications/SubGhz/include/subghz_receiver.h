@@ -31,9 +31,9 @@ extern "C" {
  * @brief Receiver operating mode.
  */
 typedef enum {
-  SUBGHZ_MODE_SCAN,   /**< @brief Scan for known protocols. */
-  SUBGHZ_MODE_RAW,    /**< @brief Capture raw signal data. */
-  SUBGHZ_MODE_COUNT   /**< @brief Number of receiver modes (sentinel). */
+  SUBGHZ_MODE_SCAN, /**< @brief Scan for known protocols. */
+  SUBGHZ_MODE_RAW,  /**< @brief Capture raw signal data. */
+  SUBGHZ_MODE_COUNT /**< @brief Number of receiver modes (sentinel). */
 } subghz_mode_t;
 
 /**
