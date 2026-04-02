@@ -12,13 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/**
+ * @file cc1101.h
+ * @brief TI CC1101 Sub-GHz transceiver driver interface.
+ */
 
 #ifndef CC1101_H
 #define CC1101_H
 
-#include <stdint.h>
-#include <stddef.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "esp_err.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Config registers (Write and Read)
 #define CC1101_IOCFG2       0x00        // GDO2 output pin configuration
@@ -104,23 +114,9 @@
 #define CC1101_TXFIFO       0x3F        // TX FIFO access
 #define CC1101_RXFIFO       0x3F        // RX FIFO access
 
-
-void cc1101_init(void);
-void cc1101_set_frequency(uint32_t freq_hz);
-void cc1101_strobe(uint8_t cmd);
-void cc1101_write_reg(uint8_t reg, uint8_t val);
-uint8_t cc1101_read_reg(uint8_t reg);
-void cc1101_write_burst(uint8_t reg, const uint8_t *buf, uint8_t len);
-void cc1101_read_burst(uint8_t reg, uint8_t *buf, uint8_t len);
-float cc1101_convert_rssi(uint8_t rssi_raw);
-void cc1101_spectrum_task(void *pvParameters);
-void cc1101_send_data(const uint8_t *data, size_t len);
-void cc1101_enter_rx_mode(void);
-void cc1101_enter_tx_mode(void);
-void cc1101_enable_async_mode(uint32_t freq_hz); // ASK (OOK) Default
-void cc1101_enable_fsk_mode(uint32_t freq_hz);   // FSK
-
-// Preset Management
+/**
+ * @brief Available modulation presets for the CC1101.
+ */
 typedef enum {
   CC1101_PRESET_IDLE = 0,
   CC1101_PRESET_OOK_270KHZ = 1,
@@ -128,25 +124,209 @@ typedef enum {
   CC1101_PRESET_2FSK_2KHZ = 3,
   CC1101_PRESET_2FSK_47KHZ = 4,
   CC1101_PRESET_2FSK_95KHZ = 5,
-  CC1101_PRESET_OOK_800KHZ = 6, 
+  CC1101_PRESET_OOK_800KHZ = 6,
+  CC1101_PRESET_COUNT,
 } cc1101_preset_t;
 
+/**
+ * @brief Initialize the CC1101 transceiver and SPI bus.
+ */
+void cc1101_init(void);
+
+/**
+ * @brief Set the carrier frequency.
+ *
+ * @param freq_hz Frequency in Hertz.
+ */
+void cc1101_set_frequency(uint32_t freq_hz);
+
+/**
+ * @brief Apply a predefined modulation preset at a given frequency.
+ *
+ * @param preset Preset identifier from cc1101_preset_t.
+ * @param freq_hz Carrier frequency in Hertz.
+ */
 void cc1101_set_preset(cc1101_preset_t preset, uint32_t freq_hz);
+
+/**
+ * @brief Return the numeric identifier of the currently active preset.
+ *
+ * @return Active preset ID (0 when idle).
+ */
 uint8_t cc1101_get_active_preset_id(void);
 
-// New Tuning & Configuration Functions
+/**
+ * @brief Switch the radio into async OOK receive/transmit mode.
+ *
+ * @param freq_hz Carrier frequency in Hertz.
+ */
+void cc1101_enable_async_mode(uint32_t freq_hz);
+
+/**
+ * @brief Switch the radio into 2-FSK mode.
+ *
+ * @param freq_hz Carrier frequency in Hertz.
+ */
+void cc1101_enable_fsk_mode(uint32_t freq_hz);
+
+/**
+ * @brief Enter receive mode.
+ */
+void cc1101_enter_rx_mode(void);
+
+/**
+ * @brief Enter transmit mode.
+ */
+void cc1101_enter_tx_mode(void);
+
+/**
+ * @brief Set the receive filter bandwidth.
+ *
+ * @param khz Bandwidth in kHz.
+ */
 void cc1101_set_rx_bandwidth(float khz);
+
+/**
+ * @brief Set the over-the-air data rate.
+ *
+ * @param baud Data rate in baud.
+ */
 void cc1101_set_data_rate(float baud);
+
+/**
+ * @brief Set the frequency deviation.
+ *
+ * @param dev Deviation in kHz.
+ */
 void cc1101_set_deviation(float dev);
-void cc1101_set_modulation(uint8_t modulation); // 0=2-FSK, 1=GFSK, 2=ASK/OOK, 3=4-FSK, 4=MSK
+
+/**
+ * @brief Set the modulation format.
+ *
+ * @param modulation 0 = 2-FSK, 1 = GFSK, 2 = ASK/OOK, 3 = 4-FSK, 4 = MSK.
+ */
+void cc1101_set_modulation(uint8_t modulation);
+
+/**
+ * @brief Set the PA output power.
+ *
+ * @param dbm Power level in dBm.
+ */
 void cc1101_set_pa(int dbm);
+
+/**
+ * @brief Set the channel number.
+ *
+ * @param channel Channel number (0-255).
+ */
 void cc1101_set_channel(uint8_t channel);
-void cc1101_set_chsp(float khz); // Channel Spacing
+
+/**
+ * @brief Set the channel spacing.
+ *
+ * @param khz Spacing in kHz.
+ */
+void cc1101_set_chsp(float khz);
+
+/**
+ * @brief Run manual frequency synthesizer calibration.
+ */
 void cc1101_calibrate(void);
+
+/**
+ * @brief Set the sync-word qualification mode.
+ *
+ * @param mode Sync mode value (0-7, see CC1101 datasheet).
+ */
 void cc1101_set_sync_mode(uint8_t mode);
+
+/**
+ * @brief Enable or disable forward error correction.
+ *
+ * @param enable true to enable FEC, false to disable.
+ */
 void cc1101_set_fec(bool enable);
+
+/**
+ * @brief Set the number of preamble bytes transmitted.
+ *
+ * @param preamble_bytes Number of preamble bytes.
+ */
 void cc1101_set_preamble(uint8_t preamble_bytes);
+
+/**
+ * @brief Enable or disable the digital DC blocking filter.
+ *
+ * @param disable true to turn the filter off, false to keep it on.
+ */
 void cc1101_set_dc_filter_off(bool disable);
+
+/**
+ * @brief Enable or disable Manchester encoding.
+ *
+ * @param enable true to enable, false to disable.
+ */
 void cc1101_set_manchester(bool enable);
+
+/**
+ * @brief Transmit a data buffer.
+ *
+ * @param data Pointer to the payload bytes.
+ * @param len  Number of bytes to send.
+ */
+void cc1101_send_data(const uint8_t *data, size_t len);
+
+/**
+ * @brief Convert a raw RSSI register value to dBm.
+ *
+ * @param rssi_raw Raw RSSI byte read from the CC1101.
+ * @return RSSI value in dBm.
+ */
+float cc1101_convert_rssi(uint8_t rssi_raw);
+
+/**
+ * @brief Send a single-byte command strobe.
+ *
+ * @param cmd Strobe command address (e.g. CC1101_SRX).
+ */
+void cc1101_strobe(uint8_t cmd);
+
+/**
+ * @brief Write a value to a single configuration register.
+ *
+ * @param reg Register address.
+ * @param val Value to write.
+ */
+void cc1101_write_reg(uint8_t reg, uint8_t val);
+
+/**
+ * @brief Read a single configuration or status register.
+ *
+ * @param reg Register address.
+ * @return Register value.
+ */
+uint8_t cc1101_read_reg(uint8_t reg);
+
+/**
+ * @brief Burst-write a buffer to consecutive registers.
+ *
+ * @param reg  Starting register address.
+ * @param buf  Pointer to the data to write.
+ * @param len  Number of bytes.
+ */
+void cc1101_write_burst(uint8_t reg, const uint8_t *buf, uint8_t len);
+
+/**
+ * @brief Burst-read consecutive registers into a buffer.
+ *
+ * @param reg  Starting register address.
+ * @param buf  Destination buffer.
+ * @param len  Number of bytes to read.
+ */
+void cc1101_read_burst(uint8_t reg, uint8_t *buf, uint8_t len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // CC1101_H
