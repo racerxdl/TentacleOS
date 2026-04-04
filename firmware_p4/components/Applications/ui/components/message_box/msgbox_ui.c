@@ -231,3 +231,7 @@ void msgbox_close(void) {
         do_close(false);
     }
 }
+
+bool msgbox_is_open(void) {
+    return (panel != NULL);
+}
