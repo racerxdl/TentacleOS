@@ -36,6 +36,7 @@ file(GLOB_RECURSE BLE_UI_SRCS "ui/screens/bluetooth/*.c")
 file(GLOB_RECURSE SUBGHZ_UI_SRCS "ui/screens/SubGhz/*.c")
 file(GLOB_RECURSE SUB_EXAMPLE_UI_SRCS "ui/screens/sub_example/*.c")
 file(GLOB_RECURSE BADUSB_UI_SRCS "ui/screens/badusb/*.c")
+file(GLOB_RECURSE IR_UI_SRCS "ui/screens/infrared/*.c")
 
 #COMPONENTS
 file(GLOB_RECURSE HEADER_UI_SRCS "ui/components/header/*.c")
@@ -44,6 +45,7 @@ file(GLOB_RECURSE KEYBOARD_UI_SRCS "ui/components/keyboard/*.c")
 file(GLOB_RECURSE MSGBOX_UI_SRCS "ui/components/message_box/*.c")
 file(GLOB_RECURSE DROPDOWN_UI_SRCS "ui/components/dropdown/*.c")
 file(GLOB_RECURSE TOGGLE_UI_SRCS "ui/components/toggle/*.c")
+file(GLOB_RECURSE SPINNER_UI_SRCS "ui/components/spinner/*.c")
 
 #SETINGS SCREENS
 file(GLOB_RECURSE SETTINGS_UI_SRCS "ui/screens/settings/*.c")
@@ -83,6 +85,7 @@ idf_component_register(SRCS
   ${WIFI_UI_SRCS}
   ${SUB_EXAMPLE_UI_SRCS}
   ${BADUSB_UI_SRCS}
+  ${IR_UI_SRCS}
   ${HEADER_UI_SRCS}
   ${FOOTER_UI_SRCS}
   ${KEYBOARD_UI_SRCS}
@@ -99,6 +102,7 @@ idf_component_register(SRCS
   ${MSGBOX_UI_SRCS}
   ${DROPDOWN_UI_SRCS}
   ${TOGGLE_UI_SRCS}
+  ${SPINNER_UI_SRCS}
 
   INCLUDE_DIRS
   "wifi/include"   
@@ -127,6 +131,7 @@ idf_component_register(SRCS
   "ui/screens/about_settings/include"
   "ui/screens/theme_selector/include"
   "ui/screens/badusb/include"
+  "ui/screens/infrared/include"
   "bad_usb/include"
   "bluetooth/include"
   "SubGhz/include"
@@ -152,6 +157,7 @@ idf_component_register(SRCS
   "ui/components/intensity_bar/include"
   "ui/components/chart/include"
   "ui/components/text_viewer/include"
+  "ui/components/spinner/include"
   
 
 
