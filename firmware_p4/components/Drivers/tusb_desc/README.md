@@ -1,56 +1,74 @@
 # TinyUSB Descriptors (HID Composite)
 
-This component defines the USB descriptors required to enumerate the ESP32 as a USB HID Composite Device (Keyboard + Mouse). It uses the TinyUSB stack provided by Espressif.
+This component defines the USB descriptors required to enumerate the ESP32-P4 as a USB HID Composite Device (Keyboard + Mouse) and provides the initialization routine for the TinyUSB driver.
 
 ## Overview
 
 - **Location:** `components/Drivers/tusb_desc/`
 - **Header:** `include/tusb_desc.h`
-- **Dependencies:** `tinyusb`, `esp_tinyusb`
+- **Dependencies:** `tinyusb`, `esp_tinyusb`, `driver/gpio`
+- **USB Port:** High Speed (ESP32-P4)
 
-## Descriptors Defined
+## USB Descriptors
 
 ### Device Descriptor
-- **USB Version:** 2.0
-- **Vendor ID:** `0xCAFE` (Example/Test ID)
-- **Product ID:** `0x4001`
-- **Class:** Defined at Interface level
+
+| Field | Value |
+|-------|-------|
+| USB Version | 2.0 |
+| Vendor ID | `0xCAFE` |
+| Product ID | `0x4001` |
+| Device Class | Defined at interface level |
+| Configurations | 1 |
 
 ### Configuration Descriptor
-- **Interfaces:** 1 (HID)
-- **Power:** 100mA
-- **Attributes:** Remote Wakeup enabled
+
+| Field | Value |
+|-------|-------|
+| Interfaces | 1 (HID) |
+| Max Power | 100 mA |
+| Attributes | Remote Wakeup |
 
 ### HID Report Descriptor
-The device reports two functionalities within a single HID interface using Report IDs:
 
-1.  **Keyboard:**
-    - **Report ID:** `1`
-    - **Usage:** Generic Desktop Keyboard
+Single HID interface with two reports using Report IDs:
 
-2.  **Mouse:**
-    - **Report ID:** `2`
-    - **Usage:** Generic Desktop Mouse (Buttons + XY Movement + Wheel)
+| Report ID | Type | Usage |
+|-----------|------|-------|
+| 1 | Keyboard | Generic Desktop Keyboard |
+| 2 | Mouse | Generic Desktop Mouse (buttons + XY + wheel) |
 
 ### String Descriptors
-0.  Language ID (English)
-1.  Manufacturer: "HighCode"
-2.  Product: "BadUSB Device"
-3.  Serial: "123456"
+
+| Index | Value |
+|-------|-------|
+| 0 | Language ID (English US) |
+| 1 | Manufacturer: "HighCode" |
+| 2 | Product: "BadUSB Device" |
+| 3 | Serial: "123456" |
 
 ## API Reference
 
 ### `busb_init`
 ```c
-void busb_init(void);
+esp_err_t busb_init(void);
 ```
 Initializes the TinyUSB driver with the defined descriptors.
-- Installs the driver using `tinyusb_driver_install`.
-- **Note:** This function must be called before attempting to send any keystrokes or mouse movements.
+1. Installs the GPIO ISR service (required for ESP32-P4 High Speed USB).
+2. Configures device, configuration, and HID report descriptors.
+3. Installs the TinyUSB driver on the High Speed port.
 
-## Callbacks (TinyUSB Hooks)
-The component implements standard TinyUSB callbacks to serve descriptors to the host:
-- `tud_descriptor_device_cb`
-- `tud_descriptor_configuration_cb`
-- `tud_descriptor_string_cb`
-- `tud_hid_descriptor_report_cb`
+Must be called before any HID report transmission.
+
+## TinyUSB Callbacks
+
+The component implements the required TinyUSB callbacks to serve descriptors to the USB host:
+
+| Callback | Purpose |
+|----------|---------|
+| `tud_descriptor_device_cb` | Returns the device descriptor |
+| `tud_descriptor_configuration_cb` | Returns the configuration descriptor |
+| `tud_descriptor_string_cb` | Returns string descriptors (manufacturer, product, serial) |
+| `tud_hid_descriptor_report_cb` | Returns the HID report descriptor |
+| `tud_hid_get_report_cb` | Handles GET_REPORT requests (stub) |
+| `tud_hid_set_report_cb` | Handles SET_REPORT requests (stub) |

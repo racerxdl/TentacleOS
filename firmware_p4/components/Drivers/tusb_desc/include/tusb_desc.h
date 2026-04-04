@@ -12,18 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #ifndef TUSB_DESC_H
 #define TUSB_DESC_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+#include "esp_err.h"
 #include "tinyusb.h"
-// --- Constantes Públicas ---
-// Define um nome para a nossa única interface HID (Teclado)
-#define ITF_NUM_HID   0
 
-// --- Declarações Externas ---
-// Informa a outros arquivos que essas variáveis existem em algum lugar (no tusb_desc.c)
-void busb_init(void);
+#define TUSB_DESC_ITF_NUM_HID 0
+
+/**
+ * @brief Initialize the TinyUSB driver with HID composite descriptors.
+ *
+ * Installs the GPIO ISR service (required for ESP32-P4 High Speed USB),
+ * configures device/configuration/HID report descriptors, and installs
+ * the TinyUSB driver.
+ *
+ * Must be called before any HID report transmission.
+ *
+ * @return
+ *   - ESP_OK on success
+ *   - ESP_FAIL if the TinyUSB driver installation fails
+ */
+esp_err_t busb_init(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TUSB_DESC_H
