@@ -1,66 +1,155 @@
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "tos_log.h"
-#include "tos_config.h"
-#include "tos_storage_paths.h"
-#include "storage_init.h"
-#include "esp_log.h"
 
 #include <stdio.h>
-#include <stdarg.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <time.h>
 
-static const char *TAG = "tos_log";
+#include "esp_log.h"
 
-#define LOG_FILE      TOS_PATH_LOGS "/system.log"
-#define LOG_FILE_BAK  TOS_PATH_LOGS "/system.log.bak"
-#define LOG_MAX_SIZE  (2 * 1024 * 1024)  // 2MB
+#include "storage_init.h"
+#include "tos_storage_paths.h"
 
-static tos_log_level_t s_min_level = TOS_LOG_INFO;
+static const char *TAG = "TOS_LOG";
 
-static const char *level_str[] = {"E", "W", "I", "D"};
+#define LOG_DIR        TOS_PATH_LOGS
+#define LOG_FILE_FMT   LOG_DIR "/sys.%d.log"
+#define LOG_MAX_FILES  5
+#define LOG_MAX_SIZE   (2 * 1024 * 1024) // 2 MB per file (total max = 10 MB)
+#define LOG_PATH_LEN   64
 
-static tos_log_level_t parse_level(const char *str) {
-    if (!str) return TOS_LOG_INFO;
-    if (strcmp(str, "debug") == 0) return TOS_LOG_DEBUG;
-    if (strcmp(str, "error") == 0) return TOS_LOG_ERROR;
-    if (strcmp(str, "warn")  == 0) return TOS_LOG_WARN;
-    return TOS_LOG_INFO;
+static FILE *s_log_file = NULL;
+static vprintf_like_t s_original_vprintf = NULL;
+
+static void build_path(char *out_path, int index) {
+  snprintf(out_path, LOG_PATH_LEN, LOG_FILE_FMT, index);
 }
 
-void tos_log_init(void) {
-    s_min_level = parse_level(g_config_system.log_level);
-    ESP_LOGI(TAG, "Log system initialized (level: %s)", g_config_system.log_level);
+static long get_file_size(const char *path) {
+  struct stat st;
+  if (stat(path, &st) != 0) {
+    return 0;
+  }
+  return st.st_size;
 }
 
-static void rotate_if_needed(void) {
-    struct stat st;
-    if (stat(LOG_FILE, &st) != 0) return;
-    if (st.st_size < LOG_MAX_SIZE) return;
+/**
+ * Rotate log files:
+ *   sys.5.log -> deleted
+ *   sys.4.log -> sys.5.log
+ *   sys.3.log -> sys.4.log
+ *   sys.2.log -> sys.3.log
+ *   sys.1.log -> sys.2.log
+ *   (new sys.1.log created)
+ */
+static void rotate_logs(void) {
+  // Close current file before rotating
+  if (s_log_file != NULL) {
+    fclose(s_log_file);
+    s_log_file = NULL;
+  }
 
-    remove(LOG_FILE_BAK);
-    rename(LOG_FILE, LOG_FILE_BAK);
-    ESP_LOGI(TAG, "Log rotated: system.log -> system.log.bak");
+  char old_path[LOG_PATH_LEN];
+  char new_path[LOG_PATH_LEN];
+
+  // Delete the oldest file
+  build_path(old_path, LOG_MAX_FILES);
+  remove(old_path);
+
+  // Shift files: N -> N+1
+  for (int i = LOG_MAX_FILES - 1; i >= 1; i--) {
+    build_path(old_path, i);
+    build_path(new_path, i + 1);
+    rename(old_path, new_path);
+  }
+
+  // Open fresh sys.1.log
+  build_path(old_path, 1);
+  s_log_file = fopen(old_path, "w");
 }
 
-void tos_log_write(tos_log_level_t level, const char *tag, const char *fmt, ...) {
-    if (level > s_min_level) return;
-    if (!storage_is_mounted()) return;
+static int log_to_file(const char *fmt, va_list args) {
+  // Always print to serial
+  int ret = s_original_vprintf(fmt, args);
 
-    rotate_if_needed();
+  if (s_log_file == NULL || !storage_is_mounted()) {
+    return ret;
+  }
 
-    FILE *f = fopen(LOG_FILE, "a");
-    if (!f) return;
+  // Check if rotation is needed
+  long size = ftell(s_log_file);
+  if (size >= LOG_MAX_SIZE) {
+    rotate_logs();
+    if (s_log_file == NULL) {
+      return ret;
+    }
+  }
 
-    // Timestamp (uptime in seconds)
-    uint32_t uptime = (uint32_t)(esp_log_timestamp() / 1000);
-    fprintf(f, "[%6lu] [%s] [%s] ", (unsigned long)uptime, level_str[level], tag ? tag : "?");
+  // Write to file
+  va_list args_copy;
+  va_copy(args_copy, args);
+  vfprintf(s_log_file, fmt, args_copy);
+  va_end(args_copy);
+  fflush(s_log_file);
 
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(f, fmt, args);
-    va_end(args);
+  return ret;
+}
 
-    fprintf(f, "\n");
-    fclose(f);
+esp_err_t tos_log_init(void) {
+  if (s_log_file != NULL) {
+    return ESP_ERR_INVALID_STATE;
+  }
+
+  if (!storage_is_mounted()) {
+    return ESP_ERR_INVALID_STATE;
+  }
+
+  // Open current log file (append to existing sys.1.log)
+  char path[LOG_PATH_LEN];
+  build_path(path, 1);
+  s_log_file = fopen(path, "a");
+  if (s_log_file == NULL) {
+    ESP_LOGE(TAG, "Failed to open log file: %s", path);
+    return ESP_FAIL;
+  }
+
+  // Check if rotation is needed on startup
+  if (get_file_size(path) >= LOG_MAX_SIZE) {
+    rotate_logs();
+  }
+
+  // Redirect all ESP_LOGx output through our handler
+  s_original_vprintf = esp_log_set_vprintf(log_to_file);
+
+  ESP_LOGI(TAG, "Log system initialized (file: %s, max: %d files x %d MB)",
+           path, LOG_MAX_FILES, LOG_MAX_SIZE / (1024 * 1024));
+
+  return ESP_OK;
+}
+
+void tos_log_deinit(void) {
+  if (s_original_vprintf != NULL) {
+    esp_log_set_vprintf(s_original_vprintf);
+    s_original_vprintf = NULL;
+  }
+
+  if (s_log_file != NULL) {
+    fclose(s_log_file);
+    s_log_file = NULL;
+  }
+
+  ESP_LOGI(TAG, "Log system deinitialized");
 }
