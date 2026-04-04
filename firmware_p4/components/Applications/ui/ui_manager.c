@@ -51,6 +51,12 @@
 #include "wifi_beacon_spam_ui.h"
 #include "wifi_probe_ui.h"
 #include "theme_selector_ui.h"
+#include "ir_menu_ui.h"
+#include "ir_receive_ui.h"
+#include "ir_send_ui.h"
+#include "ir_controller_ui.h"
+#include "ir_saved_ui.h"
+#include "ir_burst_ui.h"
 #include "esp_log.h"
 #include "bluetooth_service.h"
 #include "bad_usb.h"
@@ -379,6 +385,30 @@ void ui_switch_screen(screen_id_t new_screen) {
 
       case SCREEN_THEME_SELECTOR:
         ui_theme_selector_open();
+        break;
+
+      case SCREEN_IR_MENU:
+        ui_ir_menu_open();
+        break;
+
+      case SCREEN_IR_RECEIVE:
+        ui_ir_receive_open();
+        break;
+
+      case SCREEN_IR_SEND:
+        ui_ir_send_open();
+        break;
+
+      case SCREEN_IR_CONTROLLER:
+        ui_ir_controller_open();
+        break;
+
+      case SCREEN_IR_SAVED:
+        ui_ir_saved_open();
+        break;
+
+      case SCREEN_IR_BURST:
+        ui_ir_burst_open();
         break;
 
       default:
