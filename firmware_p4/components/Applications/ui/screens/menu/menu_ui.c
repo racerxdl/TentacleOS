@@ -209,6 +209,7 @@ static void ev(lv_event_t * e) {
       case 0: ui_switch_screen(SCREEN_WIFI_MENU); break;
       case 1: ui_switch_screen(SCREEN_BLE_MENU); break;
       case 2: ui_switch_screen(SCREEN_NFC_MENU); break;
+      case 3: ui_switch_screen(SCREEN_IR_MENU); break;
       case 7: ui_switch_screen(SCREEN_SETTINGS); break;
       case 8: ui_switch_screen(SCREEN_FILES); break;
       default: ESP_LOGW(TAG, "NOT DEFINED"); break;
