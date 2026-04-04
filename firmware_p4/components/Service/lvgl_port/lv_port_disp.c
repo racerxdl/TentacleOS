@@ -1,24 +1,44 @@
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "lv_port_disp.h"
+
+#include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_io.h"
-#include "esp_heap_caps.h"
-#include "lvgl.h"
-#include "st7789.h" 
+
+#include "st7789.h"
 #include "ble_screen_server.h"
 
-#define LVGL_BUF_PIXELS (LCD_H_RES * (LCD_V_RES / 5))
+static const char *TAG = "LV_PORT_DISP";
 
+#define LVGL_BUF_LINES  (LCD_V_RES / 5)
+#define LVGL_BUF_PIXELS (LCD_H_RES * LVGL_BUF_LINES)
+#define LVGL_BUF_ALLOC  (MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)
 
-static lv_display_t * disp_handle = NULL;
+static lv_display_t *s_disp_handle = NULL;
 
-static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
-{
-  lv_display_t * disp = (lv_display_t *)user_ctx;
+static bool flush_ready_cb(esp_lcd_panel_io_handle_t panel_io,
+                           esp_lcd_panel_io_event_data_t *edata,
+                           void *user_ctx) {
+  lv_display_t *disp = (lv_display_t *)user_ctx;
   lv_display_flush_ready(disp);
   return false;
 }
 
-static void disp_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px_map)
-{
+static void disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
   uint32_t w = lv_area_get_width(area);
   uint32_t h = lv_area_get_height(area);
   uint32_t px_count = w * h;
@@ -31,26 +51,31 @@ static void disp_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px
     ble_screen_server_send_partial((const uint16_t *)px_map, area->x1, area->y1, w, h);
   }
 }
-void lv_port_disp_init(void)
-{
-  disp_handle = lv_display_create(LCD_H_RES, LCD_V_RES);
 
-  lv_display_set_flush_cb(disp_handle, disp_flush);
+void lv_port_disp_init(void) {
+  s_disp_handle = lv_display_create(LCD_H_RES, LCD_V_RES);
+  lv_display_set_flush_cb(s_disp_handle, disp_flush);
 
-  size_t buffer_size_bytes = LVGL_BUF_PIXELS * sizeof(lv_color_t);
+  size_t buf_size = LVGL_BUF_PIXELS * sizeof(lv_color_t);
 
-  void *buf1 = heap_caps_malloc(buffer_size_bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-  void *buf2 = heap_caps_malloc(buffer_size_bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+  void *buf1 = heap_caps_malloc(buf_size, LVGL_BUF_ALLOC);
+  void *buf2 = heap_caps_malloc(buf_size, LVGL_BUF_ALLOC);
 
-  if(buf1 == NULL || buf2 == NULL) {
+  if (buf1 == NULL || buf2 == NULL) {
+    ESP_LOGE(TAG, "Failed to allocate display buffers (%u bytes each)", (unsigned)buf_size);
     return;
   }
 
-  lv_display_set_buffers(disp_handle, buf1, buf2, buffer_size_bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
+  lv_display_set_buffers(s_disp_handle, buf1, buf2, buf_size, LV_DISPLAY_RENDER_MODE_PARTIAL);
 
   const esp_lcd_panel_io_callbacks_t cbs = {
-    .on_color_trans_done = notify_lvgl_flush_ready,
+      .on_color_trans_done = flush_ready_cb,
   };
+  esp_lcd_panel_io_register_event_callbacks(io_handle, &cbs, s_disp_handle);
 
-  esp_lcd_panel_io_register_event_callbacks(io_handle, &cbs, disp_handle);
+  ESP_LOGI(TAG,
+           "Display port initialized (%dx%d, buf: %u bytes x2)",
+           LCD_H_RES,
+           LCD_V_RES,
+           (unsigned)buf_size);
 }

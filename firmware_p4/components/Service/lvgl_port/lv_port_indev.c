@@ -1,81 +1,84 @@
-#include "core/lv_group.h"
-#include "pin_def.h"
-#include "buttons_gpio.h" 
-#include "esp_log.h"
-#include "lv_port_indev.h"
-#include "lvgl.h"
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-static void keypad_read(lv_indev_t * indev, lv_indev_data_t * data);
+#include "lv_port_indev.h"
+
+#include "esp_log.h"
+#include "core/lv_group.h"
+
+#include "buttons_gpio.h"
+
+static const char *TAG = "LV_PORT_INDEV";
+
+lv_indev_t *indev_keypad = NULL;
+lv_group_t *main_group = NULL;
+
+static bool s_is_keyboard_mode = false;
+
+static void keypad_read(lv_indev_t *indev, lv_indev_data_t *data);
 static uint32_t keypad_get_key(void);
 
-lv_indev_t * indev_keypad = NULL;
-lv_group_t * main_group = NULL;
-static bool keyboard_mode = false;
+void lv_port_indev_init(void) {
+  indev_keypad = lv_indev_create();
+  lv_indev_set_type(indev_keypad, LV_INDEV_TYPE_KEYPAD);
+  lv_indev_set_read_cb(indev_keypad, keypad_read);
 
-void lv_port_indev_init(void)
-{
-    // --- LVGL v9: Criação do Input Device ---
-    
-    // 1. Cria o dispositivo de entrada (não precisa mais de lv_indev_drv_t)
-    indev_keypad = lv_indev_create();
+  main_group = lv_group_create();
+  lv_group_set_default(main_group);
+  lv_indev_set_group(indev_keypad, main_group);
 
-    // 2. Define o tipo como KEYPAD (Teclado/Botões físicos)
-    lv_indev_set_type(indev_keypad, LV_INDEV_TYPE_KEYPAD);
-
-    // 3. Define a função de leitura (callback)
-    lv_indev_set_read_cb(indev_keypad, keypad_read);
-
-    // Opcional: Se você tiver um "Group" (grupo de navegação), você associaria aqui depois
-    // lv_indev_set_group(indev_keypad, group);
-    // 2. Cria o Grupo de Navegação
-    main_group = lv_group_create();
-    
-    // 3. Define como padrão (qualquer widget criado depois disso entra no grupo auto)
-    lv_group_set_default(main_group);
-
-    // 4. Associa o Teclado físico ao Grupo Lógico
-    lv_indev_set_group(indev_keypad, main_group);
+  ESP_LOGI(TAG, "Input device initialized (keypad + navigation group)");
 }
 
-void lv_port_indev_set_keyboard_mode(bool enabled)
-{
-    keyboard_mode = enabled;
+void lv_port_indev_set_keyboard_mode(bool is_enabled) {
+  s_is_keyboard_mode = is_enabled;
 }
 
-// Callback chamado periodicamente pelo LVGL para ler o estado dos botões
-static void keypad_read(lv_indev_t * indev, lv_indev_data_t * data)
-{
-    static uint32_t last_key = 0;
+static void keypad_read(lv_indev_t *indev, lv_indev_data_t *data) {
+  static uint32_t s_last_key = 0;
 
-    // Obtém a tecla pressionada do hardware (sua função de GPIO)
-    uint32_t act_key = keypad_get_key();
+  uint32_t key = keypad_get_key();
 
-    if(act_key != 0) {
-        data->state = LV_INDEV_STATE_PRESSED;
-        last_key = act_key;
-        ESP_LOGI("INDEV", "Tecla Pressionada: %d", (int)act_key);
-    } else {
-        data->state = LV_INDEV_STATE_RELEASED;
-    }
+  if (key != 0) {
+    data->state = LV_INDEV_STATE_PRESSED;
+    s_last_key = key;
+  } else {
+    data->state = LV_INDEV_STATE_RELEASED;
+  }
 
-    data->key = last_key;
+  data->key = s_last_key;
 }
 
-// Função auxiliar para mapear seus botões físicos para teclas do LVGL
-static uint32_t keypad_get_key(void)
-{
+static uint32_t keypad_get_key(void) {
+  if (up_button_is_down()) {
+    return s_is_keyboard_mode ? LV_KEY_UP : LV_KEY_PREV;
+  }
+  if (down_button_is_down()) {
+    return s_is_keyboard_mode ? LV_KEY_DOWN : LV_KEY_NEXT;
+  }
+  if (ok_button_is_down()) {
+    return LV_KEY_ENTER;
+  }
+  if (back_button_is_down()) {
+    return LV_KEY_ESC;
+  }
+  if (left_button_is_down()) {
+    return LV_KEY_LEFT;
+  }
+  if (right_button_is_down()) {
+    return LV_KEY_RIGHT;
+  }
 
-    // AQUI entra a lógica dos seus botões do HighBoy
-    // Exemplo (supondo que suas funções de botão retornem true se pressionado):
-    
-  //navegation
-  if(up_button_is_down()) return keyboard_mode ? LV_KEY_UP : LV_KEY_PREV;
-  if(down_button_is_down()) return keyboard_mode ? LV_KEY_DOWN : LV_KEY_NEXT;
-
-  if(ok_button_is_down()) return LV_KEY_ENTER;
-  if(back_button_is_down()) return LV_KEY_ESC;
-  if(left_button_is_down()) return LV_KEY_LEFT;
-  if(right_button_is_down()) return LV_KEY_RIGHT;
-
-  return 0; // Nenhuma tecla pressionada
+  return 0;
 }
