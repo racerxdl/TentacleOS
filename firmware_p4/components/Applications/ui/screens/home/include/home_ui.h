@@ -4,4 +4,3 @@
 void ui_home_open(void);
 
 #endif // !HOME_UI_H
-

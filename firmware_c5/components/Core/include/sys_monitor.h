@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #ifndef SYS_MONITOR_H
 #define SYS_MONITOR_H
 
