@@ -12,65 +12,89 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "ir_protocol.h"
 #include "ir_protocol_nec.h"
+
+#include "esp_log.h"
+
+#include "ir_protocol.h"
 
 static const char *TAG = "IR_NEC";
 
-bool nec_decode(rmt_symbol_word_t *symbols, size_t count, ir_data_t *out) {
-    if (!ir_match(symbols[0].duration0, NEC_HEADER_MARK))
-        return false;
+bool ir_protocol_nec_decode(const rmt_symbol_word_t *symbols, size_t count, ir_data_t *out_data) {
+  if (symbols == NULL || count == 0 || out_data == NULL)
+    return false;
 
-    // Repeat frame: 9000 mark + 2250 space + 560 stop
-    if (count <= 4 && ir_match(symbols[0].duration1, NEC_REPEAT_SPACE)) {
-        out->protocol = IR_PROTO_NEC;
-        out->repeat = true;
-        return true;
-    }
+  if (!ir_match(symbols[0].duration0, NEC_HEADER_MARK))
+    return false;
 
-    if (count < 34 || !ir_match(symbols[0].duration1, NEC_HEADER_SPACE))
-        return false;
-
-    uint32_t raw = (uint32_t)ir_decode_pulse_distance(symbols, 1, 32,
-                                                       NEC_ONE_SPACE, NEC_ZERO_SPACE, false);
-
-    uint8_t addr     = (raw >>  0) & 0xFF;
-    uint8_t addr_inv = (raw >>  8) & 0xFF;
-    uint8_t cmd      = (raw >> 16) & 0xFF;
-    uint8_t cmd_inv  = (raw >> 24) & 0xFF;
-
-    if ((uint8_t)(cmd ^ cmd_inv) != 0xFF) return false;
-
-    out->protocol = IR_PROTO_NEC;
-    out->command  = cmd;
-    out->repeat   = false;
-    out->address  = ((uint8_t)(addr ^ addr_inv) == 0xFF) ? addr : (raw & 0xFFFF);
-
+  if (count <= NEC_REPEAT_MAX_SYMBOLS && ir_match(symbols[0].duration1, NEC_REPEAT_SPACE)) {
+    out_data->protocol = IR_PROTO_NEC;
+    out_data->repeat = true;
     return true;
+  }
+
+  if (count < NEC_MIN_SYMBOLS || !ir_match(symbols[0].duration1, NEC_HEADER_SPACE))
+    return false;
+
+  ir_pulse_distance_cfg_t cfg = {
+      .one_space = NEC_ONE_SPACE,
+      .zero_space = NEC_ZERO_SPACE,
+      .msb_first = false,
+  };
+  uint32_t raw = (uint32_t)ir_decode_pulse_distance(symbols, 1, NEC_FRAME_BITS, &cfg);
+
+  uint8_t addr = (raw >> 0) & NEC_ADDR_STANDARD_MAX;
+  uint8_t addr_inv = (raw >> NEC_ADDR_INV_SHIFT) & NEC_ADDR_STANDARD_MAX;
+  uint8_t cmd = (raw >> NEC_CMD_SHIFT) & NEC_ADDR_STANDARD_MAX;
+  uint8_t cmd_inv = (raw >> NEC_CMD_INV_SHIFT) & NEC_ADDR_STANDARD_MAX;
+
+  if ((uint8_t)(cmd ^ cmd_inv) != NEC_INTEGRITY_MASK)
+    return false;
+
+  out_data->protocol = IR_PROTO_NEC;
+  out_data->command = cmd;
+  out_data->repeat = false;
+  out_data->address =
+      ((uint8_t)(addr ^ addr_inv) == NEC_INTEGRITY_MASK) ? addr : (raw & NEC_EXT_ADDR_MASK);
+  return true;
 }
 
-size_t nec_encode(const ir_data_t *data, rmt_symbol_word_t *symbols, size_t max) {
-    if (data->repeat) {
-        symbols[0] = (rmt_symbol_word_t){ .duration0 = NEC_HEADER_MARK, .level0 = 1,
-                                          .duration1 = NEC_REPEAT_SPACE, .level1 = 0 };
-        symbols[1] = (rmt_symbol_word_t){ .duration0 = NEC_BIT_MARK, .level0 = 1,
-                                          .duration1 = 0, .level1 = 0 };
-        return 2;
-    }
+size_t ir_protocol_nec_encode(const ir_data_t *data, rmt_symbol_word_t *symbols, size_t max) {
+  if (data == NULL || symbols == NULL || max == 0)
+    return 0;
 
-    uint8_t cmd = data->command & 0xFF;
-    uint32_t raw;
+  if (data->repeat) {
+    if (max < NEC_REPEAT_SYMBOL_COUNT)
+      return 0;
+    symbols[0] = (rmt_symbol_word_t){
+        .duration0 = NEC_HEADER_MARK, .level0 = 1, .duration1 = NEC_REPEAT_SPACE, .level1 = 0};
+    symbols[1] =
+        (rmt_symbol_word_t){.duration0 = NEC_BIT_MARK, .level0 = 1, .duration1 = 0, .level1 = 0};
+    return NEC_REPEAT_SYMBOL_COUNT;
+  }
 
-    if (data->address <= 0xFF) {
-        uint8_t addr = data->address & 0xFF;
-        raw = addr | ((uint32_t)(~addr & 0xFF) << 8) |
-              ((uint32_t)cmd << 16) | ((uint32_t)(~cmd & 0xFF) << 24);
-    } else {
-        raw = data->address | ((uint32_t)cmd << 16) | ((uint32_t)(~cmd & 0xFF) << 24);
-    }
+  uint8_t cmd = data->command & NEC_ADDR_STANDARD_MAX;
+  uint32_t raw;
 
-    return ir_encode_pulse_distance(symbols,
-        NEC_HEADER_MARK, NEC_HEADER_SPACE,
-        NEC_BIT_MARK, NEC_ONE_SPACE, NEC_ZERO_SPACE,
-        raw, 32, false, true);
+  if (data->address <= NEC_ADDR_STANDARD_MAX) {
+    uint8_t addr = data->address & NEC_ADDR_STANDARD_MAX;
+    raw = addr | ((uint32_t)(~addr & NEC_INTEGRITY_MASK) << NEC_ADDR_INV_SHIFT) |
+          ((uint32_t)cmd << NEC_CMD_SHIFT) |
+          ((uint32_t)(~cmd & NEC_INTEGRITY_MASK) << NEC_CMD_INV_SHIFT);
+  } else {
+    raw = data->address | ((uint32_t)cmd << NEC_CMD_SHIFT) |
+          ((uint32_t)(~cmd & NEC_INTEGRITY_MASK) << NEC_CMD_INV_SHIFT);
+  }
+
+  ir_encode_distance_cfg_t cfg = {
+      .header_mark = NEC_HEADER_MARK,
+      .header_space = NEC_HEADER_SPACE,
+      .bit_mark = NEC_BIT_MARK,
+      .one_space = NEC_ONE_SPACE,
+      .zero_space = NEC_ZERO_SPACE,
+      .max = max,
+      .msb_first = false,
+      .stop_bit = true,
+  };
+  return ir_encode_pulse_distance(symbols, raw, NEC_FRAME_BITS, &cfg);
 }

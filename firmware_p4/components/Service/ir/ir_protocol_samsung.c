@@ -12,49 +12,74 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "ir_protocol.h"
 #include "ir_protocol_samsung.h"
+
+#include "esp_log.h"
+
+#include "ir_protocol.h"
 
 static const char *TAG = "IR_SAMSUNG";
 
-bool samsung_decode(rmt_symbol_word_t *symbols, size_t count, ir_data_t *out) {
-    if (count < 34) return false;
-    if (!ir_match(symbols[0].duration0, SAMSUNG_HEADER_MARK) ||
-        !ir_match(symbols[0].duration1, SAMSUNG_HEADER_SPACE))
-        return false;
+bool ir_protocol_samsung_decode(const rmt_symbol_word_t *symbols,
+                                size_t count,
+                                ir_data_t *out_data) {
+  if (symbols == NULL || count == 0 || out_data == NULL)
+    return false;
+  if (count < SAMSUNG_MIN_SYMBOLS)
+    return false;
 
-    uint32_t raw = (uint32_t)ir_decode_pulse_distance(symbols, 1, 32,
-                                                       SAMSUNG_ONE_SPACE, SAMSUNG_ZERO_SPACE, false);
+  if (!ir_match(symbols[0].duration0, SAMSUNG_HEADER_MARK) ||
+      !ir_match(symbols[0].duration1, SAMSUNG_HEADER_SPACE))
+    return false;
 
-    uint8_t addr_lo = (raw >>  0) & 0xFF;
-    uint8_t addr_hi = (raw >>  8) & 0xFF;
-    uint8_t cmd     = (raw >> 16) & 0xFF;
-    uint8_t cmd_inv = (raw >> 24) & 0xFF;
+  ir_pulse_distance_cfg_t cfg = {
+      .one_space = SAMSUNG_ONE_SPACE,
+      .zero_space = SAMSUNG_ZERO_SPACE,
+      .msb_first = false,
+  };
+  uint32_t raw = (uint32_t)ir_decode_pulse_distance(symbols, 1, SAMSUNG_FRAME_BITS, &cfg);
 
-    if ((uint8_t)(cmd ^ cmd_inv) != 0xFF) return false;
+  uint8_t addr_lo = (raw >> 0) & SAMSUNG_ADDR_STANDARD_MAX;
+  uint8_t addr_hi = (raw >> SAMSUNG_ADDR_HI_SHIFT) & SAMSUNG_ADDR_STANDARD_MAX;
+  uint8_t cmd = (raw >> SAMSUNG_CMD_SHIFT) & SAMSUNG_ADDR_STANDARD_MAX;
+  uint8_t cmd_inv = (raw >> SAMSUNG_CMD_INV_SHIFT) & SAMSUNG_ADDR_STANDARD_MAX;
 
-    out->protocol = IR_PROTO_SAMSUNG;
-    out->command  = cmd;
-    out->repeat   = false;
-    out->address  = (addr_lo == addr_hi) ? addr_lo : (raw & 0xFFFF);
+  if ((uint8_t)(cmd ^ cmd_inv) != SAMSUNG_INTEGRITY_MASK) {
+    ESP_LOGD(TAG, "CMD integrity check failed");
+    return false;
+  }
 
-    return true;
+  out_data->protocol = IR_PROTO_SAMSUNG;
+  out_data->command = cmd;
+  out_data->repeat = false;
+  out_data->address = (addr_lo == addr_hi) ? addr_lo : (raw & SAMSUNG_EXT_ADDR_MASK);
+  return true;
 }
 
-size_t samsung_encode(const ir_data_t *data, rmt_symbol_word_t *symbols, size_t max) {
-    uint8_t cmd = data->command & 0xFF;
-    uint32_t raw;
+size_t ir_protocol_samsung_encode(const ir_data_t *data, rmt_symbol_word_t *symbols, size_t max) {
+  if (data == NULL || symbols == NULL || max == 0)
+    return 0;
 
-    if (data->address <= 0xFF) {
-        uint8_t addr = data->address & 0xFF;
-        raw = addr | ((uint32_t)addr << 8) |
-              ((uint32_t)cmd << 16) | ((uint32_t)(~cmd & 0xFF) << 24);
-    } else {
-        raw = data->address | ((uint32_t)cmd << 16) | ((uint32_t)(~cmd & 0xFF) << 24);
-    }
+  uint8_t cmd = data->command & SAMSUNG_ADDR_STANDARD_MAX;
+  uint32_t raw;
+  if (data->address <= SAMSUNG_ADDR_STANDARD_MAX) {
+    uint8_t addr = data->address & SAMSUNG_ADDR_STANDARD_MAX;
+    raw = addr | ((uint32_t)addr << SAMSUNG_ADDR_HI_SHIFT) | ((uint32_t)cmd << SAMSUNG_CMD_SHIFT) |
+          ((uint32_t)(~cmd & SAMSUNG_INTEGRITY_MASK) << SAMSUNG_CMD_INV_SHIFT);
+  } else {
+    raw = data->address | ((uint32_t)cmd << SAMSUNG_CMD_SHIFT) |
+          ((uint32_t)(~cmd & SAMSUNG_INTEGRITY_MASK) << SAMSUNG_CMD_INV_SHIFT);
+  }
 
-    return ir_encode_pulse_distance(symbols,
-        SAMSUNG_HEADER_MARK, SAMSUNG_HEADER_SPACE,
-        SAMSUNG_BIT_MARK, SAMSUNG_ONE_SPACE, SAMSUNG_ZERO_SPACE,
-        raw, 32, false, true);
+  ir_encode_distance_cfg_t cfg = {
+      .header_mark = SAMSUNG_HEADER_MARK,
+      .header_space = SAMSUNG_HEADER_SPACE,
+      .bit_mark = SAMSUNG_BIT_MARK,
+      .one_space = SAMSUNG_ONE_SPACE,
+      .zero_space = SAMSUNG_ZERO_SPACE,
+      .max = max,
+      .msb_first = false,
+      .stop_bit = true,
+  };
+  return ir_encode_pulse_distance(symbols, raw, SAMSUNG_FRAME_BITS, &cfg);
 }

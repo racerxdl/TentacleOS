@@ -12,62 +12,81 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "ir_protocol.h"
 #include "ir_protocol_panasonic.h"
+
+#include "esp_log.h"
+
+#include "ir_protocol.h"
 
 static const char *TAG = "IR_PANASONIC";
 
-bool panasonic_decode(rmt_symbol_word_t *symbols, size_t count, ir_data_t *out) {
-    if (count < 50) return false;
-    if (!ir_match(symbols[0].duration0, PANASONIC_HEADER_MARK) ||
-        !ir_match(symbols[0].duration1, PANASONIC_HEADER_SPACE))
-        return false;
+bool ir_protocol_panasonic_decode(const rmt_symbol_word_t *symbols,
+                                  size_t count,
+                                  ir_data_t *out_data) {
+  if (symbols == NULL || count == 0 || out_data == NULL)
+    return false;
 
-    // 48 bits LSB first
-    uint64_t raw = ir_decode_pulse_distance(symbols, 1, 48,
-                                            PANASONIC_ONE_SPACE, PANASONIC_ZERO_SPACE, false);
+  if (count < PANASONIC_MIN_SYMBOLS)
+    return false;
+  if (!ir_match(symbols[0].duration0, PANASONIC_HEADER_MARK) ||
+      !ir_match(symbols[0].duration1, PANASONIC_HEADER_SPACE))
+    return false;
 
-    // Vendor ID (16 bits)
-    uint16_t vendor = raw & 0xFFFF;
-    if (vendor != PANASONIC_VENDOR_ID) return false;
+  ir_pulse_distance_cfg_t cfg = {
+      .one_space = PANASONIC_ONE_SPACE,
+      .zero_space = PANASONIC_ZERO_SPACE,
+      .msb_first = false,
+  };
+  uint64_t raw = ir_decode_pulse_distance(symbols, 1, PANASONIC_FRAME_BITS, &cfg);
 
-    // Remaining 32 bits: vendorParity(4) + address(12) + command(8) + parity(8)
-    uint8_t byte0 = (raw >> 16) & 0xFF;
-    uint8_t byte1 = (raw >> 24) & 0xFF;
-    uint8_t byte2 = (raw >> 32) & 0xFF;
-    uint8_t byte3 = (raw >> 40) & 0xFF;
+  uint16_t vendor = raw & PANASONIC_VENDOR_MASK;
+  if (vendor != PANASONIC_VENDOR_ID)
+    return false;
 
-    // Verify 8-bit parity
-    if (byte3 != (uint8_t)(byte0 ^ byte1 ^ byte2)) return false;
+  uint8_t byte0 = (raw >> PANASONIC_BYTE0_SHIFT) & 0xFF;
+  uint8_t byte1 = (raw >> PANASONIC_BYTE1_SHIFT) & 0xFF;
+  uint8_t byte2 = (raw >> PANASONIC_BYTE2_SHIFT) & 0xFF;
+  uint8_t byte3 = (raw >> PANASONIC_BYTE3_SHIFT) & 0xFF;
 
-    out->protocol = IR_PROTO_PANASONIC;
-    out->address  = ((byte0 >> 4) & 0x0F) | ((uint16_t)byte1 << 4);
-    out->command  = byte2;
-    out->repeat   = false;
+  if (byte3 != (uint8_t)(byte0 ^ byte1 ^ byte2))
+    return false;
 
-    return true;
+  out_data->protocol = IR_PROTO_PANASONIC;
+  out_data->address = ((byte0 >> PANASONIC_NIBBLE_SHIFT) & PANASONIC_NIBBLE_MASK) |
+                      ((uint16_t)byte1 << PANASONIC_NIBBLE_SHIFT);
+  out_data->command = byte2;
+  out_data->repeat = false;
+  return true;
 }
 
-size_t panasonic_encode(const ir_data_t *data, rmt_symbol_word_t *symbols, size_t max) {
-    uint16_t vendor = PANASONIC_VENDOR_ID;
+size_t ir_protocol_panasonic_encode(const ir_data_t *data, rmt_symbol_word_t *symbols, size_t max) {
+  if (data == NULL || symbols == NULL || max == 0)
+    return 0;
 
-    // Vendor parity
-    uint8_t vp = vendor ^ (vendor >> 8);
-    vp = (vp ^ (vp >> 4)) & 0x0F;
+  uint16_t vendor = PANASONIC_VENDOR_ID;
+  uint8_t vp = vendor ^ (vendor >> PANASONIC_BYTE_SHIFT);
+  vp = (vp ^ (vp >> PANASONIC_NIBBLE_SHIFT)) & PANASONIC_NIBBLE_MASK;
 
-    uint8_t byte0 = (vp & 0x0F) | ((data->address & 0x0F) << 4);
-    uint8_t byte1 = (data->address >> 4) & 0xFF;
-    uint8_t byte2 = data->command & 0xFF;
-    uint8_t byte3 = byte0 ^ byte1 ^ byte2;
+  uint8_t byte0 = (vp & PANASONIC_NIBBLE_MASK) |
+                  ((data->address & PANASONIC_NIBBLE_MASK) << PANASONIC_NIBBLE_SHIFT);
+  uint8_t byte1 = (data->address >> PANASONIC_NIBBLE_SHIFT) & 0xFF;
+  uint8_t byte2 = data->command & 0xFF;
+  uint8_t byte3 = byte0 ^ byte1 ^ byte2;
 
-    uint64_t raw = (uint64_t)vendor |
-                   ((uint64_t)byte0 << 16) |
-                   ((uint64_t)byte1 << 24) |
-                   ((uint64_t)byte2 << 32) |
-                   ((uint64_t)byte3 << 40);
+  uint64_t raw = (uint64_t)vendor | ((uint64_t)byte0 << PANASONIC_BYTE0_SHIFT) |
+                 ((uint64_t)byte1 << PANASONIC_BYTE1_SHIFT) |
+                 ((uint64_t)byte2 << PANASONIC_BYTE2_SHIFT) |
+                 ((uint64_t)byte3 << PANASONIC_BYTE3_SHIFT);
 
-    return ir_encode_pulse_distance(symbols,
-        PANASONIC_HEADER_MARK, PANASONIC_HEADER_SPACE,
-        PANASONIC_BIT_MARK, PANASONIC_ONE_SPACE, PANASONIC_ZERO_SPACE,
-        raw, 48, false, true);
+  ir_encode_distance_cfg_t cfg = {
+      .header_mark = PANASONIC_HEADER_MARK,
+      .header_space = PANASONIC_HEADER_SPACE,
+      .bit_mark = PANASONIC_BIT_MARK,
+      .one_space = PANASONIC_ONE_SPACE,
+      .max = max,
+      .zero_space = PANASONIC_ZERO_SPACE,
+      .msb_first = false,
+      .stop_bit = true,
+  };
+  return ir_encode_pulse_distance(symbols, raw, PANASONIC_FRAME_BITS, &cfg);
 }
