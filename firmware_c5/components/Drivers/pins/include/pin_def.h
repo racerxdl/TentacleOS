@@ -12,47 +12,61 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/**
+ * @file pin_def.h
+ * @brief Central GPIO pin assignments for the ESP32-C5 board.
+ *
+ * All hardware pin numbers are defined here. No driver should
+ * hardcode GPIO numbers — use these defines instead.
+ */
 
 #ifndef PIN_DEF_H
 #define PIN_DEF_H
 
-// SPI
-#define SPI_MOSI_PIN    11
-#define SPI_SCLK_PIN    12
-#define SPI_MISO_PIN    13
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-// extra gpios
-#define GPIO_CS_PIN     3
-#define GPIO_SDA_PIN    8  // GDO0
-#define GPIO_SCL_PIN    9  // GDO2
+// SPI Bus
+#define GPIO_SPI_MOSI_PIN 11
+#define GPIO_SPI_SCLK_PIN 12
+#define GPIO_SPI_MISO_PIN 13
 
-// chip select
-#define SD_CARD_CS_PIN  14
-#define ST7789_CS_PIN   48
+// CC1101 Sub-GHz Radio
+#define GPIO_CC1101_CS_PIN   3
+#define GPIO_CC1101_GDO0_PIN 8
+#define GPIO_CC1101_GDO2_PIN 9
 
-// buttons
-#define BTN_LEFT     5
-#define BTN_BACK     7
-#define BTN_UP     15
-#define BTN_DOWN   6
-#define BTN_OK     4
-#define BTN_RIGHT 16
+// SD Card (SPI mode)
+#define GPIO_SD_CARD_CS_PIN 14
 
-// led
-#define LED_GPIO     45
-#define LED_COUNT    1
+// ST7789 Display
+#define GPIO_ST7789_CS_PIN  48
+#define GPIO_ST7789_DC_PIN  47
+#define GPIO_ST7789_RST_PIN 21
+#define GPIO_ST7789_BL_PIN  38
 
-// lcd st7789
-#define ST7789_PIN_CS   48
-#define ST7789_PIN_DC   47
-#define ST7789_PIN_RST  21
-#define ST7789_PIN_BL   38
+// Buttons
+#define GPIO_BTN_LEFT_PIN  5
+#define GPIO_BTN_BACK_PIN  7
+#define GPIO_BTN_UP_PIN    15
+#define GPIO_BTN_DOWN_PIN  6
+#define GPIO_BTN_OK_PIN    4
+#define GPIO_BTN_RIGHT_PIN 16
+
+// RGB LED (WS2812 / SK6812)
+#define GPIO_LED_RGB_PIN 45
+#define LED_COUNT        1
 
 // P4-C5 Bridge SPI (Slave)
-#define BRIDGE_SCLK_PIN 6
-#define BRIDGE_MOSI_PIN 7
-#define BRIDGE_MISO_PIN 2
-#define BRIDGE_CS_PIN   10
-#define BRIDGE_IRQ_PIN  3
+#define GPIO_BRIDGE_SCLK_PIN 6
+#define GPIO_BRIDGE_MOSI_PIN 7
+#define GPIO_BRIDGE_MISO_PIN 2
+#define GPIO_BRIDGE_CS_PIN   10
+#define GPIO_BRIDGE_IRQ_PIN  3
 
-#endif // !PIN_DEF_H
+#ifdef __cplusplus
+}
+#endif
+
+#endif // PIN_DEF_H
