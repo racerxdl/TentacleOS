@@ -12,36 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "vfs_core.h"
-#include "vfs_config.h"
-#include "pin_def.h"
-#include "esp_vfs_fat.h"
-#include "sdmmc_cmd.h"
-#include "driver/sdmmc_host.h"
-#include "driver/sdmmc_defs.h"
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/stat.h>
+#include "vfs_sdcard.h"
+
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <string.h>
-#include "vfs_sdcard.h"
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include "esp_log.h"
+#include "esp_vfs_fat.h"
+#include "driver/sdmmc_host.h"
+#include "driver/sdmmc_defs.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "sdmmc_cmd.h"
+
+#include "pin_def.h"
+#include "vfs_config.h"
+#include "vfs_core.h"
 
 #ifdef VFS_USE_SD_CARD
 
-static const char *TAG = "vfs_sdcard";
+static const char *TAG = "VFS_SDCARD";
 
 static struct {
   bool mounted;
   sdmmc_card_t *card;
 } s_sdcard = {0};
-
-/* ============================================================================
- * VFS WRAPPERS
- * ============================================================================ */
 
 static vfs_fd_t sdcard_open(const char *path, int flags, int mode) {
   int fd = open(path, flags, mode);
@@ -207,10 +206,6 @@ static const vfs_backend_ops_t s_sdcard_ops = {
     .closedir = sdcard_closedir,
     .statvfs = sdcard_statvfs,
 };
-
-/* ============================================================================
- * PUBLIC API
- * ============================================================================ */
 
 esp_err_t vfs_sdcard_init(void) {
   if (s_sdcard.mounted) {
