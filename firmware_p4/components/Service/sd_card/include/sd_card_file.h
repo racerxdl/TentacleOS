@@ -1,6 +1,6 @@
 /**
  * @file sd_card_file.h
- * @brief Operações de gerenciamento de arquivos
+ * @brief File management operations.
  */
 
 #ifndef SD_CARD_FILE_H
@@ -16,107 +16,107 @@ extern "C" {
 #endif
 
 /**
- * @brief Informações de arquivo
+ * @brief File information.
  */
 typedef struct {
-    char path[256];
-    size_t size;
-    time_t modified_time;
-    bool is_directory;
+  char path[256];
+  size_t size;
+  time_t modified_time;
+  bool is_directory;
 } sd_file_info_t;
 
 /**
- * @brief Verifica se arquivo existe
- * @param path Caminho do arquivo
- * @return true se existe
+ * @brief Check if a file exists.
+ * @param path File path.
+ * @return true if exists.
  */
 bool sd_file_exists(const char *path);
 
 /**
- * @brief Deleta arquivo
- * @param path Caminho do arquivo
- * @return ESP_OK em sucesso
+ * @brief Delete a file.
+ * @param path File path.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_file_delete(const char *path);
 
 /**
- * @brief Renomeia ou move arquivo
- * @param old_path Caminho antigo
- * @param new_path Caminho novo
- * @return ESP_OK em sucesso
+ * @brief Rename or move a file.
+ * @param old_path Old path.
+ * @param new_path New path.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_file_rename(const char *old_path, const char *new_path);
 
 /**
- * @brief Copia arquivo
- * @param src_path Origem
- * @param dst_path Destino
- * @return ESP_OK em sucesso
+ * @brief Copy a file.
+ * @param src_path Source path.
+ * @param dst_path Destination path.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_file_copy(const char *src_path, const char *dst_path);
 
 /**
- * @brief Obtém tamanho do arquivo
- * @param path Caminho do arquivo
- * @param size Ponteiro para receber tamanho
- * @return ESP_OK em sucesso
+ * @brief Get file size.
+ * @param path File path.
+ * @param size Pointer to receive size.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_file_get_size(const char *path, size_t *size);
 
 /**
- * @brief Obtém informações do arquivo
- * @param path Caminho do arquivo
- * @param info Estrutura para receber info
- * @return ESP_OK em sucesso
+ * @brief Get file information.
+ * @param path File path.
+ * @param info Struct to receive info.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_file_get_info(const char *path, sd_file_info_t *info);
 
 /**
- * @brief Trunca arquivo para tamanho específico
- * @param path Caminho do arquivo
- * @param size Novo tamanho
- * @return ESP_OK em sucesso
+ * @brief Truncate file to a specific size.
+ * @param path File path.
+ * @param size New size.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_file_truncate(const char *path, size_t size);
 
 /**
- * @brief Verifica se arquivo está vazio
- * @param path Caminho do arquivo
- * @param is_empty Ponteiro para receber resultado
- * @return ESP_OK em sucesso
+ * @brief Check if a file is empty.
+ * @param path File path.
+ * @param is_empty Pointer to receive result.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_file_is_empty(const char *path, bool *is_empty);
 
 /**
- * @brief Move arquivo
- * @param src_path Origem
- * @param dst_path Destino
- * @return ESP_OK em sucesso
+ * @brief Move a file.
+ * @param src_path Source path.
+ * @param dst_path Destination path.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_file_move(const char *src_path, const char *dst_path);
 
 /**
- * @brief Compara dois arquivos
- * @param path1 Caminho arquivo 1
- * @param path2 Caminho arquivo 2
- * @param are_equal Ponteiro para resultado
- * @return ESP_OK em sucesso
+ * @brief Compare two files byte-by-byte.
+ * @param path1 First file path.
+ * @param path2 Second file path.
+ * @param are_equal Pointer to receive result.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_file_compare(const char *path1, const char *path2, bool *are_equal);
 
 /**
- * @brief Limpa conteúdo do arquivo (torna vazio)
- * @param path Caminho do arquivo
- * @return ESP_OK em sucesso
+ * @brief Clear file contents (truncate to zero).
+ * @param path File path.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_file_clear(const char *path);
 
 /**
- * @brief Obtém extensão do arquivo
- * @param path Caminho do arquivo
- * @param extension Buffer para receber extensão
- * @param size Tamanho do buffer
- * @return ESP_OK em sucesso
+ * @brief Get file extension.
+ * @param path File path.
+ * @param extension Buffer to receive extension.
+ * @param size Buffer size.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_file_get_extension(const char *path, char *extension, size_t size);
 

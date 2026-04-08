@@ -20,7 +20,7 @@
 #include "driver/sdmmc_defs.h"
 #include "sdmmc_cmd.h"
 
-static const char *TAG = "sd_init";
+static const char *TAG = "SD_CARD_INIT";
 static sdmmc_card_t *s_card = NULL;
 static bool s_is_mounted = false;
 

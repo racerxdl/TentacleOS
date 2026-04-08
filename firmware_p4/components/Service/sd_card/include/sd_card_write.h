@@ -1,6 +1,6 @@
 /**
  * @file sd_card_write.h
- * @brief Funções de escrita no cartão SD
+ * @brief SD card write operations.
  */
 
 #ifndef SD_CARD_WRITE_H
@@ -14,130 +14,130 @@ extern "C" {
 #endif
 
 /**
- * @brief Escreve string em arquivo (sobrescreve)
- * @param path Caminho do arquivo
- * @param data String a escrever
- * @return ESP_OK em sucesso
+ * @brief Write string to file (overwrites).
+ * @param path File path.
+ * @param data String to write.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_write_string(const char *path, const char *data);
 
 /**
- * @brief Anexa string ao arquivo
- * @param path Caminho do arquivo
- * @param data String a anexar
- * @return ESP_OK em sucesso
+ * @brief Append string to file.
+ * @param path File path.
+ * @param data String to append.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_append_string(const char *path, const char *data);
 
 /**
- * @brief Escreve dados binários
- * @param path Caminho do arquivo
- * @param data Buffer de dados
- * @param size Tamanho em bytes
- * @return ESP_OK em sucesso
+ * @brief Write binary data.
+ * @param path File path.
+ * @param data Data buffer.
+ * @param size Size in bytes.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_write_binary(const char *path, const void *data, size_t size);
 
 /**
- * @brief Anexa dados binários
- * @param path Caminho do arquivo
- * @param data Buffer de dados
- * @param size Tamanho em bytes
- * @return ESP_OK em sucesso
+ * @brief Append binary data.
+ * @param path File path.
+ * @param data Data buffer.
+ * @param size Size in bytes.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_append_binary(const char *path, const void *data, size_t size);
 
 /**
- * @brief Escreve uma linha (adiciona \n)
- * @param path Caminho do arquivo
- * @param line Linha a escrever
- * @return ESP_OK em sucesso
+ * @brief Write a line (appends newline).
+ * @param path File path.
+ * @param line Line to write.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_write_line(const char *path, const char *line);
 
 /**
- * @brief Anexa uma linha (adiciona \n)
- * @param path Caminho do arquivo
- * @param line Linha a anexar
- * @return ESP_OK em sucesso
+ * @brief Append a line (appends newline).
+ * @param path File path.
+ * @param line Line to append.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_append_line(const char *path, const char *line);
 
 /**
- * @brief Escreve dados formatados (como fprintf)
- * @param path Caminho do arquivo
- * @param format String de formato
- * @param ... Argumentos
- * @return ESP_OK em sucesso
+ * @brief Write formatted data (printf-style).
+ * @param path File path.
+ * @param format Format string.
+ * @param ... Arguments.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_write_formatted(const char *path, const char *format, ...);
 
 /**
- * @brief Anexa dados formatados
- * @param path Caminho do arquivo
- * @param format String de formato
- * @param ... Argumentos
- * @return ESP_OK em sucesso
+ * @brief Append formatted data (printf-style).
+ * @param path File path.
+ * @param format Format string.
+ * @param ... Arguments.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_append_formatted(const char *path, const char *format, ...);
 
 /**
- * @brief Escreve buffer em arquivo
- * @param path Caminho do arquivo
- * @param buffer Buffer de dados
- * @param size Tamanho do buffer
- * @return ESP_OK em sucesso
+ * @brief Write buffer to file.
+ * @param path File path.
+ * @param buffer Data buffer.
+ * @param size Buffer size.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_write_buffer(const char *path, const void *buffer, size_t size);
 
 /**
- * @brief Escreve array de bytes
- * @param path Caminho do arquivo
- * @param bytes Array de bytes
- * @param count Número de bytes
- * @return ESP_OK em sucesso
+ * @brief Write byte array.
+ * @param path File path.
+ * @param bytes Byte array.
+ * @param count Number of bytes.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_write_bytes(const char *path, const uint8_t *bytes, size_t count);
 
 /**
- * @brief Escreve um único byte
- * @param path Caminho do arquivo
- * @param byte Byte a escrever
- * @return ESP_OK em sucesso
+ * @brief Write a single byte.
+ * @param path File path.
+ * @param byte Byte to write.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_write_byte(const char *path, uint8_t byte);
 
 /**
- * @brief Escreve inteiro em arquivo
- * @param path Caminho do arquivo
- * @param value Valor inteiro
- * @return ESP_OK em sucesso
+ * @brief Write integer to file.
+ * @param path File path.
+ * @param value Integer value.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_write_int(const char *path, int32_t value);
 
 /**
- * @brief Escreve float em arquivo
- * @param path Caminho do arquivo
- * @param value Valor float
- * @return ESP_OK em sucesso
+ * @brief Write float to file.
+ * @param path File path.
+ * @param value Float value.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_write_float(const char *path, float value);
 
 /**
- * @brief Escreve CSV com múltiplas colunas
- * @param path Caminho do arquivo
- * @param columns Array de strings (colunas)
- * @param num_columns Número de colunas
- * @return ESP_OK em sucesso
+ * @brief Write CSV row (overwrites).
+ * @param path File path.
+ * @param columns Array of column strings.
+ * @param num_columns Number of columns.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_write_csv_row(const char *path, const char **columns, size_t num_columns);
 
 /**
- * @brief Anexa linha CSV
- * @param path Caminho do arquivo
- * @param columns Array de strings
- * @param num_columns Número de colunas
- * @return ESP_OK em sucesso
+ * @brief Append CSV row.
+ * @param path File path.
+ * @param columns Array of column strings.
+ * @param num_columns Number of columns.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_append_csv_row(const char *path, const char **columns, size_t num_columns);
 
