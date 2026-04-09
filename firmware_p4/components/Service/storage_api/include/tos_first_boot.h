@@ -15,6 +15,10 @@
 #ifndef TOS_FIRST_BOOT_H
 #define TOS_FIRST_BOOT_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "esp_err.h"
 
 /**
@@ -28,5 +32,9 @@
  * @return ESP_OK on success or if setup was already done
  */
 esp_err_t tos_first_boot_setup(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TOS_FIRST_BOOT_H
