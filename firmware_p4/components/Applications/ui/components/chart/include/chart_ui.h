@@ -1,5 +1,23 @@
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #ifndef UI_CHART_H
 #define UI_CHART_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "lvgl.h"
 
@@ -8,38 +26,46 @@
 typedef void (*chart_btn_cb_t)(int btn_index);
 
 typedef struct {
-    lv_obj_t * screen;
-    lv_obj_t * chart;
-    lv_chart_series_t * series;
-    lv_obj_t * panel;
-    lv_obj_t * btns[2];
-    lv_obj_t * btn_dots[2];
-    int btn_count;
-    int btn_sel;
-    chart_btn_cb_t btn_cb;
+  lv_obj_t *screen;
+  lv_obj_t *chart;
+  lv_chart_series_t *series;
+  lv_obj_t *panel;
+  lv_obj_t *btns[2];
+  lv_obj_t *btn_dots[2];
+  int btn_count;
+  int btn_sel;
+  chart_btn_cb_t btn_cb;
 } chart_ui_t;
 
-/* Create chart screen with header, bar chart, and bottom panel */
-chart_ui_t chart_ui_create(lv_obj_t * parent, const char * title);
+/** @brief Create a bar chart screen with header and bottom panel. */
+chart_ui_t chart_ui_create(lv_obj_t *parent, const char *title);
 
-/* Add a button to bottom panel (max 2). dot_color: red/green circle */
-void chart_ui_add_btn(chart_ui_t * ch, const char * label, lv_color_t dot_color);
+/** @brief Add a button to the bottom panel (max 2). */
+void chart_ui_add_btn(chart_ui_t *ch, const char *label, lv_color_t dot_color);
 
-/* Set button callback */
-void chart_ui_set_btn_cb(chart_ui_t * ch, chart_btn_cb_t cb);
+/** @brief Set the button press callback. */
+void chart_ui_set_btn_cb(chart_ui_t *ch, chart_btn_cb_t cb);
 
-/* Add a data point to the chart */
-void chart_ui_add_point(chart_ui_t * ch, int32_t value);
+/** @brief Append a data point to the chart. */
+void chart_ui_add_point(chart_ui_t *ch, int32_t value);
 
-/* Set all points at once */
-void chart_ui_set_points(chart_ui_t * ch, const int32_t * values, int count);
+/** @brief Set all chart points at once. */
+void chart_ui_set_points(chart_ui_t *ch, const int32_t *values, int count);
 
-/* Dim/undim a button (visual inactive state) */
-void chart_ui_set_btn_dim(chart_ui_t * ch, int index, bool dim);
+/** @brief Dim or undim a button by index. */
+void chart_ui_set_btn_dim(chart_ui_t *ch, int index, bool dim);
 
-/* Navigation */
-void chart_ui_btn_next(chart_ui_t * ch);
-void chart_ui_btn_prev(chart_ui_t * ch);
-void chart_ui_btn_press(chart_ui_t * ch);
+/** @brief Move button selection to the next button. */
+void chart_ui_btn_next(chart_ui_t *ch);
 
+/** @brief Move button selection to the previous button. */
+void chart_ui_btn_prev(chart_ui_t *ch);
+
+/** @brief Trigger a press on the currently selected button. */
+void chart_ui_btn_press(chart_ui_t *ch);
+
+#ifdef __cplusplus
+}
 #endif
+
+#endif // UI_CHART_H

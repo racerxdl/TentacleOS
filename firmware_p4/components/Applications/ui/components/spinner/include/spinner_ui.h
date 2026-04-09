@@ -22,8 +22,8 @@ extern "C" {
 #include "lvgl.h"
 
 typedef struct {
-    lv_obj_t  *obj;
-    lv_timer_t *timer;
+  lv_obj_t *obj;
+  lv_timer_t *timer;
 } spinner_ui_t;
 
 /**
@@ -35,8 +35,13 @@ typedef struct {
  */
 spinner_ui_t spinner_ui_create(lv_obj_t *parent, int32_t size);
 
+/** @brief Show the spinner. */
 void spinner_ui_show(spinner_ui_t *s);
+
+/** @brief Hide the spinner. */
 void spinner_ui_hide(spinner_ui_t *s);
+
+/** @brief Delete the spinner and free its resources. */
 void spinner_ui_delete(spinner_ui_t *s);
 
 #ifdef __cplusplus

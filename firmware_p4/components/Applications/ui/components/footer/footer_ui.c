@@ -1,49 +1,68 @@
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "footer_ui.h"
-#include "ui_theme.h"
+
+#include "esp_log.h"
+
 #include "cJSON.h"
 #include "storage_assets.h"
-#include "esp_log.h"
+#include "ui_theme.h"
 
 #define FOOTER_HEIGHT 20
 #include "tos_flash_paths.h"
 #define INTERFACE_CONFIG_PATH FLASH_CONFIG_INTERFACE
 
 static bool footer_is_hidden(void) {
-    bool hidden = false;
-    if (!storage_assets_is_mounted()) return hidden;
-    FILE *f = fopen(INTERFACE_CONFIG_PATH, "r");
-    if (f) {
-        fseek(f, 0, SEEK_END);
-        long fsize = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        char *data = malloc(fsize + 1);
-        if (data) {
-            fread(data, 1, fsize, f);
-            data[fsize] = 0;
-            cJSON *root = cJSON_Parse(data);
-            if (root) {
-                cJSON *f_sw = cJSON_GetObjectItem(root, "hide_footer");
-                if (cJSON_IsBool(f_sw)) hidden = cJSON_IsTrue(f_sw);
-                cJSON_Delete(root);
-            }
-            free(data);
-        }
-        fclose(f);
-    }
+  bool hidden = false;
+  if (!storage_assets_is_mounted())
     return hidden;
+  FILE *f = fopen(INTERFACE_CONFIG_PATH, "r");
+  if (f) {
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char *data = malloc(fsize + 1);
+    if (data) {
+      fread(data, 1, fsize, f);
+      data[fsize] = 0;
+      cJSON *root = cJSON_Parse(data);
+      if (root) {
+        cJSON *f_sw = cJSON_GetObjectItem(root, "hide_footer");
+        if (cJSON_IsBool(f_sw))
+          hidden = cJSON_IsTrue(f_sw);
+        cJSON_Delete(root);
+      }
+      free(data);
+    }
+    fclose(f);
+  }
+  return hidden;
 }
 
-void footer_ui_create(lv_obj_t * parent) {
-    if (footer_is_hidden()) return;
-    
-    lv_obj_t * footer = lv_obj_create(parent);
-    lv_obj_set_size(footer, lv_pct(100), FOOTER_HEIGHT);
-    lv_obj_align(footer, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_obj_remove_flag(footer, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(footer, current_theme.bg_primary, 0);
-    lv_obj_set_style_border_side(footer, LV_BORDER_SIDE_TOP, 0);
-    lv_obj_set_style_border_width(footer, 2, 0);
-    lv_obj_set_style_border_color(footer, current_theme.border_interface, 0);
-    lv_obj_set_style_radius(footer, 0, 0);
-    lv_obj_set_style_pad_all(footer, 0, 0);
+void footer_ui_create(lv_obj_t *parent) {
+  if (footer_is_hidden())
+    return;
+
+  lv_obj_t *footer = lv_obj_create(parent);
+  lv_obj_set_size(footer, lv_pct(100), FOOTER_HEIGHT);
+  lv_obj_align(footer, LV_ALIGN_BOTTOM_MID, 0, 0);
+  lv_obj_remove_flag(footer, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_style_bg_color(footer, current_theme.bg_primary, 0);
+  lv_obj_set_style_border_side(footer, LV_BORDER_SIDE_TOP, 0);
+  lv_obj_set_style_border_width(footer, 2, 0);
+  lv_obj_set_style_border_color(footer, current_theme.border_interface, 0);
+  lv_obj_set_style_radius(footer, 0, 0);
+  lv_obj_set_style_pad_all(footer, 0, 0);
 }

@@ -1,3 +1,17 @@
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "wifi_scan_ui.h"
 #include "ui_theme.h"
 #include "ui_manager.h"
@@ -9,76 +23,74 @@
 
 static const char *TAG = "UI_SCAN";
 
-static lv_obj_t * screen_scan = NULL;
-static lv_obj_t * spinner = NULL;
-static lv_obj_t * lbl_status = NULL;
+static lv_obj_t *screen_scan = NULL;
+static lv_obj_t *spinner = NULL;
+static lv_obj_t *lbl_status = NULL;
 
-static void scan_worker_task(void *arg)
-{
-    ESP_LOGI(TAG, "Iniciando AP Scanner...");
+static void scan_worker_task(void *arg) {
+  ESP_LOGI(TAG, "Iniciando AP Scanner...");
 
-    ap_scanner_start();
-    
-    // Wait for scan to complete
-    uint16_t count = 0;
-    int timeout = 100; // 10 seconds approx
-    while (ap_scanner_get_results(&count) == NULL && timeout > 0) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-        timeout--;
+  ap_scanner_start();
+
+  // Wait for scan to complete
+  uint16_t count = 0;
+  int timeout = 100; // 10 seconds approx
+  while (ap_scanner_get_results(&count) == NULL && timeout > 0) {
+    vTaskDelay(pdMS_TO_TICKS(100));
+    timeout--;
+  }
+
+  if (ui_acquire()) {
+    if (spinner) {
+      lv_obj_del(spinner);
+      spinner = NULL;
     }
 
-    if (ui_acquire()) {
-        if (spinner) {
-            lv_obj_del(spinner);
-            spinner = NULL;
-        }
+    if (lbl_status) {
+      lv_label_set_text_fmt(lbl_status, "Found %d Networks!", count);
+      lv_obj_set_style_text_color(lbl_status, current_theme.text_main, 0);
+      lv_obj_align(lbl_status, LV_ALIGN_CENTER, 0, 0);
 
-        if (lbl_status) {
-            lv_label_set_text_fmt(lbl_status, "Found %d Networks!", count);
-            lv_obj_set_style_text_color(lbl_status, current_theme.text_main, 0);
-            lv_obj_align(lbl_status, LV_ALIGN_CENTER, 0, 0);
-            
-            lv_obj_t * icon = lv_label_create(screen_scan);
-            lv_label_set_text(icon, LV_SYMBOL_OK);
-            lv_obj_set_style_text_color(icon, current_theme.text_main, 0);
-            lv_obj_align(icon, LV_ALIGN_CENTER, 0, -30);
-        }
-        
-        ui_release();
+      lv_obj_t *icon = lv_label_create(screen_scan);
+      lv_label_set_text(icon, LV_SYMBOL_OK);
+      lv_obj_set_style_text_color(icon, current_theme.text_main, 0);
+      lv_obj_align(icon, LV_ALIGN_CENTER, 0, -30);
     }
 
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    ui_switch_screen(SCREEN_WIFI_AP_LIST); 
+    ui_release();
+  }
 
-    vTaskDelete(NULL);
+  vTaskDelay(pdMS_TO_TICKS(1000));
+  ui_switch_screen(SCREEN_WIFI_AP_LIST);
+
+  vTaskDelete(NULL);
 }
 
-void ui_wifi_scan_open(void)
-{
-    if (screen_scan) {
-        lv_obj_del(screen_scan);
-        screen_scan = NULL;
-    }
+void ui_wifi_scan_open(void) {
+  if (screen_scan) {
+    lv_obj_del(screen_scan);
+    screen_scan = NULL;
+  }
 
-    screen_scan = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_scan, current_theme.screen_base, 0);
+  screen_scan = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(screen_scan, current_theme.screen_base, 0);
 
-    spinner = lv_spinner_create(screen_scan);
-    lv_obj_set_size(spinner, 80, 80);
-    lv_obj_align(spinner, LV_ALIGN_CENTER, 0, -20);
-    
-    // Tema aplicado ao Spinner
-    lv_obj_set_style_arc_color(spinner, ui_theme_get_accent(), LV_PART_INDICATOR);
-    lv_obj_set_style_arc_color(spinner, current_theme.border_inactive, LV_PART_MAIN);
-    lv_obj_set_style_arc_width(spinner, 4, LV_PART_MAIN);
-    lv_obj_set_style_arc_width(spinner, 4, LV_PART_INDICATOR);
+  spinner = lv_spinner_create(screen_scan);
+  lv_obj_set_size(spinner, 80, 80);
+  lv_obj_align(spinner, LV_ALIGN_CENTER, 0, -20);
 
-    lbl_status = lv_label_create(screen_scan);
-    lv_label_set_text(lbl_status, "Scanning...");
-    lv_obj_set_style_text_color(lbl_status, current_theme.text_main, 0);
-    lv_obj_align(lbl_status, LV_ALIGN_CENTER, 0, 40);
+  // Tema aplicado ao Spinner
+  lv_obj_set_style_arc_color(spinner, ui_theme_get_accent(), LV_PART_INDICATOR);
+  lv_obj_set_style_arc_color(spinner, current_theme.border_inactive, LV_PART_MAIN);
+  lv_obj_set_style_arc_width(spinner, 4, LV_PART_MAIN);
+  lv_obj_set_style_arc_width(spinner, 4, LV_PART_INDICATOR);
 
-    lv_screen_load(screen_scan);
+  lbl_status = lv_label_create(screen_scan);
+  lv_label_set_text(lbl_status, "Scanning...");
+  lv_obj_set_style_text_color(lbl_status, current_theme.text_main, 0);
+  lv_obj_align(lbl_status, LV_ALIGN_CENTER, 0, 40);
 
-    xTaskCreate(scan_worker_task, "WifiScanWorker", 4096, NULL, 5, NULL);
+  lv_screen_load(screen_scan);
+
+  xTaskCreate(scan_worker_task, "WifiScanWorker", 4096, NULL, 5, NULL);
 }
