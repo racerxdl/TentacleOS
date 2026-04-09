@@ -12,12 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #ifndef SYS_MONITOR_H
 #define SYS_MONITOR_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdbool.h>
 
+/**
+ * @brief Start the system monitor task.
+ *
+ * Monitors stack usage across all tasks and optionally logs RAM statistics.
+ *
+ * @param show_ram_logs  Enable verbose RAM logging when true.
+ */
 void sys_monitor(bool show_ram_logs);
 
+#ifdef __cplusplus
+}
 #endif
+
+#endif // SYS_MONITOR_H

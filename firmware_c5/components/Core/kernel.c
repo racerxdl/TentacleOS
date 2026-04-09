@@ -12,26 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "kernel.h"
+
 #include <stdio.h>
-#include "buttons_gpio.h"
+
+#include "driver/gpio.h"
+#include "driver/i2c.h"
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "driver/gpio.h"
-#include "spi.h"
+#include "nvs_flash.h"
+
+#include "bq25896.h"
+#include "buttons_gpio.h"
+#include "console_service.h"
 #include "i2c_init.h"
 #include "led_control.h"
 #include "pin_def.h"
-#include "bq25896.h"
-#include "driver/i2c.h"
-#include "nvs_flash.h"
-#include "wifi_service.h"
-#include "storage_init.h"
-#include "storage_assets.h"
-#include "sys_monitor.h"
-#include "console_service.h"
+#include "spi.h"
 #include "spi_bridge.h"
+#include "storage_assets.h"
+#include "storage_init.h"
+#include "sys_monitor.h"
+#include "wifi_service.h"
 
 static const char *TAG = "SAFEGUARD";
+
+#define CONSOLE_TASK_STACK 4096
+#define CONSOLE_TASK_PRIO  5
+#define BOOT_SETTLE_MS     1500
 
 static void console_task(void *pvParameters) {
   console_service_init();
@@ -61,14 +70,12 @@ void kernel_init(void) {
 
   wifi_service_init();
 
-  xTaskCreate(console_task, "console_task", 4096, NULL, 5, NULL);
+  xTaskCreate(console_task, "console_task", CONSOLE_TASK_STACK, NULL, CONSOLE_TASK_PRIO, NULL);
 
-  vTaskDelay(pdMS_TO_TICKS(1500));
+  vTaskDelay(pdMS_TO_TICKS(BOOT_SETTLE_MS));
 }
 
-// SAFEGUARDS
-
-#include <esp_log.h>
+// Safeguards
 
 void safeguard_alert(const char *title, const char *message) {
   ESP_LOGE(TAG, "ALERT: %s - %s", title, message);

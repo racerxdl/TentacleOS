@@ -13,18 +13,21 @@
 // limitations under the License.
 
 #include "sys_monitor.h"
+
+#include <string.h>
+
+#include "esp_heap_caps.h"
+#include "esp_log.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esp_log.h"
-#include "esp_heap_caps.h"
-#include "esp_system.h"
-#include <string.h>
+
 #include "kernel.h"
 
 static const char *TAG = "SYS_MONITOR";
 
-#define MONITOR_INTERVAL_MS 2000 
-#define STACK_SIZE_BYTES    4096
+#define MONITOR_INTERVAL_MS      2000
+#define STACK_SIZE_BYTES         4096
 #define CRITICAL_STACK_THRESHOLD 256
 
 typedef struct {
@@ -36,7 +39,8 @@ static void sys_monitor_task(void *pvParameters) {
   bool verbose = params->verbose_logging;
   vPortFree(params);
 
-  ESP_LOGI(TAG, "System Monitor (RAM & Stack) started. Verbose: %s", verbose ? "ENABLED" : "DISABLED");
+  ESP_LOGI(
+      TAG, "System Monitor (RAM & Stack) started. Verbose: %s", verbose ? "ENABLED" : "DISABLED");
 
   while (1) {
     if (verbose) {
@@ -44,8 +48,11 @@ static void sys_monitor_task(void *pvParameters) {
       uint32_t internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
       uint32_t spiram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
 
-      ESP_LOGI(TAG, "RAM Status - Total Free: %lu, Internal Free: %lu, PSRAM Free: %lu", 
-               (unsigned long)free_heap, (unsigned long)internal_free, (unsigned long)spiram_free);
+      ESP_LOGI(TAG,
+               "RAM Status - Total Free: %lu, Internal Free: %lu, PSRAM Free: %lu",
+               (unsigned long)free_heap,
+               (unsigned long)internal_free,
+               (unsigned long)spiram_free);
     }
 
     uint32_t task_count = uxTaskGetNumberOfTasks();
@@ -58,8 +65,11 @@ static void sys_monitor_task(void *pvParameters) {
         uint32_t watermark = pxTaskStatusArray[i].usStackHighWaterMark;
 
         if (watermark < CRITICAL_STACK_THRESHOLD) {
-          ESP_LOGE(TAG, "!!! SECURITY ALERT !!! Task [%s] has CRITICAL STACK: %lu bytes free. TERMINATING TASK.", 
-                   pxTaskStatusArray[i].pcTaskName, (unsigned long)watermark);
+          ESP_LOGE(TAG,
+                   "!!! SECURITY ALERT !!! Task [%s] has CRITICAL STACK: %lu bytes free. "
+                   "TERMINATING TASK.",
+                   pxTaskStatusArray[i].pcTaskName,
+                   (unsigned long)watermark);
 
           if (pxTaskStatusArray[i].xHandle != xTaskGetCurrentTaskHandle()) {
             vTaskDelete(pxTaskStatusArray[i].xHandle);
@@ -79,14 +89,7 @@ void sys_monitor(bool show_ram_logs) {
     params->verbose_logging = show_ram_logs;
 
     xTaskCreatePinnedToCore(
-      sys_monitor_task,   
-      "SysMonitor",       
-      STACK_SIZE_BYTES,   
-      (void *)params,               
-      1,                  
-      NULL,               
-      1                   
-    );
+        sys_monitor_task, "SysMonitor", STACK_SIZE_BYTES, (void *)params, 1, NULL, 1);
   } else {
     ESP_LOGE(TAG, "Failed to allocate memory for SysMonitor parameters.");
   }

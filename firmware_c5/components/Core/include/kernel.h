@@ -12,11 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #ifndef KERNEL_H
 #define KERNEL_H
 
-void kernel_init(void);
-void safeguard_alert(const char* title, const char* message);
-
+#ifdef __cplusplus
+extern "C" {
 #endif
+
+/**
+ * @brief Initialize all kernel subsystems and start background tasks.
+ */
+void kernel_init(void);
+
+/**
+ * @brief Log a safeguard alert.
+ *
+ * @param title    Alert title.
+ * @param message  Alert message.
+ */
+void safeguard_alert(const char *title, const char *message);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // KERNEL_H
