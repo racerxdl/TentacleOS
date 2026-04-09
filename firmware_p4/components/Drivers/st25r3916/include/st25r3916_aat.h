@@ -11,30 +11,49 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file st25r3916_aat.h
- * @brief ST25R3916 Automatic Antenna Tuning (Phase 4).
- */
+
 #ifndef ST25R3916_AAT_H
 #define ST25R3916_AAT_H
 
-#include <stdint.h>
-#include "highboy_nfc_error.h"
-
-typedef struct {
-    uint8_t dac_a;
-    uint8_t dac_b;
-    uint8_t amplitude;
-    uint8_t phase;
-} st25r_aat_result_t;
-
-/** Run AAT calibration sweep. */
-hb_nfc_err_t st25r_aat_calibrate(st25r_aat_result_t* result);
-
-/** Load AAT values from NVS cache. */
-hb_nfc_err_t st25r_aat_load_nvs(st25r_aat_result_t* result);
-
-/** Save AAT values to NVS. */
-hb_nfc_err_t st25r_aat_save_nvs(const st25r_aat_result_t* result);
-
+#ifdef __cplusplus
+extern "C" {
 #endif
+
+#include <stdint.h>
+#include <stdbool.h>
+
+#include "esp_err.h"
+
+/**
+ * @brief Result of an AAT calibration sweep.
+ */
+typedef struct {
+  uint8_t dac_a;     /**< Best DAC A value. */
+  uint8_t dac_b;     /**< Best DAC B value. */
+  uint8_t amplitude; /**< Measured amplitude. */
+  uint8_t phase;     /**< Measured phase. */
+} st25r3916_aat_result_t;
+
+/**
+ * @brief Run a 2-pass antenna tuning sweep and apply best values.
+ *
+ * @param[out] out_result Receives the best calibration point.
+ * @return ESP_OK on success, or ESP_FAIL/ESP_ERR_INVALID_STATE.
+ */
+esp_err_t st25r3916_aat_calibrate(st25r3916_aat_result_t *out_result);
+
+/**
+ * @brief Load cached AAT calibration values from NVS.
+ */
+esp_err_t st25r3916_aat_load_nvs(st25r3916_aat_result_t *out_result);
+
+/**
+ * @brief Persist AAT calibration values to NVS.
+ */
+esp_err_t st25r3916_aat_save_nvs(const st25r3916_aat_result_t *result);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // ST25R3916_AAT_H

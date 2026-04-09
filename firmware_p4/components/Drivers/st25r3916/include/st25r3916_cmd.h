@@ -11,68 +11,57 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file st25r3916_cmd.h
- * @brief ST25R3916 Direct Commands.
- *
- * v5 FIX: Command codes verified against ST25R3916
- * datasheet DocID 031020 Rev 3, Table 19.
- *
- * BUGS FIXED from v4:
- *  - CMD_MEAS_AMPLITUDE was 0xD8, correct = 0xD3
- *  - CMD_CALIBRATE_DRIVER was 0xD7, correct = 0xD8
- *  - Several other measurement/timer codes off-by-one
- *  - Added missing target-mode commands
- *
- * NOTE: These are for ST25R3916 (IC type 0x02, IC_IDENTITY = 0x15).
- * ST25R3916B returns a different IC type and has a different command table.
- */
+
 #ifndef ST25R3916_CMD_H
 #define ST25R3916_CMD_H
 
-#define CMD_SET_DEFAULT         0xC0  
-#define CMD_CLEAR               0xC2  
-#define CMD_TX_WITH_CRC         0xC4  
-#define CMD_TX_WO_CRC           0xC5  
-#define CMD_TX_REQA             0xC6  
-#define CMD_TX_WUPA             0xC7  
-#define CMD_NFC_INITIAL_RF_COL  0xC8  
-#define CMD_NFC_RESPONSE_RF_COL 0xC9  
-#define CMD_NFC_RESPONSE_RF_N   0xCA  
-#define CMD_GOTO_SENSE          0xCD  
-#define CMD_GOTO_SLEEP          0xCE  
-
-#define CMD_STOP_ALL            CMD_CLEAR
-#define CMD_CLEAR_FIFO          CMD_CLEAR  
-
-#define CMD_MASK_RX_DATA        0xD0  
-#define CMD_UNMASK_RX_DATA      0xD1  
-#define CMD_AM_MOD_STATE_CHG    0xD2  
-#define CMD_MEAS_AMPLITUDE      0xD3  
-#define CMD_RESET_RX_GAIN       0xD5  
-#define CMD_ADJUST_REGULATORS   0xD6  
-
-#define CMD_CALIBRATE_DRIVER    0xD8  
-#define CMD_MEAS_PHASE          0xD9  
-#define CMD_CLEAR_RSSI          0xDA  
-#define CMD_TRANSPARENT_MODE    0xDB  
-#define CMD_CALIBRATE_C_SENSOR  0xDC  
-#define CMD_MEAS_CAPACITANCE    0xDD  
-#define CMD_MEAS_VDD            0xDE  
-
-#define CMD_START_GP_TIMER      0xDF  
-#define CMD_START_WU_TIMER      0xE0  
-#define CMD_START_MASK_RX_TIMER 0xE1  
-#define CMD_START_NRT           0xE2  
-#define CMD_START_PPON2_TIMER   0xE3  
-
-#define CMD_TEST_ACCESS         0xFC  
-
-#define SPI_FIFO_LOAD           0x80
-#define SPI_FIFO_READ           0x9F
-
-#define SEL_CL1                 0x93
-#define SEL_CL2                 0x95
-#define SEL_CL3                 0x97
-
+#ifdef __cplusplus
+extern "C" {
 #endif
+
+#define ST25R3916_CMD_SET_DEFAULT    0xC0 /**< Set all registers to default. */
+#define ST25R3916_CMD_CLEAR          0xC2 /**< Stop activity, clear FIFO/IRQ. */
+#define ST25R3916_CMD_TX_WITH_CRC    0xC4 /**< Transmit FIFO with CRC. */
+#define ST25R3916_CMD_TX_WO_CRC      0xC5 /**< Transmit FIFO without CRC. */
+#define ST25R3916_CMD_TX_REQA        0xC6 /**< Transmit ISO 14443-A REQA. */
+#define ST25R3916_CMD_TX_WUPA        0xC7 /**< Transmit ISO 14443-A WUPA. */
+#define ST25R3916_CMD_NFC_INIT_COL   0xC8 /**< Initial RF collision avoidance. */
+#define ST25R3916_CMD_NFC_RESP_COL   0xC9 /**< Response RF collision avoidance. */
+#define ST25R3916_CMD_NFC_RESP_COL_N 0xCA /**< Response RF collision avoidance (n). */
+#define ST25R3916_CMD_GOTO_SENSE     0xCD /**< Enter sense state. */
+#define ST25R3916_CMD_GOTO_SLEEP     0xCE /**< Enter sleep state. */
+
+#define ST25R3916_CMD_MASK_RX_DATA       0xD0 /**< Mask RX data. */
+#define ST25R3916_CMD_UNMASK_RX_DATA     0xD1 /**< Unmask RX data. */
+#define ST25R3916_CMD_MEAS_AMPLITUDE     0xD3 /**< Trigger ADC amplitude measurement. */
+#define ST25R3916_CMD_RESET_RX_GAIN      0xD5 /**< Reset RX gain. */
+#define ST25R3916_CMD_ADJUST_REGULATORS  0xD6 /**< Calibrate internal regulators. */
+#define ST25R3916_CMD_CALIBRATE_DRIVER   0xD8 /**< Calibrate TX driver. */
+#define ST25R3916_CMD_MEAS_PHASE         0xD9 /**< Trigger ADC phase measurement. */
+#define ST25R3916_CMD_CLEAR_RSSI         0xDA /**< Clear RSSI measurement. */
+#define ST25R3916_CMD_TRANSPARENT_MODE   0xDB /**< Enter transparent (bit-stream) mode. */
+#define ST25R3916_CMD_CALIBRATE_C_SENSOR 0xDC /**< Calibrate capacitance sensor. */
+#define ST25R3916_CMD_MEAS_CAPACITANCE   0xDD /**< Trigger capacitance measurement. */
+#define ST25R3916_CMD_MEAS_VDD           0xDE /**< Trigger VDD measurement. */
+
+#define ST25R3916_CMD_START_GP_TIMER      0xDF /**< Start general-purpose timer. */
+#define ST25R3916_CMD_START_WU_TIMER      0xE0 /**< Start wake-up timer. */
+#define ST25R3916_CMD_START_MASK_RX_TIMER 0xE1 /**< Start mask-receive timer. */
+#define ST25R3916_CMD_START_NRT           0xE2 /**< Start no-response timer. */
+
+#define ST25R3916_SPI_FIFO_LOAD 0x80 /**< SPI Operation: Write to FIFO. */
+#define ST25R3916_SPI_FIFO_READ 0x9F /**< SPI Operation: Read from FIFO. */
+#define ST25R3916_SPI_CMD_MODE  0xC0 /**< SPI Operation: Direct Command mode. */
+
+#define ST25R3916_SEL_CL1 0x93 /**< SELECT Cascade Level 1. */
+#define ST25R3916_SEL_CL2 0x95 /**< SELECT Cascade Level 2. */
+#define ST25R3916_SEL_CL3 0x97 /**< SELECT Cascade Level 3. */
+
+#define ST25R3916_CMD_STOP_ALL   ST25R3916_CMD_CLEAR
+#define ST25R3916_CMD_CLEAR_FIFO ST25R3916_CMD_CLEAR
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // ST25R3916_CMD_H

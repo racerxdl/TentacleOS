@@ -11,145 +11,178 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file st25r3916_aat.c
- * @brief ST25R3916 Antenna Auto-Tuning: 2-pass sweep + NVS cache.
- */
+
 #include "st25r3916_aat.h"
+
+#include <string.h>
+
+#include "esp_log.h"
+#include "nvs.h"
+
 #include "st25r3916_core.h"
 #include "st25r3916_cmd.h"
 #include "st25r3916_reg.h"
 #include "hb_nfc_spi.h"
 #include "hb_nfc_timer.h"
-#include "esp_log.h"
-#include "nvs.h"
 
-static const char* TAG = "st25r_aat";
+static const char *TAG = "ST25R3916_AAT";
 
-static hb_nfc_err_t aat_set(uint8_t dac_a, uint8_t dac_b)
-{
-    hb_nfc_err_t err = hb_spi_reg_write(REG_ANT_TUNE_A, dac_a);
-    if (err != HB_NFC_OK) return err;
-    return hb_spi_reg_write(REG_ANT_TUNE_B, dac_b);
+#define ST25R3916_AAT_DAC_DEFAULT 0x80
+#define ST25R3916_AAT_DAC_MAX     0xFF
+#define ST25R3916_AAT_COARSE_STEP 16
+#define ST25R3916_AAT_FINE_STEP   4
+
+static esp_err_t set_dacs(uint8_t dac_a, uint8_t dac_b) {
+  if (hb_nfc_spi_reg_write(ST25R3916_REG_ANT_TUNE_A, dac_a) != ESP_OK)
+    return ESP_FAIL;
+  if (hb_nfc_spi_reg_write(ST25R3916_REG_ANT_TUNE_B, dac_b) != ESP_OK)
+    return ESP_FAIL;
+  return ESP_OK;
 }
 
-static void aat_measure(uint8_t* amp, uint8_t* phase)
-{
-    hb_spi_direct_cmd(CMD_MEAS_AMPLITUDE);
-    hb_delay_ms(2);
-    hb_spi_reg_read(REG_AD_RESULT, amp);
+static void perform_measurement(uint8_t *out_amp, uint8_t *out_phase) {
+  hb_nfc_spi_direct_cmd(ST25R3916_CMD_MEAS_AMPLITUDE);
+  hb_nfc_timer_delay_ms(ST25R3916_AD_MEAS_DELAY_MS);
+  hb_nfc_spi_reg_read(ST25R3916_REG_AD_RESULT, out_amp);
 
-    hb_spi_direct_cmd(CMD_MEAS_PHASE);
-    hb_delay_ms(2);
-    hb_spi_reg_read(REG_AD_RESULT, phase);
+  hb_nfc_spi_direct_cmd(ST25R3916_CMD_MEAS_PHASE);
+  hb_nfc_timer_delay_ms(ST25R3916_AD_MEAS_DELAY_MS);
+  hb_nfc_spi_reg_read(ST25R3916_REG_AD_RESULT, out_phase);
 }
 
-hb_nfc_err_t st25r_aat_calibrate(st25r_aat_result_t* result)
-{
-    if (!result) return HB_NFC_ERR_PARAM;
+esp_err_t st25r3916_aat_calibrate(st25r3916_aat_result_t *out_result) {
+  if (out_result == NULL) {
+    return ESP_ERR_INVALID_ARG;
+  }
 
-    bool was_on = st25r_field_is_on();
-    if (!was_on) {
-        hb_nfc_err_t err = st25r_field_on();
-        if (err != HB_NFC_OK) return err;
+  bool original_field_state = st25r3916_core_field_is_on();
+  if (!original_field_state) {
+    if (st25r3916_core_field_on() != ESP_OK) {
+      return ESP_FAIL;
     }
+  }
 
-    uint8_t best_a = 0x80;
-    uint8_t best_b = 0x80;
-    uint8_t best_amp = 0;
-    uint8_t best_phase = 0;
-    const uint8_t coarse = 16;
+  uint8_t best_a = ST25R3916_AAT_DAC_DEFAULT;
+  uint8_t best_b = ST25R3916_AAT_DAC_DEFAULT;
+  uint8_t max_amp = 0;
+  uint8_t best_ph = 0;
 
-    for (uint16_t a = 0; a <= 0xFF; a += coarse) {
-        for (uint16_t b = 0; b <= 0xFF; b += coarse) {
-            hb_nfc_err_t err = aat_set((uint8_t)a, (uint8_t)b);
-            if (err != HB_NFC_OK) return err;
-            uint8_t amp = 0, phase = 0;
-            aat_measure(&amp, &phase);
-            if (amp > best_amp) {
-                best_amp = amp;
-                best_phase = phase;
-                best_a = (uint8_t)a;
-                best_b = (uint8_t)b;
-            }
-        }
+  for (uint16_t a = 0; a <= ST25R3916_AAT_DAC_MAX; a += ST25R3916_AAT_COARSE_STEP) {
+    for (uint16_t b = 0; b <= ST25R3916_AAT_DAC_MAX; b += ST25R3916_AAT_COARSE_STEP) {
+      set_dacs((uint8_t)a, (uint8_t)b);
+      uint8_t amp = 0, ph = 0;
+      perform_measurement(&amp, &ph);
+      if (amp > max_amp) {
+        max_amp = amp;
+        best_ph = ph;
+        best_a = (uint8_t)a;
+        best_b = (uint8_t)b;
+      }
     }
+  }
 
-    const uint8_t fine = 4;
-    uint8_t start_a = (best_a > coarse) ? (best_a - coarse) : 0;
-    uint8_t end_a   = (best_a + coarse < 0xFF) ? (best_a + coarse) : 0xFF;
-    uint8_t start_b = (best_b > coarse) ? (best_b - coarse) : 0;
-    uint8_t end_b   = (best_b + coarse < 0xFF) ? (best_b + coarse) : 0xFF;
+  int start_a = (best_a > ST25R3916_AAT_COARSE_STEP) ? (best_a - ST25R3916_AAT_COARSE_STEP) : 0;
+  int end_a = (best_a + ST25R3916_AAT_COARSE_STEP > ST25R3916_AAT_DAC_MAX)
+                  ? ST25R3916_AAT_DAC_MAX
+                  : (best_a + ST25R3916_AAT_COARSE_STEP);
+  int start_b = (best_b > ST25R3916_AAT_COARSE_STEP) ? (best_b - ST25R3916_AAT_COARSE_STEP) : 0;
+  int end_b = (best_b + ST25R3916_AAT_COARSE_STEP > ST25R3916_AAT_DAC_MAX)
+                  ? ST25R3916_AAT_DAC_MAX
+                  : (best_b + ST25R3916_AAT_COARSE_STEP);
 
-    for (uint16_t a = start_a; a <= end_a; a += fine) {
-        for (uint16_t b = start_b; b <= end_b; b += fine) {
-            hb_nfc_err_t err = aat_set((uint8_t)a, (uint8_t)b);
-            if (err != HB_NFC_OK) return err;
-            uint8_t amp = 0, phase = 0;
-            aat_measure(&amp, &phase);
-            if (amp > best_amp) {
-                best_amp = amp;
-                best_phase = phase;
-                best_a = (uint8_t)a;
-                best_b = (uint8_t)b;
-            }
-        }
+  for (int a = start_a; a <= end_a; a += ST25R3916_AAT_FINE_STEP) {
+    for (int b = start_b; b <= end_b; b += ST25R3916_AAT_FINE_STEP) {
+      set_dacs((uint8_t)a, (uint8_t)b);
+      uint8_t amp = 0, ph = 0;
+      perform_measurement(&amp, &ph);
+      if (amp > max_amp) {
+        max_amp = amp;
+        best_ph = ph;
+        best_a = (uint8_t)a;
+        best_b = (uint8_t)b;
+      }
     }
+  }
 
-    (void)aat_set(best_a, best_b);
-    result->dac_a = best_a;
-    result->dac_b = best_b;
-    result->amplitude = best_amp;
-    result->phase = best_phase;
+  set_dacs(best_a, best_b);
+  out_result->dac_a = best_a;
+  out_result->dac_b = best_b;
+  out_result->amplitude = max_amp;
+  out_result->phase = best_ph;
 
-    if (!was_on) {
-        st25r_field_off();
-    }
+  if (!original_field_state) {
+    st25r3916_core_field_off();
+  }
 
-    ESP_LOGI(TAG, "AAT sweep: A=0x%02X B=0x%02X AMP=%u PH=%u",
-             result->dac_a, result->dac_b, result->amplitude, result->phase);
-    return HB_NFC_OK;
+  ESP_LOGI(TAG, "Calibration finished: A=0x%02X B=0x%02X Amp=%u", best_a, best_b, max_amp);
+  return ESP_OK;
 }
 
-hb_nfc_err_t st25r_aat_load_nvs(st25r_aat_result_t* result)
-{
-    if (!result) return HB_NFC_ERR_PARAM;
-    nvs_handle_t nvs = 0;
-    esp_err_t err = nvs_open("hb_aat", NVS_READONLY, &nvs);
-    if (err != ESP_OK) return HB_NFC_ERR_INTERNAL;
+esp_err_t st25r3916_aat_load_nvs(st25r3916_aat_result_t *out_result) {
+  if (out_result == NULL)
+    return ESP_ERR_INVALID_ARG;
 
-    uint8_t a = 0, b = 0, amp = 0, ph = 0;
-    if (nvs_get_u8(nvs, "dac_a", &a) != ESP_OK ||
-        nvs_get_u8(nvs, "dac_b", &b) != ESP_OK ||
-        nvs_get_u8(nvs, "amp",   &amp) != ESP_OK ||
-        nvs_get_u8(nvs, "phase", &ph) != ESP_OK) {
-        nvs_close(nvs);
-        return HB_NFC_ERR_INTERNAL;
-    }
-    nvs_close(nvs);
+  nvs_handle_t handle;
+  esp_err_t err = nvs_open("hb_aat", NVS_READONLY, &handle);
+  if (err != ESP_OK)
+    return err;
 
-    result->dac_a = a;
-    result->dac_b = b;
-    result->amplitude = amp;
-    result->phase = ph;
-    return HB_NFC_OK;
+  err = nvs_get_u8(handle, "dac_a", &out_result->dac_a);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return err;
+  }
+  err = nvs_get_u8(handle, "dac_b", &out_result->dac_b);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return err;
+  }
+  err = nvs_get_u8(handle, "amp", &out_result->amplitude);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return err;
+  }
+  err = nvs_get_u8(handle, "phase", &out_result->phase);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return err;
+  }
+
+  nvs_close(handle);
+  return ESP_OK;
 }
 
-hb_nfc_err_t st25r_aat_save_nvs(const st25r_aat_result_t* result)
-{
-    if (!result) return HB_NFC_ERR_PARAM;
-    nvs_handle_t nvs = 0;
-    esp_err_t err = nvs_open("hb_aat", NVS_READWRITE, &nvs);
-    if (err != ESP_OK) return HB_NFC_ERR_INTERNAL;
+esp_err_t st25r3916_aat_save_nvs(const st25r3916_aat_result_t *result) {
+  if (result == NULL)
+    return ESP_ERR_INVALID_ARG;
 
-    if (nvs_set_u8(nvs, "dac_a", result->dac_a)    != ESP_OK ||
-        nvs_set_u8(nvs, "dac_b", result->dac_b)    != ESP_OK ||
-        nvs_set_u8(nvs, "amp",   result->amplitude) != ESP_OK ||
-        nvs_set_u8(nvs, "phase", result->phase)     != ESP_OK) {
-        nvs_close(nvs);
-        return HB_NFC_ERR_INTERNAL;
-    }
-    err = nvs_commit(nvs);
-    nvs_close(nvs);
-    return (err == ESP_OK) ? HB_NFC_OK : HB_NFC_ERR_INTERNAL;
+  nvs_handle_t handle;
+  esp_err_t err = nvs_open("hb_aat", NVS_READWRITE, &handle);
+  if (err != ESP_OK)
+    return err;
+
+  err = nvs_set_u8(handle, "dac_a", result->dac_a);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return err;
+  }
+  err = nvs_set_u8(handle, "dac_b", result->dac_b);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return err;
+  }
+  err = nvs_set_u8(handle, "amp", result->amplitude);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return err;
+  }
+  err = nvs_set_u8(handle, "phase", result->phase);
+  if (err != ESP_OK) {
+    nvs_close(handle);
+    return err;
+  }
+
+  err = nvs_commit(handle);
+  nvs_close(handle);
+  return err;
 }

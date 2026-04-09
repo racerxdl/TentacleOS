@@ -11,52 +11,101 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file highboy_nfc.h
- * @brief High Boy NFC Library Public API.
- *
- * Proven working config (ESP32-P4 + ST25R3916):
- *  MOSI=18, MISO=19, SCK=17, CS=3, IRQ=8
- *  SPI Mode 1, 500 kHz, cs_ena_pretrans=1, cs_ena_posttrans=1
- */
+
 #ifndef HIGHBOY_NFC_H
 #define HIGHBOY_NFC_H
 
-#include "highboy_nfc_types.h"
-#include "highboy_nfc_error.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+#include <stdint.h>
+#include <stdbool.h>
+
+#include "esp_err.h"
+#include "driver/gpio.h"
+#include "driver/spi_master.h"
+
+/**
+ * @brief Hardware and bus configuration for library initialization.
+ *
+ * Target: ST25R3916 / ST25R3916B.
+ */
 typedef struct {
-    
-    int pin_mosi;       
-    int pin_miso;       
-    int pin_sclk;       
-    int pin_cs;         
-    
-    int pin_irq;        
-    
-    int spi_host;       
-    int spi_mode;       
-    uint32_t spi_clock_hz;  
+  gpio_num_t pin_mosi;   /**< SPI MOSI pin. */
+  gpio_num_t pin_miso;   /**< SPI MISO pin. */
+  gpio_num_t pin_sclk;   /**< SPI clock pin. */
+  gpio_num_t pin_cs;     /**< SPI chip-select pin. */
+  gpio_num_t pin_irq;    /**< ST25R3916 IRQ output pin. */
+  int spi_host;          /**< ESP-IDF SPI host index (e.g., SPI2_HOST). */
+  uint8_t spi_mode;      /**< SPI mode (ST25R3916 requires Mode 1). */
+  uint32_t spi_clock_hz; /**< SPI clock frequency (Max 6MHz). */
 } highboy_nfc_config_t;
 
-#define HIGHBOY_NFC_CONFIG_DEFAULT() { \
-    .pin_mosi     = 18,                \
-    .pin_miso     = 19,                \
-    .pin_sclk     = 17,                \
-    .pin_cs       = 3,                 \
-    .pin_irq      = 8,                 \
-    .spi_host     = 2,                 \
-    .spi_mode     = 1,                 \
-    .spi_clock_hz = 500000,            \
+/**
+ * @brief Default configuration based on ESP32-P4 reference wiring.
+ */
+#define HIGHBOY_NFC_CONFIG_DEFAULT()                                                   \
+  {                                                                                    \
+    .pin_mosi = GPIO_NUM_18, .pin_miso = GPIO_NUM_19, .pin_sclk = GPIO_NUM_17,         \
+    .pin_cs = GPIO_NUM_3, .pin_irq = GPIO_NUM_8, .spi_host = SPI2_HOST, .spi_mode = 1, \
+    .spi_clock_hz = 500000,                                                            \
+  }
+
+/**
+ * @brief Initialize the NFC library and underlying hardware.
+ *
+ * @param[in] config Hardware configuration. Must not be NULL.
+ * @return
+ * - ESP_OK: Success.
+ * - ESP_ERR_INVALID_ARG: NULL configuration.
+ * - ESP_ERR_NOT_FOUND: Chip not detected.
+ * - ESP_FAIL: Hardware initialization failed.
+ */
+esp_err_t highboy_nfc_init(const highboy_nfc_config_t *config);
+
+/**
+ * @brief Deinitialize the library and power down the RF field.
+ */
+void highboy_nfc_deinit(void);
+
+/**
+ * @brief Ping the chip to verify communication.
+ *
+ * @param[out] out_chip_id Optional pointer to store the raw IC identity.
+ * @return ESP_OK on success.
+ */
+esp_err_t highboy_nfc_ping(uint8_t *out_chip_id);
+
+/**
+ * @brief Enable the RF field.
+ * @return ESP_OK on success.
+ */
+esp_err_t highboy_nfc_field_on(void);
+
+/**
+ * @brief Disable the RF field.
+ * @return ESP_OK on success.
+ */
+esp_err_t highboy_nfc_field_off(void);
+
+/**
+ * @brief Measure the current RF field amplitude.
+ *
+ * @return Raw ADC value (0–255).
+ */
+uint8_t highboy_nfc_measure_amplitude(void);
+
+/**
+ * @brief Detect if an external RF field is present (External Field Detector).
+ *
+ * @param[out] out_aux_display Optional pointer to store raw AUX_DISPLAY register.
+ * @return true if field detected, false otherwise.
+ */
+bool highboy_nfc_field_detected(uint8_t *out_aux_display);
+
+#ifdef __cplusplus
 }
-
-hb_nfc_err_t highboy_nfc_init(const highboy_nfc_config_t* config);
-void         highboy_nfc_deinit(void);
-hb_nfc_err_t highboy_nfc_ping(uint8_t* chip_id);
-
-hb_nfc_err_t highboy_nfc_field_on(void);
-void         highboy_nfc_field_off(void);
-uint8_t      highboy_nfc_measure_amplitude(void);
-bool         highboy_nfc_field_detected(uint8_t* aux_display);
-
 #endif
+
+#endif // HIGHBOY_NFC_H
