@@ -49,7 +49,7 @@ esp_err_t storage_read_string(const char *path, char *buffer, size_t buffer_size
     return ESP_ERR_INVALID_STATE;
   }
 
-  if (!path || !buffer || buffer_size == 0) {
+  if (path == NULL || buffer == NULL || buffer_size == 0) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -77,7 +77,7 @@ esp_err_t storage_read_binary(const char *path, void *buffer, size_t size, size_
     return ESP_ERR_INVALID_STATE;
   }
 
-  if (!path || !buffer) {
+  if (path == NULL || buffer == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -103,7 +103,7 @@ storage_read_line(const char *path, char *buffer, size_t buffer_size, uint32_t l
     return ESP_ERR_INVALID_STATE;
   }
 
-  if (!path || !buffer || buffer_size == 0 || line_number == 0) {
+  if (path == NULL || buffer == NULL || buffer_size == 0 || line_number == 0) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -153,7 +153,7 @@ esp_err_t storage_read_last_line(const char *path, char *buffer, size_t buffer_s
     return ESP_ERR_INVALID_STATE;
   }
 
-  if (!path || !buffer || buffer_size == 0) {
+  if (path == NULL || buffer == NULL || buffer_size == 0) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -204,7 +204,7 @@ esp_err_t storage_read_lines(const char *path, storage_line_callback_t callback,
     return ESP_ERR_INVALID_STATE;
   }
 
-  if (!path || !callback) {
+  if (path == NULL || callback == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -244,7 +244,7 @@ esp_err_t storage_count_lines(const char *path, uint32_t *line_count) {
     return ESP_ERR_INVALID_STATE;
   }
 
-  if (!path || !line_count) {
+  if (path == NULL || line_count == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -277,7 +277,7 @@ storage_read_chunk(const char *path, size_t offset, void *buffer, size_t size, s
     return ESP_ERR_INVALID_STATE;
   }
 
-  if (!path || !buffer) {
+  if (path == NULL || buffer == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -311,7 +311,7 @@ storage_read_chunk(const char *path, size_t offset, void *buffer, size_t size, s
 // Specific Types
 
 esp_err_t storage_read_int(const char *path, int32_t *value) {
-  if (!value) {
+  if (value == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -324,7 +324,7 @@ esp_err_t storage_read_int(const char *path, int32_t *value) {
 }
 
 esp_err_t storage_read_float(const char *path, float *value) {
-  if (!value) {
+  if (value == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -341,7 +341,7 @@ esp_err_t storage_read_bytes(const char *path, uint8_t *bytes, size_t max_count,
 }
 
 esp_err_t storage_read_byte(const char *path, uint8_t *byte) {
-  if (!byte) {
+  if (byte == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -356,7 +356,7 @@ esp_err_t storage_file_contains(const char *path, const char *search, bool *foun
     return ESP_ERR_INVALID_STATE;
   }
 
-  if (!path || !search || !found) {
+  if (path == NULL || search == NULL || found == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -395,7 +395,7 @@ esp_err_t storage_count_occurrences(const char *path, const char *search, uint32
     return ESP_ERR_INVALID_STATE;
   }
 
-  if (!path || !search || !count) {
+  if (path == NULL || search == NULL || count == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 

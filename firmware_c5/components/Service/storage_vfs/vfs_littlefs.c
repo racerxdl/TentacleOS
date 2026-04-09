@@ -28,6 +28,8 @@
 
 #ifdef VFS_USE_LITTLEFS
 
+#define LFS_BLOCK_SIZE 4096
+
 static const char *TAG = "VFS_LITTLEFS";
 
 static struct {
@@ -125,7 +127,7 @@ static esp_err_t littlefs_readdir(vfs_dir_t dir, vfs_stat_t *entry) {
   DIR *d = (DIR *)dir;
   struct dirent *ent = readdir(d);
 
-  if (!ent) {
+  if (ent == NULL) {
     return ESP_ERR_NOT_FOUND;
   }
 
@@ -154,9 +156,9 @@ static esp_err_t littlefs_statvfs(vfs_statvfs_t *stat) {
     stat->total_bytes = total;
     stat->used_bytes = used;
     stat->free_bytes = total - used;
-    stat->block_size = 4096;
-    stat->total_blocks = total / 4096;
-    stat->free_blocks = (total - used) / 4096;
+    stat->block_size = LFS_BLOCK_SIZE;
+    stat->total_blocks = total / LFS_BLOCK_SIZE;
+    stat->free_blocks = (total - used) / LFS_BLOCK_SIZE;
   }
 
   return ret;

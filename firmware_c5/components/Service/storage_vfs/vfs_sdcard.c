@@ -138,7 +138,7 @@ static esp_err_t sdcard_readdir(vfs_dir_t dir, vfs_stat_t *entry) {
   DIR *d = (DIR *)dir;
   struct dirent *ent = readdir(d);
 
-  if (!ent) {
+  if (ent == NULL) {
     return ESP_ERR_NOT_FOUND;
   }
 
@@ -156,7 +156,7 @@ static esp_err_t sdcard_closedir(vfs_dir_t dir) {
 }
 
 static esp_err_t sdcard_statvfs(vfs_statvfs_t *stat) {
-  if (!s_sdcard.mounted || !s_sdcard.card) {
+  if (!s_sdcard.mounted || s_sdcard.card == NULL) {
     return ESP_ERR_INVALID_STATE;
   }
 

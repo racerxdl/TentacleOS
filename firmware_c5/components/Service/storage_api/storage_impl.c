@@ -105,7 +105,7 @@ esp_err_t storage_file_get_extension(const char *path, char *ext, size_t size) {
   }
 
   const char *dot = strrchr(path, '.');
-  if (!dot || dot == path) {
+  if (dot == NULL || dot == path) {
     ext[0] = '\0';
     return ESP_OK;
   }

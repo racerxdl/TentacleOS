@@ -46,7 +46,7 @@ static vfs_file_descriptor_t s_fd_table[MAX_OPEN_FILES] = {0};
 // Helper Functions
 
 static const vfs_backend_config_t *find_backend_by_mount(const char *path) {
-  if (!path)
+  if (path == NULL)
     return NULL;
 
   const vfs_backend_config_t *best_match = NULL;
@@ -93,7 +93,7 @@ static vfs_file_descriptor_t *get_fd(int fd) {
 // Backend Management
 
 esp_err_t vfs_register_backend(const vfs_backend_config_t *config) {
-  if (!config || !config->mount_point || !config->ops) {
+  if (config == NULL || config->mount_point == NULL || config->ops == NULL) {
     ESP_LOGE(TAG, "Invalid configuration");
     return ESP_ERR_INVALID_ARG;
   }
@@ -118,7 +118,7 @@ esp_err_t vfs_register_backend(const vfs_backend_config_t *config) {
 }
 
 esp_err_t vfs_unregister_backend(const char *mount_point) {
-  if (!mount_point) {
+  if (mount_point == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -143,7 +143,7 @@ const vfs_backend_config_t *vfs_get_backend(const char *path) {
 }
 
 size_t vfs_list_backends(const vfs_backend_config_t **backends, size_t max_count) {
-  if (!backends)
+  if (backends == NULL)
     return 0;
 
   size_t count = s_vfs_backends.count < max_count ? s_vfs_backends.count : max_count;
@@ -157,13 +157,13 @@ size_t vfs_list_backends(const vfs_backend_config_t **backends, size_t max_count
 // File Operations
 
 vfs_fd_t vfs_open(const char *path, int flags, int mode) {
-  if (!path) {
+  if (path == NULL) {
     ESP_LOGE(TAG, "Null path");
     return VFS_INVALID_FD;
   }
 
   const vfs_backend_config_t *backend = find_backend_by_mount(path);
-  if (!backend || !backend->ops || !backend->ops->open) {
+  if (backend == NULL || backend->ops == NULL || backend->ops->open == NULL) {
     ESP_LOGE(TAG, "Backend not found for: %s", path);
     return VFS_INVALID_FD;
   }
@@ -194,7 +194,7 @@ vfs_fd_t vfs_open(const char *path, int flags, int mode) {
 
 ssize_t vfs_read(vfs_fd_t fd, void *buf, size_t size) {
   vfs_file_descriptor_t *vfd = get_fd(fd);
-  if (!vfd || !vfd->backend->ops->read) {
+  if (vfd == NULL || vfd->backend->ops->read == NULL) {
     ESP_LOGE(TAG, "Invalid FD: %d", fd);
     return -1;
   }
@@ -204,7 +204,7 @@ ssize_t vfs_read(vfs_fd_t fd, void *buf, size_t size) {
 
 ssize_t vfs_write(vfs_fd_t fd, const void *buf, size_t size) {
   vfs_file_descriptor_t *vfd = get_fd(fd);
-  if (!vfd || !vfd->backend->ops->write) {
+  if (vfd == NULL || vfd->backend->ops->write == NULL) {
     ESP_LOGE(TAG, "Invalid FD: %d", fd);
     return -1;
   }
@@ -214,7 +214,7 @@ ssize_t vfs_write(vfs_fd_t fd, const void *buf, size_t size) {
 
 off_t vfs_lseek(vfs_fd_t fd, off_t offset, int whence) {
   vfs_file_descriptor_t *vfd = get_fd(fd);
-  if (!vfd || !vfd->backend->ops->lseek) {
+  if (vfd == NULL || vfd->backend->ops->lseek == NULL) {
     ESP_LOGE(TAG, "Invalid FD: %d", fd);
     return -1;
   }
@@ -224,7 +224,7 @@ off_t vfs_lseek(vfs_fd_t fd, off_t offset, int whence) {
 
 esp_err_t vfs_close(vfs_fd_t fd) {
   vfs_file_descriptor_t *vfd = get_fd(fd);
-  if (!vfd) {
+  if (vfd == NULL) {
     ESP_LOGE(TAG, "Invalid FD: %d", fd);
     return ESP_ERR_INVALID_ARG;
   }
@@ -240,7 +240,7 @@ esp_err_t vfs_close(vfs_fd_t fd) {
 
 esp_err_t vfs_fsync(vfs_fd_t fd) {
   vfs_file_descriptor_t *vfd = get_fd(fd);
-  if (!vfd) {
+  if (vfd == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -254,12 +254,12 @@ esp_err_t vfs_fsync(vfs_fd_t fd) {
 // Metadata
 
 esp_err_t vfs_stat(const char *path, vfs_stat_t *st) {
-  if (!path || !st) {
+  if (path == NULL || st == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
   const vfs_backend_config_t *backend = find_backend_by_mount(path);
-  if (!backend || !backend->ops->stat) {
+  if (backend == NULL || backend->ops->stat == NULL) {
     ESP_LOGE(TAG, "Backend not found: %s", path);
     return ESP_ERR_NOT_FOUND;
   }
@@ -268,12 +268,12 @@ esp_err_t vfs_stat(const char *path, vfs_stat_t *st) {
 }
 
 esp_err_t vfs_fstat(vfs_fd_t fd, vfs_stat_t *st) {
-  if (!st) {
+  if (st == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
   vfs_file_descriptor_t *vfd = get_fd(fd);
-  if (!vfd || !vfd->backend->ops->fstat) {
+  if (vfd == NULL || vfd->backend->ops->fstat == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -281,12 +281,12 @@ esp_err_t vfs_fstat(vfs_fd_t fd, vfs_stat_t *st) {
 }
 
 esp_err_t vfs_rename(const char *old_path, const char *new_path) {
-  if (!old_path || !new_path) {
+  if (old_path == NULL || new_path == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
   const vfs_backend_config_t *backend = find_backend_by_mount(old_path);
-  if (!backend || !backend->ops->rename) {
+  if (backend == NULL || backend->ops->rename == NULL) {
     return ESP_ERR_NOT_SUPPORTED;
   }
 
@@ -294,12 +294,12 @@ esp_err_t vfs_rename(const char *old_path, const char *new_path) {
 }
 
 esp_err_t vfs_unlink(const char *path) {
-  if (!path) {
+  if (path == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
   const vfs_backend_config_t *backend = find_backend_by_mount(path);
-  if (!backend || !backend->ops->unlink) {
+  if (backend == NULL || backend->ops->unlink == NULL) {
     return ESP_ERR_NOT_SUPPORTED;
   }
 
@@ -307,12 +307,12 @@ esp_err_t vfs_unlink(const char *path) {
 }
 
 esp_err_t vfs_truncate(const char *path, off_t length) {
-  if (!path) {
+  if (path == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
   const vfs_backend_config_t *backend = find_backend_by_mount(path);
-  if (!backend || !backend->ops->truncate) {
+  if (backend == NULL || backend->ops->truncate == NULL) {
     return ESP_ERR_NOT_SUPPORTED;
   }
 
@@ -327,12 +327,12 @@ bool vfs_exists(const char *path) {
 // Directories
 
 esp_err_t vfs_mkdir(const char *path, int mode) {
-  if (!path) {
+  if (path == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
   const vfs_backend_config_t *backend = find_backend_by_mount(path);
-  if (!backend || !backend->ops->mkdir) {
+  if (backend == NULL || backend->ops->mkdir == NULL) {
     return ESP_ERR_NOT_SUPPORTED;
   }
 
@@ -340,12 +340,12 @@ esp_err_t vfs_mkdir(const char *path, int mode) {
 }
 
 esp_err_t vfs_rmdir(const char *path) {
-  if (!path) {
+  if (path == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
   const vfs_backend_config_t *backend = find_backend_by_mount(path);
-  if (!backend || !backend->ops->rmdir) {
+  if (backend == NULL || backend->ops->rmdir == NULL) {
     return ESP_ERR_NOT_SUPPORTED;
   }
 
@@ -375,12 +375,12 @@ esp_err_t vfs_rmdir_recursive(const char *path) {
 }
 
 vfs_dir_t vfs_opendir(const char *path) {
-  if (!path) {
+  if (path == NULL) {
     return NULL;
   }
 
   const vfs_backend_config_t *backend = find_backend_by_mount(path);
-  if (!backend || !backend->ops->opendir) {
+  if (backend == NULL || backend->ops->opendir == NULL) {
     ESP_LOGE(TAG, "Backend does not support opendir: %s", path);
     return NULL;
   }
@@ -405,7 +405,7 @@ vfs_dir_t vfs_opendir(const char *path) {
 }
 
 esp_err_t vfs_readdir(vfs_dir_t dir, vfs_stat_t *entry) {
-  if (dir == NULL || entry == NULL || !dir->backend->ops->readdir) {
+  if (dir == NULL || entry == NULL || dir->backend->ops->readdir == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -427,7 +427,7 @@ esp_err_t vfs_closedir(vfs_dir_t dir) {
 }
 
 esp_err_t vfs_list_dir(const char *path, vfs_dir_callback_t callback, void *user_data) {
-  if (!path || !callback) {
+  if (path == NULL || callback == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -447,12 +447,12 @@ esp_err_t vfs_list_dir(const char *path, vfs_dir_callback_t callback, void *user
 // Filesystem Info
 
 esp_err_t vfs_statvfs(const char *path, vfs_statvfs_t *stat) {
-  if (!path || !stat) {
+  if (path == NULL || stat == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
   const vfs_backend_config_t *backend = find_backend_by_mount(path);
-  if (!backend || !backend->ops->statvfs) {
+  if (backend == NULL || backend->ops->statvfs == NULL) {
     return ESP_ERR_NOT_SUPPORTED;
   }
 
@@ -460,7 +460,7 @@ esp_err_t vfs_statvfs(const char *path, vfs_statvfs_t *stat) {
 }
 
 esp_err_t vfs_get_free_space(const char *path, uint64_t *free_bytes) {
-  if (!free_bytes) {
+  if (free_bytes == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -473,7 +473,7 @@ esp_err_t vfs_get_free_space(const char *path, uint64_t *free_bytes) {
 }
 
 esp_err_t vfs_get_total_space(const char *path, uint64_t *total_bytes) {
-  if (!total_bytes) {
+  if (total_bytes == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -486,7 +486,7 @@ esp_err_t vfs_get_total_space(const char *path, uint64_t *total_bytes) {
 }
 
 esp_err_t vfs_get_usage_percent(const char *path, float *percentage) {
-  if (!percentage) {
+  if (percentage == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -502,7 +502,7 @@ esp_err_t vfs_get_usage_percent(const char *path, float *percentage) {
 // High-Level Helpers
 
 esp_err_t vfs_read_file(const char *path, void *buf, size_t size, size_t *bytes_read) {
-  if (!path || !buf) {
+  if (path == NULL || buf == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -526,11 +526,11 @@ esp_err_t vfs_read_file(const char *path, void *buf, size_t size, size_t *bytes_
 }
 
 esp_err_t vfs_write_file(const char *path, const void *buf, size_t size) {
-  if (!path) {
+  if (path == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
-  if (size > 0 && !buf) {
+  if (size > 0 && buf == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -556,11 +556,11 @@ esp_err_t vfs_write_file(const char *path, const void *buf, size_t size) {
 }
 
 esp_err_t vfs_append_file(const char *path, const void *buf, size_t size) {
-  if (!path) {
+  if (path == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
-  if (size > 0 && !buf) {
+  if (size > 0 && buf == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -586,7 +586,7 @@ esp_err_t vfs_append_file(const char *path, const void *buf, size_t size) {
 }
 
 esp_err_t vfs_copy_file(const char *src, const char *dst) {
-  if (!src || !dst) {
+  if (src == NULL || dst == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -627,7 +627,7 @@ esp_err_t vfs_copy_file(const char *src, const char *dst) {
 }
 
 esp_err_t vfs_get_size(const char *path, size_t *size) {
-  if (!path || !size) {
+  if (path == NULL || size == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
