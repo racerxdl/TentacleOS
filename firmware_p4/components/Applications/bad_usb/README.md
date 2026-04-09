@@ -75,11 +75,11 @@ void hid_hal_wait_for_connection(void);
 ### Keyboard Layouts (`hid_layouts.h`)
 
 ```c
-void type_string_us(const char *str);
-void type_string_abnt2(const char *str);
+void hid_layouts_type_string_us(const char *str);
+void hid_layouts_type_string_abnt2(const char *str);
 ```
-- `type_string_us` maps ASCII characters to US keyboard HID keycodes.
-- `type_string_abnt2` handles Brazilian Portuguese layout including UTF-8 dead-key sequences for accented characters (e.g. a, e, c, a, o).
+- `hid_layouts_type_string_us` maps ASCII characters to US keyboard HID keycodes.
+- `hid_layouts_type_string_abnt2` handles Brazilian Portuguese layout including UTF-8 dead-key sequences for accented characters (e.g. a, e, c, a, o).
 
 ### DuckyScript Parser (`ducky_parser.h`)
 
