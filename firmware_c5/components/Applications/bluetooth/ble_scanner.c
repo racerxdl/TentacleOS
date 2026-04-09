@@ -13,33 +13,113 @@
 // limitations under the License.
 
 #include "ble_scanner.h"
-#include "tos_flash_paths.h"
-#include "bluetooth_service.h"
-#include "esp_log.h"
+
+#include <string.h>
+
+#include "cJSON.h"
 #include "esp_heap_caps.h"
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <string.h>
-#include "cJSON.h"
-#include "storage_write.h"
-#include "sd_card_write.h"
-#include "sd_card_init.h"
 #include "sys/stat.h"
+
+#include "bluetooth_service.h"
 #include "oui_lookup.h"
+#include "sd_card_init.h"
+#include "sd_card_write.h"
+#include "storage_write.h"
+#include "tos_flash_paths.h"
 
 static const char *TAG = "BLE_SCANNER";
 
-static TaskHandle_t scanner_task_handle = NULL;
-static StackType_t *scanner_task_stack = NULL;
-static StaticTask_t *scanner_task_tcb = NULL;
-#define SCANNER_STACK_SIZE 4096
+#define SCANNER_STACK_SIZE    4096
+#define SCANNER_TASK_PRIORITY 5
+#define SCAN_DURATION_MS      10000
+#define DIR_PERMISSIONS       0777
 
-static ble_scan_result_t *scan_results = NULL;
-static uint16_t scan_count = 0;
-static bool is_scanning = false;
+static TaskHandle_t s_scanner_task_handle = NULL;
+static StackType_t *s_scanner_task_stack = NULL;
+static StaticTask_t *s_scanner_task_tcb = NULL;
 
-static bool save_results_to_path(const char *path, bool use_sd_driver) {
-  if (scan_results == NULL || scan_count == 0) {
+static bluetooth_service_scan_result_t *s_scan_results = NULL;
+static uint16_t s_scan_count = 0;
+static bool s_is_scanning = false;
+
+static bool save_results_to_path(const char *path, bool is_sd_driver);
+static void scanner_task(void *pvParameters);
+
+bool ble_scanner_save_results_to_internal_flash(void) {
+  return save_results_to_path(FLASH_STORAGE_BLE_DEVICES, false);
+}
+
+bool ble_scanner_save_results_to_sd_card(void) {
+  return save_results_to_path("/scanned_devices.json", true);
+}
+
+bool ble_scanner_start(void) {
+  if (s_is_scanning) {
+    ESP_LOGW(TAG, "Scan already in progress.");
+    return false;
+  }
+
+  if (s_scanner_task_stack == NULL) {
+    s_scanner_task_stack = (StackType_t *)heap_caps_malloc(SCANNER_STACK_SIZE * sizeof(StackType_t),
+                                                           MALLOC_CAP_SPIRAM);
+  }
+  if (s_scanner_task_tcb == NULL) {
+    s_scanner_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
+  }
+
+  if (s_scanner_task_stack == NULL || s_scanner_task_tcb == NULL) {
+    ESP_LOGE(TAG, "Failed to allocate scanner task memory in PSRAM!");
+    free(s_scanner_task_stack);
+    s_scanner_task_stack = NULL;
+    free(s_scanner_task_tcb);
+    s_scanner_task_tcb = NULL;
+    return false;
+  }
+
+  s_is_scanning = true;
+  s_scanner_task_handle = xTaskCreateStatic(scanner_task,
+                                            "ble_scan_task",
+                                            SCANNER_STACK_SIZE,
+                                            NULL,
+                                            SCANNER_TASK_PRIORITY,
+                                            s_scanner_task_stack,
+                                            s_scanner_task_tcb);
+
+  return (s_scanner_task_handle != NULL);
+}
+
+bluetooth_service_scan_result_t *ble_scanner_get_results(uint16_t *out_count) {
+  if (s_is_scanning) {
+    return NULL;
+  }
+  *out_count = s_scan_count;
+  return s_scan_results;
+}
+
+void ble_scanner_free_results(void) {
+  if (s_scan_results != NULL) {
+    free(s_scan_results);
+    s_scan_results = NULL;
+  }
+  s_scan_count = 0;
+
+  if (!s_is_scanning) {
+    if (s_scanner_task_stack != NULL) {
+      free(s_scanner_task_stack);
+      s_scanner_task_stack = NULL;
+    }
+    if (s_scanner_task_tcb != NULL) {
+      free(s_scanner_task_tcb);
+      s_scanner_task_tcb = NULL;
+    }
+  }
+}
+
+static bool save_results_to_path(const char *path, bool is_sd_driver) {
+  if (s_scan_results == NULL || s_scan_count == 0) {
     ESP_LOGW(TAG, "No results to save.");
     return false;
   }
@@ -50,8 +130,8 @@ static bool save_results_to_path(const char *path, bool use_sd_driver) {
     return false;
   }
 
-  for (int i = 0; i < scan_count; i++) {
-    ble_scan_result_t *dev = &scan_results[i];
+  for (int i = 0; i < s_scan_count; i++) {
+    bluetooth_service_scan_result_t *dev = &s_scan_results[i];
     cJSON *entry = cJSON_CreateObject();
 
     if (strlen(dev->name) > 0) {
@@ -61,9 +141,15 @@ static bool save_results_to_path(const char *path, bool use_sd_driver) {
     }
 
     char addr_str[18];
-    snprintf(addr_str, sizeof(addr_str), "%02x:%02x:%02x:%02x:%02x:%02x",
-             dev->addr[5], dev->addr[4], dev->addr[3],
-             dev->addr[2], dev->addr[1], dev->addr[0]); 
+    snprintf(addr_str,
+             sizeof(addr_str),
+             "%02x:%02x:%02x:%02x:%02x:%02x",
+             dev->addr[5],
+             dev->addr[4],
+             dev->addr[3],
+             dev->addr[2],
+             dev->addr[1],
+             dev->addr[0]);
 
     cJSON_AddStringToObject(entry, "addr", addr_str);
     cJSON_AddNumberToObject(entry, "addr_type", dev->addr_type);
@@ -72,7 +158,8 @@ static bool save_results_to_path(const char *path, bool use_sd_driver) {
     const char *vendor = oui_get_vendor(dev->addr);
     cJSON_AddStringToObject(entry, "vendor", vendor);
 
-    if (strlen(dev->uuids) > 0) {      cJSON_AddStringToObject(entry, "uuids", dev->uuids);
+    if (strlen(dev->uuids) > 0) {
+      cJSON_AddStringToObject(entry, "uuids", dev->uuids);
     } else {
       cJSON_AddStringToObject(entry, "uuids", "");
     }
@@ -88,7 +175,7 @@ static bool save_results_to_path(const char *path, bool use_sd_driver) {
   }
 
   esp_err_t err;
-  if (use_sd_driver) {
+  if (is_sd_driver) {
     if (!sd_is_mounted()) {
       ESP_LOGE(TAG, "SD Card not mounted.");
       free(json_string);
@@ -99,7 +186,7 @@ static bool save_results_to_path(const char *path, bool use_sd_driver) {
   } else {
     struct stat st = {0};
     if (stat(FLASH_STORAGE_BLE, &st) == -1) {
-      mkdir(FLASH_STORAGE_BLE, 0777);
+      mkdir(FLASH_STORAGE_BLE, DIR_PERMISSIONS);
     }
 
     err = storage_write_string(path, json_string);
@@ -117,37 +204,29 @@ static bool save_results_to_path(const char *path, bool use_sd_driver) {
   return true;
 }
 
-bool ble_scanner_save_results_to_internal_flash(void) {
-  return save_results_to_path(FLASH_STORAGE_BLE_DEVICES, false);
-}
-
-bool ble_scanner_save_results_to_sd_card(void) {
-  return save_results_to_path("/scanned_devices.json", true); 
-}
-
-static void ble_scanner_task(void *pvParameters) {
+static void scanner_task(void *pvParameters) {
   ESP_LOGI(TAG, "Starting BLE Scan Task (PSRAM)...");
 
-  // Scan for 10 seconds
-  bluetooth_service_scan(10000);
+  bluetooth_service_scan(SCAN_DURATION_MS);
 
   uint16_t dev_num = bluetooth_service_get_scan_count();
   ESP_LOGI(TAG, "Scan completed. Service found %d devices.", dev_num);
 
-  if (scan_results) {
-    heap_caps_free(scan_results);
-    scan_results = NULL;
-    scan_count = 0;
+  if (s_scan_results != NULL) {
+    free(s_scan_results);
+    s_scan_results = NULL;
+    s_scan_count = 0;
   }
 
   if (dev_num > 0) {
-    scan_results = (ble_scan_result_t *)heap_caps_malloc(dev_num * sizeof(ble_scan_result_t), MALLOC_CAP_SPIRAM);
-    if (scan_results) {
-      scan_count = dev_num;
+    s_scan_results = (bluetooth_service_scan_result_t *)heap_caps_malloc(
+        dev_num * sizeof(bluetooth_service_scan_result_t), MALLOC_CAP_SPIRAM);
+    if (s_scan_results != NULL) {
+      s_scan_count = dev_num;
       for (int i = 0; i < dev_num; i++) {
-        ble_scan_result_t *rec = bluetooth_service_get_scan_result(i);
-        if (rec) {
-          memcpy(&scan_results[i], rec, sizeof(ble_scan_result_t));
+        bluetooth_service_scan_result_t *rec = bluetooth_service_get_scan_result(i);
+        if (rec != NULL) {
+          memcpy(&s_scan_results[i], rec, sizeof(bluetooth_service_scan_result_t));
           ESP_LOGI(TAG, "[%d] Name: %s | RSSI: %d", i, rec->name, rec->rssi);
         }
       }
@@ -160,62 +239,7 @@ static void ble_scanner_task(void *pvParameters) {
     }
   }
 
-  is_scanning = false;
-  scanner_task_handle = NULL;
+  s_is_scanning = false;
+  s_scanner_task_handle = NULL;
   vTaskDelete(NULL);
-}
-
-bool ble_scanner_start(void) {
-  if (is_scanning) {
-    ESP_LOGW(TAG, "Scan already in progress.");
-    return false;
-  }
-
-  if (scanner_task_stack == NULL) {
-    scanner_task_stack = (StackType_t *)heap_caps_malloc(SCANNER_STACK_SIZE * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
-  }
-  if (scanner_task_tcb == NULL) {
-    scanner_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
-  }
-
-  if (scanner_task_stack == NULL || scanner_task_tcb == NULL) {
-    ESP_LOGE(TAG, "Failed to allocate scanner task memory in PSRAM!");
-    if (scanner_task_stack) { heap_caps_free(scanner_task_stack); scanner_task_stack = NULL; }
-    if (scanner_task_tcb) { heap_caps_free(scanner_task_tcb); scanner_task_tcb = NULL; }
-    return false;
-  }
-
-  is_scanning = true;
-  scanner_task_handle = xTaskCreateStatic(
-    ble_scanner_task,
-    "ble_scan_task",
-    SCANNER_STACK_SIZE,
-    NULL,
-    5,
-    scanner_task_stack,
-    scanner_task_tcb
-  );
-
-  return (scanner_task_handle != NULL);
-}
-
-ble_scan_result_t* ble_scanner_get_results(uint16_t *count) {
-  if (is_scanning) {
-    return NULL;
-  }
-  *count = scan_count;
-  return scan_results;
-}
-
-void ble_scanner_free_results(void) {
-  if (scan_results) {
-    heap_caps_free(scan_results);
-    scan_results = NULL;
-  }
-  scan_count = 0;
-
-  if (!is_scanning) {
-    if (scanner_task_stack) { heap_caps_free(scanner_task_stack); scanner_task_stack = NULL; }
-    if (scanner_task_tcb) { heap_caps_free(scanner_task_tcb); scanner_task_tcb = NULL; }
-  }
 }

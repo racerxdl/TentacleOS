@@ -13,161 +13,212 @@
 // limitations under the License.
 
 #include "tracker_detector.h"
-#include "bluetooth_service.h"
-#include "host/ble_hs.h"
-#include "esp_log.h"
+
+#include <string.h>
+
 #include "esp_heap_caps.h"
+#include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/semphr.h"
-#include <string.h>
+#include "freertos/task.h"
+#include "host/ble_hs.h"
+
+#include "bluetooth_service.h"
 
 static const char *TAG = "TRACKER_DETECTOR";
 
-#define TRACKER_TASK_STACK_SIZE 4096
-#define TRACKER_TIMEOUT_MS 30000
+#define TRACKER_TASK_STACK_SIZE  4096
+#define TRACKER_TASK_PRIORITY    5
+#define TRACKER_TIMEOUT_MS       30000
+#define TRACKER_POLL_DELAY_MS    1000
+#define TRACKER_MUTEX_TIMEOUT_MS 100
+#define TRACKER_MUTEX_POLL_MS    500
+#define TRACKER_MUTEX_CLEAR_MS   200
+#define TRACKER_TYPE_STR_MAX_LEN 16
+#define USEC_PER_MSEC            1000
 
 #define MFG_ID_APPLE   0x004C
 #define MFG_ID_SAMSUNG 0x0075
 #define MFG_ID_TILE    0x0059
 
-static tracker_record_t *found_trackers = NULL;
-static uint16_t tracker_count = 0;
-static bool is_running = false;
+static tracker_detector_record_t *s_found_trackers = NULL;
+static uint16_t s_tracker_count = 0;
+static volatile bool s_is_running = false;
 
-static TaskHandle_t tracker_task_handle = NULL;
-static StackType_t *tracker_task_stack = NULL;
-static StaticTask_t *tracker_task_tcb = NULL;
-static SemaphoreHandle_t list_mutex = NULL;
+static TaskHandle_t s_tracker_task_handle = NULL;
+static StackType_t *s_tracker_task_stack = NULL;
+static StaticTask_t *s_tracker_task_tcb = NULL;
+static SemaphoreHandle_t s_list_mutex = NULL;
 
-static tracker_type_t identify_tracker(const uint8_t *mfg_data, uint8_t len) {
-  if (len < 2) return TRACKER_TYPE_UNKNOWN;
+static tracker_detector_type_t identify_tracker(const uint8_t *mfg_data, uint8_t len);
+static const char *get_type_str(tracker_detector_type_t type);
+static void scanner_callback(
+    const uint8_t *addr, uint8_t addr_type, int rssi, const uint8_t *data, uint16_t len);
+static void monitor_task(void *pvParameters);
+
+bool tracker_detector_start(void) {
+  if (s_is_running)
+    return false;
+  if (s_list_mutex == NULL)
+    s_list_mutex = xSemaphoreCreateMutex();
+  if (s_found_trackers == NULL) {
+    s_found_trackers = (tracker_detector_record_t *)heap_caps_malloc(
+        TRACKER_DETECTOR_MAX_RESULTS * sizeof(tracker_detector_record_t), MALLOC_CAP_SPIRAM);
+    if (s_found_trackers == NULL)
+      return false;
+  }
+  s_is_running = true;
+  s_tracker_task_stack = (StackType_t *)heap_caps_malloc(
+      TRACKER_TASK_STACK_SIZE * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
+  s_tracker_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
+  if (s_tracker_task_stack == NULL || s_tracker_task_tcb == NULL) {
+    free(s_tracker_task_stack);
+    s_tracker_task_stack = NULL;
+    free(s_tracker_task_tcb);
+    s_tracker_task_tcb = NULL;
+    s_is_running = false;
+    return false;
+  }
+  s_tracker_task_handle = xTaskCreateStatic(monitor_task,
+                                            "tracker_task",
+                                            TRACKER_TASK_STACK_SIZE,
+                                            NULL,
+                                            TRACKER_TASK_PRIORITY,
+                                            s_tracker_task_stack,
+                                            s_tracker_task_tcb);
+  return (s_tracker_task_handle != NULL);
+}
+
+void tracker_detector_stop(void) {
+  s_is_running = false;
+}
+
+tracker_detector_record_t *tracker_detector_get_results(uint16_t *out_count) {
+  *out_count = s_tracker_count;
+  return s_found_trackers;
+}
+
+void tracker_detector_clear_results(void) {
+  if (xSemaphoreTake(s_list_mutex, pdMS_TO_TICKS(TRACKER_MUTEX_CLEAR_MS)) == pdTRUE) {
+    s_tracker_count = 0;
+    xSemaphoreGive(s_list_mutex);
+  }
+}
+
+static tracker_detector_type_t identify_tracker(const uint8_t *mfg_data, uint8_t len) {
+  if (len < 2)
+    return TRACKER_DETECTOR_TYPE_UNKNOWN;
   uint16_t mfg_id = (uint16_t)mfg_data[0] | ((uint16_t)mfg_data[1] << 8);
 
   if (mfg_id == MFG_ID_APPLE) {
     if (len > 2) {
       uint8_t type = mfg_data[2];
-      if (type == 0x12 || type == 0x10 || type == 0x07 || type == 0x05) return TRACKER_TYPE_AIRTAG;
+      if (type == 0x12 || type == 0x10 || type == 0x07 || type == 0x05)
+        return TRACKER_DETECTOR_TYPE_AIRTAG;
     }
-    return TRACKER_TYPE_AIRTAG; 
+    return TRACKER_DETECTOR_TYPE_AIRTAG;
   }
-  if (mfg_id == MFG_ID_SAMSUNG) return TRACKER_TYPE_SMARTTAG;
-  if (mfg_id == MFG_ID_TILE) return TRACKER_TYPE_TILE;
+  if (mfg_id == MFG_ID_SAMSUNG)
+    return TRACKER_DETECTOR_TYPE_SMARTTAG;
+  if (mfg_id == MFG_ID_TILE)
+    return TRACKER_DETECTOR_TYPE_TILE;
 
-  return TRACKER_TYPE_UNKNOWN;
+  return TRACKER_DETECTOR_TYPE_UNKNOWN;
 }
 
-static const char* get_type_str(tracker_type_t type) {
-  switch(type) {
-    case TRACKER_TYPE_AIRTAG: return "AirTag (Apple)";
-    case TRACKER_TYPE_SMARTTAG: return "SmartTag (Samsung)";
-    case TRACKER_TYPE_TILE: return "Tile";
-    default: return "Unknown";
+static const char *get_type_str(tracker_detector_type_t type) {
+  switch (type) {
+    case TRACKER_DETECTOR_TYPE_AIRTAG:
+      return "AirTag (Apple)";
+    case TRACKER_DETECTOR_TYPE_SMARTTAG:
+      return "SmartTag (Samsung)";
+    case TRACKER_DETECTOR_TYPE_TILE:
+      return "Tile";
+    default:
+      return "Unknown";
   }
 }
 
-static void scanner_callback(const uint8_t *addr, uint8_t addr_type, int rssi, const uint8_t *data, uint16_t len) {
+static void scanner_callback(
+    const uint8_t *addr, uint8_t addr_type, int rssi, const uint8_t *data, uint16_t len) {
   struct ble_hs_adv_fields fields;
-  if (ble_hs_adv_parse_fields(&fields, data, len) != 0) return;
+  if (ble_hs_adv_parse_fields(&fields, data, len) != 0)
+    return;
 
   if (fields.mfg_data != NULL && fields.mfg_data_len >= 2) {
-    tracker_type_t type = identify_tracker(fields.mfg_data, fields.mfg_data_len);
+    tracker_detector_type_t type = identify_tracker(fields.mfg_data, fields.mfg_data_len);
 
-    if (type != TRACKER_TYPE_UNKNOWN) {
-      if (xSemaphoreTake(list_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-        bool found = false;
-        for (int i = 0; i < tracker_count; i++) {
-          if (memcmp(found_trackers[i].addr.val, addr, 6) == 0) {
-            found_trackers[i].rssi = rssi;
-            found_trackers[i].last_seen = (uint32_t)(esp_timer_get_time() / 1000);
-            if (found_trackers[i].type == TRACKER_TYPE_UNKNOWN && type != TRACKER_TYPE_UNKNOWN) {
-              found_trackers[i].type = type;
-              strncpy(found_trackers[i].type_str, get_type_str(type), 15);
+    if (type != TRACKER_DETECTOR_TYPE_UNKNOWN) {
+      if (xSemaphoreTake(s_list_mutex, pdMS_TO_TICKS(TRACKER_MUTEX_TIMEOUT_MS)) == pdTRUE) {
+        bool is_found = false;
+        for (int i = 0; i < s_tracker_count; i++) {
+          if (memcmp(s_found_trackers[i].addr.val, addr, 6) == 0) {
+            s_found_trackers[i].rssi = rssi;
+            s_found_trackers[i].last_seen = (uint32_t)(esp_timer_get_time() / USEC_PER_MSEC);
+            if (s_found_trackers[i].type == TRACKER_DETECTOR_TYPE_UNKNOWN &&
+                type != TRACKER_DETECTOR_TYPE_UNKNOWN) {
+              s_found_trackers[i].type = type;
+              strncpy(
+                  s_found_trackers[i].type_str, get_type_str(type), TRACKER_TYPE_STR_MAX_LEN - 1);
             }
-            found = true;
+            is_found = true;
             break;
           }
         }
 
-        if (!found && tracker_count < MAX_TRACKERS_FOUND) {
-          tracker_record_t *rec = &found_trackers[tracker_count];
+        if (!is_found && s_tracker_count < TRACKER_DETECTOR_MAX_RESULTS) {
+          tracker_detector_record_t *rec = &s_found_trackers[s_tracker_count];
           memcpy(rec->addr.val, addr, 6);
           rec->addr.type = addr_type;
           rec->rssi = rssi;
           rec->type = type;
-          strncpy(rec->type_str, get_type_str(type), 15);
-          rec->type_str[15] = '\0';
-          rec->last_seen = (uint32_t)(esp_timer_get_time() / 1000);
-          int copy_len = (fields.mfg_data_len > 10) ? 10 : fields.mfg_data_len;
+          strncpy(rec->type_str, get_type_str(type), TRACKER_TYPE_STR_MAX_LEN - 1);
+          rec->type_str[TRACKER_TYPE_STR_MAX_LEN - 1] = '\0';
+          rec->last_seen = (uint32_t)(esp_timer_get_time() / USEC_PER_MSEC);
+          int copy_len = (fields.mfg_data_len > TRACKER_DETECTOR_PAYLOAD_SAMPLE_SIZE)
+                             ? TRACKER_DETECTOR_PAYLOAD_SAMPLE_SIZE
+                             : fields.mfg_data_len;
           memcpy(rec->payload_sample, fields.mfg_data, copy_len);
-          tracker_count++;
+          s_tracker_count++;
           ESP_LOGI(TAG, "Tracker Found: %s RSSI: %d", rec->type_str, rec->rssi);
         }
-        xSemaphoreGive(list_mutex);
+        xSemaphoreGive(s_list_mutex);
       }
     }
   }
 }
 
-static void tracker_monitor_task(void *pvParameters) {
+static void monitor_task(void *pvParameters) {
   bluetooth_service_start_sniffer(scanner_callback);
-  while (is_running) {
-    if (xSemaphoreTake(list_mutex, pdMS_TO_TICKS(500)) == pdTRUE) {
-      uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
-      for (int i = 0; i < tracker_count; ) {
-        if ((now - found_trackers[i].last_seen) > TRACKER_TIMEOUT_MS) {
-          if (i < tracker_count - 1) {
-            memmove(&found_trackers[i], &found_trackers[i+1], sizeof(tracker_record_t) * (tracker_count - 1 - i));
+  while (s_is_running) {
+    if (xSemaphoreTake(s_list_mutex, pdMS_TO_TICKS(TRACKER_MUTEX_POLL_MS)) == pdTRUE) {
+      uint32_t now = (uint32_t)(esp_timer_get_time() / USEC_PER_MSEC);
+      for (int i = 0; i < s_tracker_count;) {
+        if ((now - s_found_trackers[i].last_seen) > TRACKER_TIMEOUT_MS) {
+          if (i < s_tracker_count - 1) {
+            memmove(&s_found_trackers[i],
+                    &s_found_trackers[i + 1],
+                    sizeof(tracker_detector_record_t) * (s_tracker_count - 1 - i));
           }
-          tracker_count--;
+          s_tracker_count--;
         } else {
           i++;
         }
       }
-      xSemaphoreGive(list_mutex);
+      xSemaphoreGive(s_list_mutex);
     }
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    vTaskDelay(pdMS_TO_TICKS(TRACKER_POLL_DELAY_MS));
   }
   bluetooth_service_stop_sniffer();
-  tracker_task_handle = NULL;
-  if (tracker_task_stack) { heap_caps_free(tracker_task_stack); tracker_task_stack = NULL; }
-  if (tracker_task_tcb) { heap_caps_free(tracker_task_tcb); tracker_task_tcb = NULL; }
+  s_tracker_task_handle = NULL;
+  if (s_tracker_task_stack != NULL) {
+    free(s_tracker_task_stack);
+    s_tracker_task_stack = NULL;
+  }
+  if (s_tracker_task_tcb != NULL) {
+    free(s_tracker_task_tcb);
+    s_tracker_task_tcb = NULL;
+  }
   vTaskDelete(NULL);
-}
-
-bool tracker_detector_start(void) {
-  if (is_running) return false;
-  if (list_mutex == NULL) list_mutex = xSemaphoreCreateMutex();
-  if (found_trackers == NULL) {
-    found_trackers = (tracker_record_t *)heap_caps_malloc(MAX_TRACKERS_FOUND * sizeof(tracker_record_t), MALLOC_CAP_SPIRAM);
-    if (!found_trackers) return false;
-  }
-  is_running = true;
-  tracker_task_stack = (StackType_t *)heap_caps_malloc(TRACKER_TASK_STACK_SIZE * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
-  tracker_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
-  if (!tracker_task_stack || !tracker_task_tcb) {
-    if (tracker_task_stack) heap_caps_free(tracker_task_stack);
-    if (tracker_task_tcb) heap_caps_free(tracker_task_tcb);
-    is_running = false;
-    return false;
-  }
-  tracker_task_handle = xTaskCreateStatic(tracker_monitor_task, "tracker_task", TRACKER_TASK_STACK_SIZE, NULL, 5, tracker_task_stack, tracker_task_tcb);
-  return (tracker_task_handle != NULL);
-}
-
-void tracker_detector_stop(void) {
-  is_running = false;
-}
-
-tracker_record_t* tracker_detector_get_results(uint16_t *count) {
-  *count = tracker_count;
-  return found_trackers;
-}
-
-void tracker_detector_clear_results(void) {
-  if (xSemaphoreTake(list_mutex, pdMS_TO_TICKS(200)) == pdTRUE) {
-    tracker_count = 0;
-    xSemaphoreGive(list_mutex);
-  }
 }
