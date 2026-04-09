@@ -1,10 +1,27 @@
-#include "driver/gpio.h"
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "buttons_gpio.h"
+
+#include "driver/gpio.h"
 #include "pin_def.h"
+
+static const char *TAG = "BUTTONS_GPIO";
 
 #define BUTTON_PRESSED_LEVEL 0
 
-static button_t buttons[] = {
+static button_t s_buttons[] = {
     {GPIO_BTN_UP_PIN, true, false},
     {GPIO_BTN_DOWN_PIN, true, false},
     {GPIO_BTN_LEFT_PIN, true, false},
@@ -13,35 +30,35 @@ static button_t buttons[] = {
     {GPIO_BTN_BACK_PIN, true, false},
 };
 
-#define NUM_BUTTONS (sizeof(buttons) / sizeof(buttons[0]))
+#define NUM_BUTTONS (sizeof(s_buttons) / sizeof(s_buttons[0]))
 
 static bool get_raw_level(uint32_t gpio) {
   return gpio_get_level(gpio) == BUTTON_PRESSED_LEVEL;
 }
 
 bool up_button_pressed(void) {
-  return buttons[0].pressed_flag &&
-         (__atomic_test_and_set(&buttons[0].pressed_flag, __ATOMIC_RELAXED), false);
+  return s_buttons[0].pressed_flag &&
+         (__atomic_test_and_set(&s_buttons[0].pressed_flag, __ATOMIC_RELAXED), false);
 }
 bool down_button_pressed(void) {
-  return buttons[1].pressed_flag &&
-         (__atomic_test_and_set(&buttons[1].pressed_flag, __ATOMIC_RELAXED), false);
+  return s_buttons[1].pressed_flag &&
+         (__atomic_test_and_set(&s_buttons[1].pressed_flag, __ATOMIC_RELAXED), false);
 }
 bool left_button_pressed(void) {
-  return buttons[2].pressed_flag &&
-         (__atomic_test_and_set(&buttons[2].pressed_flag, __ATOMIC_RELAXED), false);
+  return s_buttons[2].pressed_flag &&
+         (__atomic_test_and_set(&s_buttons[2].pressed_flag, __ATOMIC_RELAXED), false);
 }
 bool right_button_pressed(void) {
-  return buttons[3].pressed_flag &&
-         (__atomic_test_and_set(&buttons[3].pressed_flag, __ATOMIC_RELAXED), false);
+  return s_buttons[3].pressed_flag &&
+         (__atomic_test_and_set(&s_buttons[3].pressed_flag, __ATOMIC_RELAXED), false);
 }
 bool ok_button_pressed(void) {
-  return buttons[4].pressed_flag &&
-         (__atomic_test_and_set(&buttons[4].pressed_flag, __ATOMIC_RELAXED), false);
+  return s_buttons[4].pressed_flag &&
+         (__atomic_test_and_set(&s_buttons[4].pressed_flag, __ATOMIC_RELAXED), false);
 }
 bool back_button_pressed(void) {
-  return buttons[5].pressed_flag &&
-         (__atomic_test_and_set(&buttons[5].pressed_flag, __ATOMIC_RELAXED), false);
+  return s_buttons[5].pressed_flag &&
+         (__atomic_test_and_set(&s_buttons[5].pressed_flag, __ATOMIC_RELAXED), false);
 }
 
 bool up_button_is_down(void) {
@@ -65,13 +82,13 @@ bool back_button_is_down(void) {
 
 void buttons_task(void) {
   for (int i = 0; i < NUM_BUTTONS; i++) {
-    bool current = get_raw_level(buttons[i].gpio);
+    bool current = get_raw_level(s_buttons[i].gpio);
 
-    if (buttons[i].last_state == true && current == false) {
-      buttons[i].pressed_flag = true;
+    if (s_buttons[i].last_state == true && current == false) {
+      s_buttons[i].pressed_flag = true;
     }
 
-    buttons[i].last_state = current;
+    s_buttons[i].last_state = current;
   }
 }
 void buttons_init(void) {
@@ -87,7 +104,7 @@ void buttons_init(void) {
   gpio_config(&io_conf);
 
   for (int i = 0; i < NUM_BUTTONS; i++) {
-    buttons[i].last_state = get_raw_level(buttons[i].gpio);
-    buttons[i].pressed_flag = false;
+    s_buttons[i].last_state = get_raw_level(s_buttons[i].gpio);
+    s_buttons[i].pressed_flag = false;
   }
 }
