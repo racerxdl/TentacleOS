@@ -1,9 +1,26 @@
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "spi_slave_driver.h"
-#include "driver/spi_slave.h"
-#include "driver/gpio.h"
-#include "pin_def.h"
-#include "esp_log.h"
+
 #include <string.h>
+
+#include "driver/gpio.h"
+#include "driver/spi_slave.h"
+#include "esp_log.h"
+
+#include "pin_def.h"
 
 static const char *TAG = "SPI_SLAVE_DRV";
 
@@ -23,21 +40,23 @@ esp_err_t spi_slave_driver_init(void) {
       .flags = 0,
   };
 
-  gpio_config_t io_conf = {.intr_type = GPIO_INTR_DISABLE,
-                           .mode = GPIO_MODE_OUTPUT,
-                           .pin_bit_mask = (1ULL << GPIO_BRIDGE_IRQ_PIN),
-                           .pull_down_en = 1,
-                           .pull_up_en = 0};
+  gpio_config_t io_conf = {
+      .intr_type = GPIO_INTR_DISABLE,
+      .mode = GPIO_MODE_OUTPUT,
+      .pin_bit_mask = (1ULL << GPIO_BRIDGE_IRQ_PIN),
+      .pull_down_en = 1,
+      .pull_up_en = 0,
+  };
   gpio_config(&io_conf);
   gpio_set_level(GPIO_BRIDGE_IRQ_PIN, 0);
 
   esp_err_t ret = spi_slave_initialize(SPI2_HOST, &buscfg, &slvcfg, SPI_DMA_CH_AUTO);
   if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to initialize SPI Slave: %s", esp_err_to_name(ret));
+    ESP_LOGE(TAG, "Failed to initialize SPI slave: %s", esp_err_to_name(ret));
     return ret;
   }
 
-  ESP_LOGI(TAG, "SPI Slave Driver initialized (Link P4)");
+  ESP_LOGI(TAG, "SPI slave driver initialized");
   return ESP_OK;
 }
 
