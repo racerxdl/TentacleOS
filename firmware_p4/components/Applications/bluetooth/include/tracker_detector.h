@@ -15,32 +15,69 @@
 #ifndef TRACKER_DETECTOR_H
 #define TRACKER_DETECTOR_H
 
-#include <stdint.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdbool.h>
+#include <stdint.h>
 
-#define MAX_TRACKERS_FOUND 50
+#define TRACKER_DETECTOR_MAX_RESULTS 50
 
+/**
+ * @brief Known BLE tracker device types.
+ */
 typedef enum {
-    TRACKER_TYPE_UNKNOWN = 0,
-    TRACKER_TYPE_AIRTAG,
-    TRACKER_TYPE_SMARTTAG,
-    TRACKER_TYPE_TILE,
-    TRACKER_TYPE_CHIPOLO
-} tracker_type_t;
+  TRACKER_DETECTOR_TYPE_UNKNOWN = 0,
+  TRACKER_DETECTOR_TYPE_AIRTAG,
+  TRACKER_DETECTOR_TYPE_SMARTTAG,
+  TRACKER_DETECTOR_TYPE_TILE,
+  TRACKER_DETECTOR_TYPE_CHIPOLO,
+  TRACKER_DETECTOR_TYPE_COUNT
+} tracker_detector_type_t;
 
+#define TRACKER_DETECTOR_PAYLOAD_SAMPLE_SIZE 10
+
+/**
+ * @brief Record for a detected BLE tracker device.
+ */
 typedef struct {
-    uint8_t addr[6];
-    uint8_t addr_type;
-    int8_t rssi;
-    tracker_type_t type;
-    char type_str[16];
-    uint32_t last_seen;
-    uint8_t payload_sample[10];
-} tracker_record_t;
+  uint8_t addr[6];
+  uint8_t addr_type;
+  int8_t rssi;
+  tracker_detector_type_t type;
+  char type_str[16];
+  uint32_t last_seen;
+  uint8_t payload_sample[TRACKER_DETECTOR_PAYLOAD_SAMPLE_SIZE];
+} tracker_detector_record_t;
 
+/**
+ * @brief Start scanning for BLE tracker devices.
+ *
+ * @return true if started, false on failure.
+ */
 bool tracker_detector_start(void);
+
+/**
+ * @brief Stop the tracker detection scan.
+ */
 void tracker_detector_stop(void);
-tracker_record_t* tracker_detector_get_results(uint16_t *count);
+
+/**
+ * @brief Get the list of detected tracker devices.
+ *
+ * @param[out] out_count Pointer to store the number of results.
+ * @return Pointer to the results array, or NULL if empty.
+ */
+tracker_detector_record_t *tracker_detector_get_results(uint16_t *out_count);
+
+/**
+ * @brief Clear all detected tracker results.
+ */
 void tracker_detector_clear_results(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TRACKER_DETECTOR_H

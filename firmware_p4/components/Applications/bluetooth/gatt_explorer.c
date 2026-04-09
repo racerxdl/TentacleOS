@@ -13,46 +13,51 @@
 // limitations under the License.
 
 #include "gatt_explorer.h"
+
+#include <string.h>
+
+#include "esp_log.h"
+
 #include "bluetooth_service.h"
 #include "spi_bridge.h"
 #include "spi_protocol.h"
-#include "esp_log.h"
-#include <string.h>
 
 static const char *TAG = "GATT_EXPLORER";
 
-static bool busy = false;
+#define GATT_ADDR_PAYLOAD_SIZE 7
+#define GATT_SPI_TIMEOUT_MS    10000
+
+static bool s_is_busy = false;
 
 bool gatt_explorer_start(const uint8_t *addr, uint8_t addr_type) {
-  if (busy) return false;
+  if (s_is_busy)
+    return false;
 
   if (!bluetooth_service_is_running()) {
     ESP_LOGE(TAG, "Bluetooth service not running");
     return false;
   }
 
-  // Payload: addr[6] + addr_type[1]
-  uint8_t payload[7];
+  uint8_t payload[GATT_ADDR_PAYLOAD_SIZE];
   memcpy(payload, addr, 6);
   payload[6] = addr_type;
 
   spi_header_t resp_hdr;
   uint8_t resp_buf[SPI_MAX_PAYLOAD];
 
-  esp_err_t ret = spi_bridge_send_command(SPI_ID_BT_APP_GATT_EXP,
-      payload, sizeof(payload),
-      &resp_hdr, resp_buf, 10000);
+  esp_err_t ret = spi_bridge_send_command(
+      SPI_ID_BT_APP_GATT_EXP, payload, sizeof(payload), &resp_hdr, resp_buf, GATT_SPI_TIMEOUT_MS);
 
   if (ret != ESP_OK || resp_buf[0] != SPI_STATUS_OK) {
     ESP_LOGE(TAG, "Failed to start GATT exploration on C5");
     return false;
   }
 
-  busy = true;
+  s_is_busy = true;
   ESP_LOGI(TAG, "GATT exploration started on C5");
   return true;
 }
 
 bool gatt_explorer_is_busy(void) {
-  return busy;
+  return s_is_busy;
 }
