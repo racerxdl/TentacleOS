@@ -39,7 +39,6 @@
 
 static const char *TAG = "CMD_WIFI";
 
-
 // --- SCAN ---
 static struct {
   struct arg_end *end;
@@ -63,10 +62,16 @@ static int subcmd_scan(int argc, char **argv) {
   for (int i = 0; i < count; i++) {
     wifi_ap_record_t *rec = wifi_service_get_ap_record(i);
     if (rec) {
-      printf("%-32s | %02x:%02x:%02x:%02x:%02x:%02x | %2d | %4d | %s\n", 
-             rec->ssid, 
-             rec->bssid[0], rec->bssid[1], rec->bssid[2], rec->bssid[3], rec->bssid[4], rec->bssid[5],
-             rec->primary, rec->rssi,
+      printf("%-32s | %02x:%02x:%02x:%02x:%02x:%02x | %2d | %4d | %s\n",
+             rec->ssid,
+             rec->bssid[0],
+             rec->bssid[1],
+             rec->bssid[2],
+             rec->bssid[3],
+             rec->bssid[4],
+             rec->bssid[5],
+             rec->primary,
+             rec->rssi,
              rec->wps ? "Yes" : "No ");
     }
   }
@@ -118,8 +123,8 @@ static int subcmd_ap(int argc, char **argv) {
   const char *pass = (ap_args.password->count > 0) ? ap_args.password->sval[0] : "";
 
   printf("Configuring AP: SSID='%s', Pass='%s'\n", ssid, pass);
-  wifi_set_ap_ssid(ssid);
-  wifi_set_ap_password(pass);
+  wifi_service_set_ap_ssid(ssid);
+  wifi_service_set_ap_password(pass);
   printf("AP Configuration updated.\n");
   return 0;
 }
@@ -142,19 +147,19 @@ static int subcmd_config(int argc, char **argv) {
   if (config_args.enabled->count > 0) {
     bool en = (config_args.enabled->ival[0] != 0);
     printf("Setting Wi-Fi Enabled: %s\n", en ? "True" : "False");
-    wifi_set_wifi_enabled(en);
+    wifi_service_set_enabled(en);
   }
 
   if (config_args.ip->count > 0) {
     const char *ip = config_args.ip->sval[0];
     printf("Setting AP IP: %s\n", ip);
-    wifi_set_ap_ip(ip);
+    wifi_service_set_ap_ip(ip);
   }
 
   if (config_args.max_conn->count > 0) {
     int max = config_args.max_conn->ival[0];
     printf("Setting Max Connections: %d\n", max);
-    wifi_set_ap_max_conn((uint8_t)max);
+    wifi_service_set_ap_max_conn((uint8_t)max);
   }
 
   return 0;
@@ -231,8 +236,14 @@ static int subcmd_deauth(int argc, char **argv) {
 
   const char *mac_str = deauth_args.mac->sval[0];
   uint8_t mac[6];
-  int parsed = sscanf(mac_str, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", 
-                      &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+  int parsed = sscanf(mac_str,
+                      "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+                      &mac[0],
+                      &mac[1],
+                      &mac[2],
+                      &mac[3],
+                      &mac[4],
+                      &mac[5]);
 
   if (parsed != 6) {
     printf("Error: Invalid MAC format. Use XX:XX:XX:XX:XX:XX\n");
@@ -246,7 +257,7 @@ static int subcmd_deauth(int argc, char **argv) {
   memcpy(target_ap.bssid, mac, 6);
   target_ap.primary = channel;
 
-  if (wifi_deauther_start(&target_ap, DEAUTH_INVALID_AUTH, true)) {
+  if (wifi_deauther_start(&target_ap, WIFI_DEAUTHER_TYPE_INVALID_AUTH, true)) {
     printf("Deauth Attack Started on %s (Ch %d)\n", mac_str, channel);
   } else {
     printf("Failed to start Deauth (Is Wi-Fi running?).\n");
@@ -259,7 +270,7 @@ static int subcmd_deauth(int argc, char **argv) {
 static struct {
   struct arg_str *type; // beacon, probe, pwn (eapol/pmkid), raw
   struct arg_int *channel;
-  struct arg_str *file; // Save to file
+  struct arg_str *file;    // Save to file
   struct arg_lit *verbose; // Print to console
   struct arg_lit *stop;
   struct arg_end *end;
@@ -278,15 +289,19 @@ static int subcmd_sniff(int argc, char **argv) {
     return 0;
   }
 
-  sniff_type_t type = SNIFF_TYPE_RAW;
+  wifi_sniffer_type_t type = WIFI_SNIFFER_TYPE_RAW;
   if (sniff_args.type->count > 0) {
     const char *t = sniff_args.type->sval[0];
-    if (strcmp(t, "beacon") == 0) type = SNIFF_TYPE_BEACON;
-    else if (strcmp(t, "probe") == 0) type = SNIFF_TYPE_PROBE;
-    else if (strcmp(t, "pwn") == 0) type = SNIFF_TYPE_EAPOL;
+    if (strcmp(t, "beacon") == 0)
+      type = WIFI_SNIFFER_TYPE_BEACON;
+    else if (strcmp(t, "probe") == 0)
+      type = WIFI_SNIFFER_TYPE_PROBE;
+    else if (strcmp(t, "pwn") == 0)
+      type = WIFI_SNIFFER_TYPE_EAPOL;
   }
 
-  uint8_t ch = (sniff_args.channel->count > 0) ? (uint8_t)sniff_args.channel->ival[0] : 0; // 0 = Hopping
+  uint8_t ch =
+      (sniff_args.channel->count > 0) ? (uint8_t)sniff_args.channel->ival[0] : 0; // 0 = Hopping
 
   wifi_sniffer_set_verbose(sniff_args.verbose->count > 0);
 
@@ -352,7 +367,7 @@ static int subcmd_clients(int argc, char **argv) {
 
   if (clients_args.stop->count > 0) {
     // client scanner stops automatically usually, but we can force it by stopping global sniffer
-    wifi_service_promiscuous_stop(); 
+    wifi_service_promiscuous_stop();
     printf("Client scanner stopped.\n");
     return 0;
   }
@@ -395,7 +410,14 @@ static int subcmd_target(int argc, char **argv) {
 
   const char *mac_str = target_args.mac->sval[0];
   uint8_t mac[6];
-  sscanf(mac_str, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+  sscanf(mac_str,
+         "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+         &mac[0],
+         &mac[1],
+         &mac[2],
+         &mac[3],
+         &mac[4],
+         &mac[5]);
   uint8_t ch = (uint8_t)target_args.channel->ival[0];
 
   if (target_scanner_start(mac, ch)) {
@@ -464,7 +486,7 @@ static int subcmd_portscan(int argc, char **argv) {
   printf("Starting Port Scan on %s (%d-%d). This block the console...\n", ip, min, max);
 
   // Allocate results on heap to avoid stack overflow
-  scan_result_t *results = malloc(sizeof(scan_result_t) * 20);
+  port_scan_result_t *results = malloc(sizeof(port_scan_result_t) * 20);
   if (!results) {
     printf("Memory error.\n");
     return 1;
@@ -473,8 +495,11 @@ static int subcmd_portscan(int argc, char **argv) {
   int count = port_scan_target_range(ip, min, max, results, 20);
 
   printf("Scan finished. Found %d open ports:\n", count);
-  for(int i=0; i<count; i++) {
-    printf("  %d/%s: %s\n", results[i].port, (results[i].protocol == PROTO_TCP) ? "TCP" : "UDP", results[i].banner);
+  for (int i = 0; i < count; i++) {
+    printf("  %d/%s: %s\n",
+           results[i].port,
+           (results[i].protocol == PORT_SCAN_PROTO_TCP) ? "TCP" : "UDP",
+           results[i].banner);
   }
   free(results);
   return 0;
@@ -485,7 +510,7 @@ static int subcmd_status(int argc, char **argv) {
   printf("--- Wi-Fi Status ---\n");
   printf("Service Active: %s\n", wifi_service_is_active() ? "Yes" : "No");
 
-  const char* conn_ssid = wifi_service_get_connected_ssid();
+  const char *conn_ssid = wifi_service_get_connected_ssid();
   printf("Connected STA:  %s\n", conn_ssid ? conn_ssid : "Disconnected");
 
   uint8_t mac_sta[6], mac_ap[6];
@@ -543,20 +568,33 @@ static int cmd_wifi(int argc, char **argv) {
   int sub_argc = argc - 1;
   char **sub_argv = &argv[1];
 
-  if (strcmp(subcmd, "scan") == 0) return subcmd_scan(sub_argc, sub_argv);
-  if (strcmp(subcmd, "connect") == 0) return subcmd_connect(sub_argc, sub_argv);
-  if (strcmp(subcmd, "ap") == 0) return subcmd_ap(sub_argc, sub_argv);
-  if (strcmp(subcmd, "config") == 0) return subcmd_config(sub_argc, sub_argv);
-  if (strcmp(subcmd, "spam") == 0) return subcmd_spam(sub_argc, sub_argv);
-  if (strcmp(subcmd, "deauth") == 0) return subcmd_deauth(sub_argc, sub_argv);
-  if (strcmp(subcmd, "status") == 0) return subcmd_status(sub_argc, sub_argv);
+  if (strcmp(subcmd, "scan") == 0)
+    return subcmd_scan(sub_argc, sub_argv);
+  if (strcmp(subcmd, "connect") == 0)
+    return subcmd_connect(sub_argc, sub_argv);
+  if (strcmp(subcmd, "ap") == 0)
+    return subcmd_ap(sub_argc, sub_argv);
+  if (strcmp(subcmd, "config") == 0)
+    return subcmd_config(sub_argc, sub_argv);
+  if (strcmp(subcmd, "spam") == 0)
+    return subcmd_spam(sub_argc, sub_argv);
+  if (strcmp(subcmd, "deauth") == 0)
+    return subcmd_deauth(sub_argc, sub_argv);
+  if (strcmp(subcmd, "status") == 0)
+    return subcmd_status(sub_argc, sub_argv);
   // New Commands
-  if (strcmp(subcmd, "sniff") == 0) return subcmd_sniff(sub_argc, sub_argv);
-  if (strcmp(subcmd, "probe") == 0) return subcmd_probe(sub_argc, sub_argv);
-  if (strcmp(subcmd, "clients") == 0) return subcmd_clients(sub_argc, sub_argv);
-  if (strcmp(subcmd, "target") == 0) return subcmd_target(sub_argc, sub_argv);
-  if (strcmp(subcmd, "evil") == 0) return subcmd_evil(sub_argc, sub_argv);
-  if (strcmp(subcmd, "portscan") == 0) return subcmd_portscan(sub_argc, sub_argv);
+  if (strcmp(subcmd, "sniff") == 0)
+    return subcmd_sniff(sub_argc, sub_argv);
+  if (strcmp(subcmd, "probe") == 0)
+    return subcmd_probe(sub_argc, sub_argv);
+  if (strcmp(subcmd, "clients") == 0)
+    return subcmd_clients(sub_argc, sub_argv);
+  if (strcmp(subcmd, "target") == 0)
+    return subcmd_target(sub_argc, sub_argv);
+  if (strcmp(subcmd, "evil") == 0)
+    return subcmd_evil(sub_argc, sub_argv);
+  if (strcmp(subcmd, "portscan") == 0)
+    return subcmd_portscan(sub_argc, sub_argv);
 
   printf("Unknown wifi command: %s\n", subcmd);
   return 1;
@@ -618,12 +656,10 @@ void register_wifi_commands(void) {
   port_args.max = arg_int0(NULL, "max", "<port>", "End Port");
   port_args.end = arg_end(1);
 
-  const esp_console_cmd_t wifi_cmd = {
-    .command = "wifi",
-    .help = "Wi-Fi Management & Attacks",
-    .hint = "<scan|connect|ap|spam|deauth|sniff|evil|...> ...",
-    .func = &cmd_wifi,
-    .argtable = NULL 
-  };
+  const esp_console_cmd_t wifi_cmd = {.command = "wifi",
+                                      .help = "Wi-Fi Management & Attacks",
+                                      .hint = "<scan|connect|ap|spam|deauth|sniff|evil|...> ...",
+                                      .func = &cmd_wifi,
+                                      .argtable = NULL};
   ESP_ERROR_CHECK(esp_console_cmd_register(&wifi_cmd));
 }
