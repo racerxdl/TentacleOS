@@ -12,18 +12,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #ifndef AP_SCANNER_H
 #define AP_SCANNER_H
 
-#include <stdint.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdbool.h>
+#include <stdint.h>
+
 #include "esp_wifi_types.h"
 
+/**
+ * @brief Start an access point scan.
+ *
+ * @return true on success, false if a scan is already in progress.
+ */
 bool ap_scanner_start(void);
-wifi_ap_record_t* ap_scanner_get_results(uint16_t *count);
+
+/**
+ * @brief Get the scan results.
+ *
+ * @param[out] out_count  Number of access points found.
+ * @return Pointer to result array, or NULL if scan is in progress.
+ */
+wifi_ap_record_t *ap_scanner_get_results(uint16_t *out_count);
+
+/**
+ * @brief Free scan results and associated task memory.
+ */
 void ap_scanner_free_results(void);
+
+/**
+ * @brief Save scan results to internal flash storage.
+ *
+ * @return true on success, false on failure.
+ */
 bool ap_scanner_save_results_to_internal_flash(void);
+
+/**
+ * @brief Save scan results to SD card.
+ *
+ * @return true on success, false on failure.
+ */
 bool ap_scanner_save_results_to_sd_card(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // AP_SCANNER_H
