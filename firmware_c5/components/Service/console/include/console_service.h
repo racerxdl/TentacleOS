@@ -15,12 +15,36 @@
 #ifndef CONSOLE_SERVICE_H
 #define CONSOLE_SERVICE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "esp_err.h"
 
+/**
+ * @brief Initialize the console service and register all commands.
+ *
+ * @return ESP_OK on success.
+ */
 esp_err_t console_service_init(void);
-void console_service_start(void);
+
+/**
+ * @brief Register filesystem commands (ls, cd, pwd, cat).
+ */
 void register_fs_commands(void);
+
+/**
+ * @brief Register system commands (free, restart, ip, tasks).
+ */
 void register_system_commands(void);
+
+/**
+ * @brief Register Wi-Fi commands (scan, connect, deauth, etc.).
+ */
 void register_wifi_commands(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // CONSOLE_SERVICE_H
