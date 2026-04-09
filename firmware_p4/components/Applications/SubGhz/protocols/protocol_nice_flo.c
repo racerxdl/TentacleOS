@@ -13,11 +13,10 @@
 // limitations under the License.
 
 #include "subghz_protocol_decoder.h"
+
 #include "subghz_protocol_utils.h"
 
-/**
- * Nice Flo 12bit Protocol Implementation
- */
+// Nice Flo 12bit Protocol Implementation
 
 #define NICE_FLO_SHORT_US      700
 #define NICE_FLO_LONG_US       1400
@@ -38,14 +37,14 @@ protocol_nice_flo_decode(const int32_t *raw_data, size_t count, subghz_data_t *o
     uint32_t decoded_data = 0;
     int bits_found = 0;
     size_t k = start_idx;
-    bool fail = false;
+    bool is_fail = false;
 
     while (k < count - 1 && bits_found < NICE_FLO_BIT_COUNT) {
       int32_t pulse = raw_data[k];
       int32_t gap = raw_data[k + 1];
 
       if (pulse <= 0 || gap >= 0) {
-        fail = true;
+        is_fail = true;
         break;
       }
 
@@ -58,13 +57,13 @@ protocol_nice_flo_decode(const int32_t *raw_data, size_t count, subghz_data_t *o
         decoded_data = (decoded_data << 1) | 1;
         bits_found++;
       } else {
-        fail = true;
+        is_fail = true;
         break;
       }
       k += NICE_FLO_STEP_SIZE;
     }
 
-    if (!fail && bits_found == NICE_FLO_BIT_COUNT) {
+    if (is_fail == false && bits_found == NICE_FLO_BIT_COUNT) {
       out_data->protocol_name = "Nice Flo 12bit";
       out_data->bit_count = NICE_FLO_BIT_COUNT;
       out_data->raw_value = decoded_data;

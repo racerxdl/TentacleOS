@@ -15,10 +15,6 @@
 #ifndef SUBGHZ_RECEIVER_H
 #define SUBGHZ_RECEIVER_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -27,13 +23,17 @@ extern "C" {
 
 #include "cc1101.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief Receiver operating mode.
  */
 typedef enum {
-  SUBGHZ_MODE_SCAN, /**< @brief Scan for known protocols. */
-  SUBGHZ_MODE_RAW,  /**< @brief Capture raw signal data. */
-  SUBGHZ_MODE_COUNT /**< @brief Number of receiver modes (sentinel). */
+  SUBGHZ_MODE_SCAN = 0, /**< @brief Scan for known protocols. */
+  SUBGHZ_MODE_RAW,      /**< @brief Capture raw signal data. */
+  SUBGHZ_MODE_COUNT     /**< @brief Number of receiver modes (sentinel). */
 } subghz_mode_t;
 
 /**

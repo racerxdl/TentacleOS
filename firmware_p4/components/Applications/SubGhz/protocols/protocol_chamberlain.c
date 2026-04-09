@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "subghz_protocol_decoder.h"
+
 #include "subghz_protocol_utils.h"
 
 #define CHAMBERLAIN_SHORT_US       430

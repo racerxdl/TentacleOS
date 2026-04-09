@@ -15,7 +15,7 @@
 #include "subghz_spectrum.h"
 
 #include <string.h>
-#include <rom/ets_sys.h>
+#include "rom/ets_sys.h"
 
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -67,7 +67,7 @@ static void subghz_spectrum_task(void *pvParameters) {
            (unsigned long)span,
            (unsigned long)step);
 
-  while (!s_stop_requested) {
+  while (s_stop_requested == false) {
     float current_sweep[SPECTRUM_SAMPLES];
 
     for (int i = 0; i < SPECTRUM_SAMPLES; i++) {

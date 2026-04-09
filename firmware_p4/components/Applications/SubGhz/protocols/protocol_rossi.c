@@ -13,16 +13,15 @@
 // limitations under the License.
 
 #include "subghz_protocol_decoder.h"
-#include "subghz_protocol_utils.h"
 
 #include <stdlib.h>
 
-/**
- * Rossi (HCS301) Protocol Implementation
- *
- * Te (Elementary Period) is typically 300us - 400us.
- * Short = 1 * Te, Long = 2 * Te.
- */
+#include "subghz_protocol_utils.h"
+
+// Rossi (HCS301) Protocol Implementation
+//
+// Te (Elementary Period) is typically 300us - 400us.
+// Short = 1 * Te, Long = 2 * Te.
 
 #define ROSSI_SHORT_MIN_US       200
 #define ROSSI_SHORT_MAX_US       600
@@ -51,17 +50,17 @@ static bool protocol_rossi_decode(const int32_t *raw_data, size_t count, subghz_
   }
 
   size_t start_idx = 0;
-  bool header_found = false;
+  bool is_header_found = false;
 
   for (size_t i = 0; i < count - ROSSI_HEADER_SEARCH_GAP; i++) {
     if (abs(raw_data[i]) > ROSSI_HEADER_MIN_US) {
       start_idx = i + 1;
-      header_found = true;
+      is_header_found = true;
       break;
     }
   }
 
-  if (!header_found) {
+  if (is_header_found == false) {
     return false;
   }
 

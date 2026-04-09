@@ -13,11 +13,10 @@
 // limitations under the License.
 
 #include "subghz_protocol_decoder.h"
+
 #include "subghz_protocol_utils.h"
 
-/**
- * CAME 12bit / 24bit Protocol Implementation
- */
+// CAME 12bit / 24bit Protocol Implementation
 
 #define CAME_SHORT_US        320
 #define CAME_LONG_US         640

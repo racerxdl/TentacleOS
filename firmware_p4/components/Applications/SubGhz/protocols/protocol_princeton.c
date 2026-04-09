@@ -13,11 +13,10 @@
 // limitations under the License.
 
 #include "subghz_protocol_decoder.h"
+
 #include "subghz_protocol_utils.h"
 
-/**
- * Princeton / PT2262 Protocol Implementation (Alternate)
- */
+// Princeton / PT2262 Protocol Implementation (Alternate)
 
 #define PRINCETON_SHORT_US      350
 #define PRINCETON_LONG_US       1050
@@ -38,14 +37,14 @@ protocol_princeton_decode(const int32_t *raw_data, size_t count, subghz_data_t *
     uint32_t decoded_data = 0;
     int bits_found = 0;
     size_t k = start_idx;
-    bool fail = false;
+    bool is_fail = false;
 
     while (k < count - 1 && bits_found < PRINCETON_MAX_BITS) {
       int32_t pulse = raw_data[k];
       int32_t gap = raw_data[k + 1];
 
       if (pulse <= 0 || gap >= 0) {
-        fail = true;
+        is_fail = true;
         break;
       }
 
@@ -58,13 +57,13 @@ protocol_princeton_decode(const int32_t *raw_data, size_t count, subghz_data_t *
         decoded_data = (decoded_data << 1) | 1;
         bits_found++;
       } else {
-        fail = true;
+        is_fail = true;
         break;
       }
       k += PRINCETON_STEP_SIZE;
     }
 
-    if (!fail && bits_found >= PRINCETON_MIN_BITS) {
+    if (is_fail == false && bits_found >= PRINCETON_MIN_BITS) {
       out_data->protocol_name = "Princeton (Alt)";
       out_data->bit_count = bits_found;
       out_data->raw_value = decoded_data;

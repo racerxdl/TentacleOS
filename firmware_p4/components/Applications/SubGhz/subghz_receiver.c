@@ -69,7 +69,7 @@ static volatile bool s_is_running = false;
 static subghz_mode_t s_rx_mode = SUBGHZ_MODE_SCAN;
 static cc1101_preset_t s_rx_preset = CC1101_PRESET_OOK_800KHZ;
 static uint32_t s_rx_freq = DEFAULT_FREQ;
-static bool s_hopping_active = false;
+static bool s_is_hopping_active = false;
 static int s_hop_idx = 0;
 static uint32_t s_capture_count = 0;
 
@@ -187,7 +187,7 @@ static void handle_scan_mode(const int32_t *decode_buffer, size_t decode_idx) {
 }
 
 static void handle_frequency_hopping(TickType_t *last_hop_time, TickType_t hop_interval) {
-  if (!s_hopping_active) {
+  if (s_is_hopping_active == false) {
     return;
   }
 
@@ -321,11 +321,11 @@ esp_err_t subghz_receiver_start(subghz_mode_t mode, cc1101_preset_t preset, uint
   s_rx_preset = preset;
 
   if (freq == 0) {
-    s_hopping_active = true;
+    s_is_hopping_active = true;
     s_hop_idx = 0;
     s_rx_freq = HOP_FREQUENCIES[0];
   } else {
-    s_hopping_active = false;
+    s_is_hopping_active = false;
     s_rx_freq = freq;
   }
 

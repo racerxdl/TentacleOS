@@ -19,14 +19,12 @@
 
 #include "subghz_protocol_utils.h"
 
-/**
- * RCSwitch Original Protocol Implementation
- * Ported to TentacleOS for improved accuracy using derived timings.
- *
- * Note: The rcswitch_proto_t struct uses camelCase field names
- * (pulseLength, syncFactor, etc.) to match the original RCSwitch
- * reference implementation.
- */
+// RCSwitch Original Protocol Implementation
+// Ported to TentacleOS for improved accuracy using derived timings.
+//
+// Note: The subghz_rcswitch_proto_t struct uses camelCase field names
+// (pulseLength, syncFactor, etc.) to match the original RCSwitch
+// reference implementation.
 
 typedef struct {
   uint16_t pulseLength;
@@ -42,10 +40,10 @@ typedef struct {
     uint8_t high;
     uint8_t low;
   } one;
-  bool invertedSignal;
-} rcswitch_proto_t;
+  bool is_inverted_signal;
+} subghz_rcswitch_proto_t;
 
-static const rcswitch_proto_t s_proto[] = {
+static const subghz_rcswitch_proto_t RCSWITCH_PROTOCOLS[] = {
     {350, {1, 31}, {1, 3}, {3, 1}, false},
     {650, {1, 10}, {1, 2}, {2, 1}, false},
     {100, {30, 71}, {4, 11}, {9, 6}, false},
@@ -60,7 +58,7 @@ static const rcswitch_proto_t s_proto[] = {
     {320, {36, 1}, {1, 2}, {2, 1}, true},
 };
 
-#define RCSWITCH_PROTO_COUNT     (sizeof(s_proto) / sizeof(s_proto[0]))
+#define RCSWITCH_PROTOCOLS_COUNT (sizeof(RCSWITCH_PROTOCOLS) / sizeof(RCSWITCH_PROTOCOLS[0]))
 #define RCSWITCH_TOLERANCE_PCT   60
 #define RCSWITCH_MIN_PULSES      10
 #define RCSWITCH_MIN_DECODE_BITS 12
@@ -78,14 +76,14 @@ protocol_rcswitch_decode(const int32_t *raw_data, size_t count, subghz_data_t *o
     return false;
   }
 
-  for (int p = 0; p < (int)RCSWITCH_PROTO_COUNT; p++) {
-    const rcswitch_proto_t *pro = &s_proto[p];
+  for (int p = 0; p < (int)RCSWITCH_PROTOCOLS_COUNT; p++) {
+    const subghz_rcswitch_proto_t *pro = &RCSWITCH_PROTOCOLS[p];
 
     for (size_t i = 0; i < count - 1; i++) {
       bool first_is_high = (raw_data[i] > 0);
       bool second_is_high = (raw_data[i + 1] > 0);
 
-      if (pro->invertedSignal) {
+      if (pro->is_inverted_signal) {
         if (first_is_high || !second_is_high) {
           continue;
         }
@@ -124,7 +122,7 @@ protocol_rcswitch_decode(const int32_t *raw_data, size_t count, subghz_data_t *o
         bool p_high = (raw_data[k] > 0);
         bool g_high = (raw_data[k + 1] > 0);
 
-        if (pro->invertedSignal) {
+        if (pro->is_inverted_signal) {
           if (p_high || !g_high) {
             break;
           }
@@ -173,10 +171,10 @@ protocol_rcswitch_encode(const subghz_data_t *data, int32_t *pulses, size_t max_
     p_idx -= 1;
   }
 
-  if (p_idx < 0 || p_idx >= (int)RCSWITCH_PROTO_COUNT) {
+  if (p_idx < 0 || p_idx >= (int)RCSWITCH_PROTOCOLS_COUNT) {
     return 0;
   }
-  const rcswitch_proto_t *pro = &s_proto[p_idx];
+  const subghz_rcswitch_proto_t *pro = &RCSWITCH_PROTOCOLS[p_idx];
 
   if (max_count < (size_t)(data->bit_count * RCSWITCH_STEP_SIZE + RCSWITCH_SYNC_OVERHEAD)) {
     return 0;
@@ -185,7 +183,7 @@ protocol_rcswitch_encode(const subghz_data_t *data, int32_t *pulses, size_t max_
   uint32_t delay = pro->pulseLength;
   size_t idx = 0;
 
-  if (pro->invertedSignal) {
+  if (pro->is_inverted_signal) {
     pulses[idx++] = -(int32_t)(delay * pro->syncFactor.high);
     pulses[idx++] = (int32_t)(delay * pro->syncFactor.low);
   } else {
@@ -196,7 +194,7 @@ protocol_rcswitch_encode(const subghz_data_t *data, int32_t *pulses, size_t max_
   for (int i = data->bit_count - 1; i >= 0; i--) {
     bool bit = (data->raw_value >> i) & 1;
     if (bit) {
-      if (pro->invertedSignal) {
+      if (pro->is_inverted_signal) {
         pulses[idx++] = -(int32_t)(delay * pro->one.high);
         pulses[idx++] = (int32_t)(delay * pro->one.low);
       } else {
@@ -204,7 +202,7 @@ protocol_rcswitch_encode(const subghz_data_t *data, int32_t *pulses, size_t max_
         pulses[idx++] = -(int32_t)(delay * pro->one.low);
       }
     } else {
-      if (pro->invertedSignal) {
+      if (pro->is_inverted_signal) {
         pulses[idx++] = -(int32_t)(delay * pro->zero.high);
         pulses[idx++] = (int32_t)(delay * pro->zero.low);
       } else {

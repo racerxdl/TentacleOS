@@ -14,12 +14,12 @@
 
 #include "subghz_transmitter.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "driver/rmt_tx.h"
 #include "driver/rmt_encoder.h"
 #include "esp_log.h"
-#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -46,7 +46,7 @@ static const char *TAG = "SUBGHZ_TX";
 typedef struct {
   int32_t *timings;
   size_t count;
-} tx_item_t;
+} subghz_tx_item_t;
 
 static rmt_channel_handle_t s_tx_channel = NULL;
 static rmt_encoder_handle_t s_copy_encoder = NULL;
@@ -55,7 +55,7 @@ static TaskHandle_t s_tx_task_handle = NULL;
 static volatile bool s_is_running = false;
 
 static void subghz_tx_task(void *pvParameters) {
-  tx_item_t item;
+  subghz_tx_item_t item;
 
   ESP_LOGI(TAG, "TX Task Started");
 
@@ -67,8 +67,7 @@ static void subghz_tx_task(void *pvParameters) {
     ESP_LOGI(TAG, "Processing TX item: %d symbols", (int)item.count);
 
     size_t num_words = (item.count + 1) / 2;
-    rmt_symbol_word_t *symbols =
-        heap_caps_malloc(num_words * sizeof(rmt_symbol_word_t), MALLOC_CAP_DEFAULT);
+    rmt_symbol_word_t *symbols = malloc(num_words * sizeof(rmt_symbol_word_t));
 
     if (symbols == NULL) {
       ESP_LOGE(TAG, "Failed to allocate symbol buffer");
@@ -157,7 +156,7 @@ esp_err_t subghz_tx_init(void) {
   cc1101_enable_async_mode(TX_DEFAULT_FREQ);
   cc1101_strobe(CC1101_SIDLE);
 
-  s_tx_queue = xQueueCreate(TX_QUEUE_SIZE, sizeof(tx_item_t));
+  s_tx_queue = xQueueCreate(TX_QUEUE_SIZE, sizeof(subghz_tx_item_t));
   if (s_tx_queue == NULL) {
     ESP_LOGE(TAG, "Failed to create TX Queue");
     return ESP_ERR_NO_MEM;
@@ -175,7 +174,7 @@ esp_err_t subghz_tx_init(void) {
 }
 
 void subghz_tx_stop(void) {
-  if (!s_is_running) {
+  if (s_is_running == false) {
     return;
   }
 
@@ -185,7 +184,7 @@ void subghz_tx_stop(void) {
   vTaskDelay(pdMS_TO_TICKS(TX_STOP_DELAY_MS));
 
   if (s_tx_queue != NULL) {
-    tx_item_t item;
+    subghz_tx_item_t item;
     while (xQueueReceive(s_tx_queue, &item, 0) == pdPASS) {
       if (item.timings != NULL) {
         free(item.timings);
@@ -211,11 +210,11 @@ void subghz_tx_stop(void) {
 }
 
 esp_err_t subghz_tx_send_raw(const int32_t *timings, size_t count) {
-  if (!s_is_running || timings == NULL || count == 0) {
+  if (s_is_running == false || timings == NULL || count == 0) {
     return ESP_ERR_INVALID_ARG;
   }
 
-  int32_t *timings_copy = heap_caps_malloc(count * sizeof(int32_t), MALLOC_CAP_DEFAULT);
+  int32_t *timings_copy = malloc(count * sizeof(int32_t));
   if (timings_copy == NULL) {
     ESP_LOGE(TAG, "OOM: Failed to copy TX timings");
     return ESP_ERR_NO_MEM;
@@ -223,7 +222,7 @@ esp_err_t subghz_tx_send_raw(const int32_t *timings, size_t count) {
 
   memcpy(timings_copy, timings, count * sizeof(int32_t));
 
-  tx_item_t item = {
+  subghz_tx_item_t item = {
       .timings = timings_copy,
       .count = count,
   };
