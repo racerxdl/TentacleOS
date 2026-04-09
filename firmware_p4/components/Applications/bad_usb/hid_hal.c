@@ -19,7 +19,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <rom/ets_sys.h>
+#include "rom/ets_sys.h"
 
 static const char *TAG = "HID_HAL";
 

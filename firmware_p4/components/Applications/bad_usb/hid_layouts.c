@@ -16,6 +16,7 @@
 
 #include <stdbool.h>
 
+#include "esp_log.h"
 #include "class/hid/hid_device.h"
 
 #include "hid_hal.h"
@@ -30,7 +31,25 @@ static const char *TAG = "HID_LAYOUTS";
 #define HID_KEY_NON_US_BACKSLASH 0x64
 #endif
 
-void type_string_us(const char *str) {
+// ABNT2 UTF-8 byte pairs for accented characters
+#define UTF8_LOWER_C_CEDILLA_B2 0xA7 // c = 0xC3 0xA7
+#define UTF8_UPPER_C_CEDILLA_B2 0x87 // C = 0xC3 0x87
+#define UTF8_LOWER_A_ACUTE_B2   0xA1 // a = 0xC3 0xA1
+#define UTF8_LOWER_E_ACUTE_B2   0xA9 // e = 0xC3 0xA9
+#define UTF8_LOWER_I_ACUTE_B2   0xAD // i = 0xC3 0xAD
+#define UTF8_LOWER_O_ACUTE_B2   0xB3 // o = 0xC3 0xB3
+#define UTF8_LOWER_U_ACUTE_B2   0xBA // u = 0xC3 0xBA
+#define UTF8_LOWER_A_CIRCUM_B2  0xA2 // a = 0xC3 0xA2
+#define UTF8_LOWER_E_CIRCUM_B2  0xAA // e = 0xC3 0xAA
+#define UTF8_LOWER_O_CIRCUM_B2  0xB4 // o = 0xC3 0xB4
+#define UTF8_LOWER_A_TILDE_B2   0xA3 // a = 0xC3 0xA3
+#define UTF8_LOWER_O_TILDE_B2   0xB5 // o = 0xC3 0xB5
+#define UTF8_LOWER_A_GRAVE_B2   0xA0 // a = 0xC3 0xA0
+#define UTF8_2BYTE_LEAD         0xC3
+
+static bool try_decode_abnt2_utf8(uint8_t c1, uint8_t c2);
+
+void hid_layouts_type_string_us(const char *str) {
   for (size_t i = 0; str[i] != '\0'; ++i) {
     char c = str[i];
     uint8_t keycode = 0;
@@ -135,104 +154,7 @@ void type_string_us(const char *str) {
   }
 }
 
-// ABNT2 UTF-8 byte pairs for accented characters
-#define UTF8_LOWER_C_CEDILLA_B2 0xA7 // c = 0xC3 0xA7
-#define UTF8_UPPER_C_CEDILLA_B2 0x87 // C = 0xC3 0x87
-#define UTF8_LOWER_A_ACUTE_B2   0xA1 // a = 0xC3 0xA1
-#define UTF8_LOWER_E_ACUTE_B2   0xA9 // e = 0xC3 0xA9
-#define UTF8_LOWER_I_ACUTE_B2   0xAD // i = 0xC3 0xAD
-#define UTF8_LOWER_O_ACUTE_B2   0xB3 // o = 0xC3 0xB3
-#define UTF8_LOWER_U_ACUTE_B2   0xBA // u = 0xC3 0xBA
-#define UTF8_LOWER_A_CIRCUM_B2  0xA2 // a = 0xC3 0xA2
-#define UTF8_LOWER_E_CIRCUM_B2  0xAA // e = 0xC3 0xAA
-#define UTF8_LOWER_O_CIRCUM_B2  0xB4 // o = 0xC3 0xB4
-#define UTF8_LOWER_A_TILDE_B2   0xA3 // a = 0xC3 0xA3
-#define UTF8_LOWER_O_TILDE_B2   0xB5 // o = 0xC3 0xB5
-#define UTF8_LOWER_A_GRAVE_B2   0xA0 // a = 0xC3 0xA0
-#define UTF8_2BYTE_LEAD         0xC3
-
-static bool try_decode_abnt2_utf8(uint8_t c1, uint8_t c2) {
-  if (c1 != UTF8_2BYTE_LEAD) {
-    return false;
-  }
-
-  // Cedilla
-  if (c2 == UTF8_LOWER_C_CEDILLA_B2) {
-    hid_hal_press_key(HID_KEY_SEMICOLON, 0);
-    return true;
-  }
-  if (c2 == UTF8_UPPER_C_CEDILLA_B2) {
-    hid_hal_press_key(HID_KEY_SEMICOLON, KEYBOARD_MODIFIER_LEFTSHIFT);
-    return true;
-  }
-
-  // Acute accent (dead key = BRACKET_LEFT)
-  if (c2 == UTF8_LOWER_A_ACUTE_B2) {
-    hid_hal_press_key(HID_KEY_BRACKET_LEFT, 0);
-    hid_hal_press_key(HID_KEY_A, 0);
-    return true;
-  }
-  if (c2 == UTF8_LOWER_E_ACUTE_B2) {
-    hid_hal_press_key(HID_KEY_BRACKET_LEFT, 0);
-    hid_hal_press_key(HID_KEY_E, 0);
-    return true;
-  }
-  if (c2 == UTF8_LOWER_I_ACUTE_B2) {
-    hid_hal_press_key(HID_KEY_BRACKET_LEFT, 0);
-    hid_hal_press_key(HID_KEY_I, 0);
-    return true;
-  }
-  if (c2 == UTF8_LOWER_O_ACUTE_B2) {
-    hid_hal_press_key(HID_KEY_BRACKET_LEFT, 0);
-    hid_hal_press_key(HID_KEY_O, 0);
-    return true;
-  }
-  if (c2 == UTF8_LOWER_U_ACUTE_B2) {
-    hid_hal_press_key(HID_KEY_BRACKET_LEFT, 0);
-    hid_hal_press_key(HID_KEY_U, 0);
-    return true;
-  }
-
-  // Circumflex accent (dead key = APOSTROPHE + SHIFT)
-  if (c2 == UTF8_LOWER_A_CIRCUM_B2) {
-    hid_hal_press_key(HID_KEY_APOSTROPHE, KEYBOARD_MODIFIER_LEFTSHIFT);
-    hid_hal_press_key(HID_KEY_A, 0);
-    return true;
-  }
-  if (c2 == UTF8_LOWER_E_CIRCUM_B2) {
-    hid_hal_press_key(HID_KEY_APOSTROPHE, KEYBOARD_MODIFIER_LEFTSHIFT);
-    hid_hal_press_key(HID_KEY_E, 0);
-    return true;
-  }
-  if (c2 == UTF8_LOWER_O_CIRCUM_B2) {
-    hid_hal_press_key(HID_KEY_APOSTROPHE, KEYBOARD_MODIFIER_LEFTSHIFT);
-    hid_hal_press_key(HID_KEY_O, 0);
-    return true;
-  }
-
-  // Tilde (dead key = APOSTROPHE)
-  if (c2 == UTF8_LOWER_A_TILDE_B2) {
-    hid_hal_press_key(HID_KEY_APOSTROPHE, 0);
-    hid_hal_press_key(HID_KEY_A, 0);
-    return true;
-  }
-  if (c2 == UTF8_LOWER_O_TILDE_B2) {
-    hid_hal_press_key(HID_KEY_APOSTROPHE, 0);
-    hid_hal_press_key(HID_KEY_O, 0);
-    return true;
-  }
-
-  // Grave accent (dead key = BRACKET_LEFT + SHIFT)
-  if (c2 == UTF8_LOWER_A_GRAVE_B2) {
-    hid_hal_press_key(HID_KEY_BRACKET_LEFT, KEYBOARD_MODIFIER_LEFTSHIFT);
-    hid_hal_press_key(HID_KEY_A, 0);
-    return true;
-  }
-
-  return false;
-}
-
-void type_string_abnt2(const char *str) {
+void hid_layouts_type_string_abnt2(const char *str) {
   for (size_t i = 0; str[i] != '\0'; ++i) {
     uint8_t c1 = (uint8_t)str[i];
     uint8_t c2 = (uint8_t)str[i + 1];
@@ -383,4 +305,85 @@ void type_string_abnt2(const char *str) {
       hid_hal_press_key(keycode, modifier);
     }
   }
+}
+
+static bool try_decode_abnt2_utf8(uint8_t c1, uint8_t c2) {
+  if (c1 != UTF8_2BYTE_LEAD) {
+    return false;
+  }
+
+  // Cedilla
+  if (c2 == UTF8_LOWER_C_CEDILLA_B2) {
+    hid_hal_press_key(HID_KEY_SEMICOLON, 0);
+    return true;
+  }
+  if (c2 == UTF8_UPPER_C_CEDILLA_B2) {
+    hid_hal_press_key(HID_KEY_SEMICOLON, KEYBOARD_MODIFIER_LEFTSHIFT);
+    return true;
+  }
+
+  // Acute accent (dead key = BRACKET_LEFT)
+  if (c2 == UTF8_LOWER_A_ACUTE_B2) {
+    hid_hal_press_key(HID_KEY_BRACKET_LEFT, 0);
+    hid_hal_press_key(HID_KEY_A, 0);
+    return true;
+  }
+  if (c2 == UTF8_LOWER_E_ACUTE_B2) {
+    hid_hal_press_key(HID_KEY_BRACKET_LEFT, 0);
+    hid_hal_press_key(HID_KEY_E, 0);
+    return true;
+  }
+  if (c2 == UTF8_LOWER_I_ACUTE_B2) {
+    hid_hal_press_key(HID_KEY_BRACKET_LEFT, 0);
+    hid_hal_press_key(HID_KEY_I, 0);
+    return true;
+  }
+  if (c2 == UTF8_LOWER_O_ACUTE_B2) {
+    hid_hal_press_key(HID_KEY_BRACKET_LEFT, 0);
+    hid_hal_press_key(HID_KEY_O, 0);
+    return true;
+  }
+  if (c2 == UTF8_LOWER_U_ACUTE_B2) {
+    hid_hal_press_key(HID_KEY_BRACKET_LEFT, 0);
+    hid_hal_press_key(HID_KEY_U, 0);
+    return true;
+  }
+
+  // Circumflex accent (dead key = APOSTROPHE + SHIFT)
+  if (c2 == UTF8_LOWER_A_CIRCUM_B2) {
+    hid_hal_press_key(HID_KEY_APOSTROPHE, KEYBOARD_MODIFIER_LEFTSHIFT);
+    hid_hal_press_key(HID_KEY_A, 0);
+    return true;
+  }
+  if (c2 == UTF8_LOWER_E_CIRCUM_B2) {
+    hid_hal_press_key(HID_KEY_APOSTROPHE, KEYBOARD_MODIFIER_LEFTSHIFT);
+    hid_hal_press_key(HID_KEY_E, 0);
+    return true;
+  }
+  if (c2 == UTF8_LOWER_O_CIRCUM_B2) {
+    hid_hal_press_key(HID_KEY_APOSTROPHE, KEYBOARD_MODIFIER_LEFTSHIFT);
+    hid_hal_press_key(HID_KEY_O, 0);
+    return true;
+  }
+
+  // Tilde (dead key = APOSTROPHE)
+  if (c2 == UTF8_LOWER_A_TILDE_B2) {
+    hid_hal_press_key(HID_KEY_APOSTROPHE, 0);
+    hid_hal_press_key(HID_KEY_A, 0);
+    return true;
+  }
+  if (c2 == UTF8_LOWER_O_TILDE_B2) {
+    hid_hal_press_key(HID_KEY_APOSTROPHE, 0);
+    hid_hal_press_key(HID_KEY_O, 0);
+    return true;
+  }
+
+  // Grave accent (dead key = BRACKET_LEFT + SHIFT)
+  if (c2 == UTF8_LOWER_A_GRAVE_B2) {
+    hid_hal_press_key(HID_KEY_BRACKET_LEFT, KEYBOARD_MODIFIER_LEFTSHIFT);
+    hid_hal_press_key(HID_KEY_A, 0);
+    return true;
+  }
+
+  return false;
 }

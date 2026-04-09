@@ -34,24 +34,8 @@ static const char *TAG = "BAD_USB";
 
 static bool s_is_initialized = false;
 
-static void send_keyboard_report(uint8_t keycode, uint8_t modifier) {
-  uint8_t keycode_array[6] = {0};
-  keycode_array[0] = keycode;
-  tud_hid_keyboard_report(HID_REPORT_ID_KEYBOARD, modifier, keycode_array);
-}
-
-static void send_mouse_report(int8_t x, int8_t y, uint8_t buttons, int8_t wheel) {
-  tud_hid_mouse_report(HID_REPORT_ID_MOUSE, buttons, x, y, wheel, 0);
-}
-
-void bad_usb_wait_for_connection(void) {
-  ESP_LOGI(TAG, "Waiting for USB host connection...");
-  while (!tud_mounted()) {
-    vTaskDelay(pdMS_TO_TICKS(USB_POLL_INTERVAL_MS));
-  }
-  ESP_LOGI(TAG, "USB host connected. Settling for %d ms...", USB_SETTLE_DELAY_MS);
-  vTaskDelay(pdMS_TO_TICKS(USB_SETTLE_DELAY_MS));
-}
+static void send_keyboard_report(uint8_t keycode, uint8_t modifier);
+static void send_mouse_report(int8_t x, int8_t y, uint8_t buttons, int8_t wheel);
 
 esp_err_t bad_usb_init(void) {
   if (s_is_initialized) {
@@ -90,4 +74,23 @@ esp_err_t bad_usb_deinit(void) {
   s_is_initialized = false;
   ESP_LOGI(TAG, "Deinitialized");
   return ESP_OK;
+}
+
+void bad_usb_wait_for_connection(void) {
+  ESP_LOGI(TAG, "Waiting for USB host connection...");
+  while (!tud_mounted()) {
+    vTaskDelay(pdMS_TO_TICKS(USB_POLL_INTERVAL_MS));
+  }
+  ESP_LOGI(TAG, "USB host connected. Settling for %d ms...", USB_SETTLE_DELAY_MS);
+  vTaskDelay(pdMS_TO_TICKS(USB_SETTLE_DELAY_MS));
+}
+
+static void send_keyboard_report(uint8_t keycode, uint8_t modifier) {
+  uint8_t keycode_array[6] = {0};
+  keycode_array[0] = keycode;
+  tud_hid_keyboard_report(HID_REPORT_ID_KEYBOARD, modifier, keycode_array);
+}
+
+static void send_mouse_report(int8_t x, int8_t y, uint8_t buttons, int8_t wheel) {
+  tud_hid_mouse_report(HID_REPORT_ID_MOUSE, buttons, x, y, wheel, 0);
 }

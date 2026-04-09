@@ -29,7 +29,7 @@ extern "C" {
  *
  * @param str  Null-terminated string to type.
  */
-void type_string_us(const char *str);
+void hid_layouts_type_string_us(const char *str);
 
 /**
  * @brief Type a string using the Brazilian ABNT2 keyboard layout.
@@ -39,7 +39,7 @@ void type_string_us(const char *str);
  *
  * @param str  Null-terminated UTF-8 string to type.
  */
-void type_string_abnt2(const char *str);
+void hid_layouts_type_string_abnt2(const char *str);
 
 #ifdef __cplusplus
 }

@@ -35,16 +35,12 @@ static const char *TAG = "DUCKY_PARSER";
 #define MIN_LINE_LEN    2
 #define MAX_SCRIPT_SIZE 8192
 
-static volatile bool s_abort_flag = false;
-static ducky_progress_cb_t s_progress_cb = NULL;
-static ducky_layout_t s_layout = DUCKY_LAYOUT_US;
-
 typedef struct {
   const char *name;
   uint8_t code;
-} key_map_entry_t;
+} ducky_key_map_entry_t;
 
-static const key_map_entry_t KEY_MAP[] = {
+static const ducky_key_map_entry_t KEY_MAP[] = {
     {"ENTER", HID_KEY_ENTER},
     {"RETURN", HID_KEY_ENTER},
     {"ESC", HID_KEY_ESCAPE},
@@ -88,6 +84,22 @@ static const key_map_entry_t KEY_MAP[] = {
     {NULL, 0},
 };
 
+static volatile bool s_is_abort_requested = false;
+static ducky_progress_cb_t s_progress_cb = NULL;
+static ducky_layout_t s_layout = DUCKY_LAYOUT_US;
+static ducky_output_mode_t s_output_mode = DUCKY_OUTPUT_USB;
+
+static uint8_t find_key_code(const char *str);
+static void trim_newline(char *str);
+static bool is_modifier(const char *word, uint8_t *out_mod);
+static void process_line(char *line);
+static int count_lines(const char *script);
+
+void ducky_set_output_mode(ducky_output_mode_t mode) {
+  s_output_mode = mode;
+  ESP_LOGI(TAG, "Output mode set to: %s", mode == DUCKY_OUTPUT_BLUETOOTH ? "Bluetooth" : "USB");
+}
+
 void ducky_set_progress_callback(ducky_progress_cb_t cb) {
   s_progress_cb = cb;
 }
@@ -95,6 +107,102 @@ void ducky_set_progress_callback(ducky_progress_cb_t cb) {
 void ducky_set_layout(ducky_layout_t layout) {
   s_layout = layout;
   ESP_LOGI(TAG, "Keyboard layout set to: %s", layout == DUCKY_LAYOUT_ABNT2 ? "ABNT2" : "US");
+}
+
+void ducky_abort(void) {
+  s_is_abort_requested = true;
+}
+
+void ducky_parse_and_run(const char *script) {
+  if (script == NULL) {
+    return;
+  }
+
+  s_is_abort_requested = false;
+
+  char *script_copy = strdup(script);
+  if (script_copy == NULL) {
+    ESP_LOGE(TAG, "Failed to allocate script copy");
+    return;
+  }
+
+  int total_lines = count_lines(script);
+  int current_line = 0;
+  char *saveptr = NULL;
+  char *line = strtok_r(script_copy, "\n", &saveptr);
+
+  while (line != NULL) {
+    if (s_is_abort_requested) {
+      ESP_LOGW(TAG, "Script aborted at line %d/%d", current_line, total_lines);
+      break;
+    }
+
+    current_line++;
+    if (s_progress_cb != NULL) {
+      s_progress_cb(current_line, total_lines);
+    }
+
+    trim_newline(line);
+    process_line(line);
+    vTaskDelay(pdMS_TO_TICKS(LINE_DELAY_MS));
+
+    line = strtok_r(NULL, "\n", &saveptr);
+  }
+
+  if (s_progress_cb != NULL) {
+    s_progress_cb(total_lines, total_lines);
+  }
+
+  free(script_copy);
+}
+
+esp_err_t ducky_run_from_assets(const char *filename) {
+  size_t size = 0;
+  char *buffer = (char *)storage_assets_load_file(filename, &size);
+  if (buffer == NULL) {
+    ESP_LOGE(TAG, "Asset not found: %s", filename);
+    return ESP_ERR_NOT_FOUND;
+  }
+
+  char *script_str = malloc(size + 1);
+  if (script_str == NULL) {
+    free(buffer);
+    ESP_LOGE(TAG, "Failed to allocate script buffer");
+    return ESP_ERR_NO_MEM;
+  }
+
+  memcpy(script_str, buffer, size);
+  script_str[size] = '\0';
+  free(buffer);
+
+  ducky_parse_and_run(script_str);
+  free(script_str);
+
+  return ESP_OK;
+}
+
+esp_err_t ducky_run_from_sdcard(const char *path) {
+  if (path == NULL) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  char *script_str = malloc(MAX_SCRIPT_SIZE);
+  if (script_str == NULL) {
+    ESP_LOGE(TAG, "Failed to allocate script buffer");
+    return ESP_ERR_NO_MEM;
+  }
+
+  esp_err_t err = storage_read_string(path, script_str, MAX_SCRIPT_SIZE);
+  if (err != ESP_OK) {
+    free(script_str);
+    ESP_LOGE(TAG, "Failed to read script from SD: %s", path);
+    return err;
+  }
+
+  ducky_parse_and_run(script_str);
+  free(script_str);
+
+  return ESP_OK;
 }
 
 static uint8_t find_key_code(const char *str) {
@@ -172,9 +280,9 @@ static void process_line(char *line) {
     char *text = strtok_r(NULL, "", &saveptr);
     if (text != NULL) {
       if (s_layout == DUCKY_LAYOUT_ABNT2) {
-        type_string_abnt2(text);
+        hid_layouts_type_string_abnt2(text);
       } else {
-        type_string_us(text);
+        hid_layouts_type_string_us(text);
       }
     }
   } else if (strcmp(cmd, "MOUSE_MOVE") == 0) {
@@ -226,100 +334,4 @@ static int count_lines(const char *script) {
     total++;
   }
   return total;
-}
-
-void ducky_abort(void) {
-  s_abort_flag = true;
-}
-
-void ducky_parse_and_run(const char *script) {
-  if (script == NULL) {
-    return;
-  }
-
-  s_abort_flag = false;
-
-  char *script_copy = strdup(script);
-  if (script_copy == NULL) {
-    ESP_LOGE(TAG, "Failed to allocate script copy");
-    return;
-  }
-
-  int total_lines = count_lines(script);
-  int current_line = 0;
-  char *saveptr = NULL;
-  char *line = strtok_r(script_copy, "\n", &saveptr);
-
-  while (line != NULL) {
-    if (s_abort_flag) {
-      ESP_LOGW(TAG, "Script aborted at line %d/%d", current_line, total_lines);
-      break;
-    }
-
-    current_line++;
-    if (s_progress_cb != NULL) {
-      s_progress_cb(current_line, total_lines);
-    }
-
-    trim_newline(line);
-    process_line(line);
-    vTaskDelay(pdMS_TO_TICKS(LINE_DELAY_MS));
-
-    line = strtok_r(NULL, "\n", &saveptr);
-  }
-
-  if (s_progress_cb != NULL) {
-    s_progress_cb(total_lines, total_lines);
-  }
-
-  free(script_copy);
-}
-
-esp_err_t ducky_run_from_assets(const char *filename) {
-  size_t size = 0;
-  char *buffer = (char *)storage_assets_load_file(filename, &size);
-  if (buffer == NULL) {
-    ESP_LOGE(TAG, "Asset not found: %s", filename);
-    return ESP_ERR_NOT_FOUND;
-  }
-
-  char *script_str = malloc(size + 1);
-  if (script_str == NULL) {
-    free(buffer);
-    ESP_LOGE(TAG, "Failed to allocate script buffer");
-    return ESP_ERR_NO_MEM;
-  }
-
-  memcpy(script_str, buffer, size);
-  script_str[size] = '\0';
-  free(buffer);
-
-  ducky_parse_and_run(script_str);
-  free(script_str);
-
-  return ESP_OK;
-}
-
-esp_err_t ducky_run_from_sdcard(const char *path) {
-  if (path == NULL) {
-    return ESP_ERR_INVALID_ARG;
-  }
-
-  char *script_str = malloc(MAX_SCRIPT_SIZE);
-  if (script_str == NULL) {
-    ESP_LOGE(TAG, "Failed to allocate script buffer");
-    return ESP_ERR_NO_MEM;
-  }
-
-  esp_err_t err = storage_read_string(path, script_str, MAX_SCRIPT_SIZE);
-  if (err != ESP_OK) {
-    free(script_str);
-    ESP_LOGE(TAG, "Failed to read script from SD: %s", path);
-    return err;
-  }
-
-  ducky_parse_and_run(script_str);
-  free(script_str);
-
-  return ESP_OK;
 }
