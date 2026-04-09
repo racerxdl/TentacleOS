@@ -52,7 +52,7 @@ esp_err_t sd_dir_create(const char *path) {
 
 static esp_err_t _remove_internal(const char *cur) {
   DIR *dir = opendir(cur);
-  if (!dir) {
+  if (dir == NULL) {
     ESP_LOGE(TAG, "Falha ao abrir dir para remover: %s", cur);
     return ESP_FAIL;
   }
@@ -64,7 +64,7 @@ static esp_err_t _remove_internal(const char *cur) {
       continue;
 
     char *child = malloc(PATH_BUF);
-    if (!child) {
+    if (child == NULL) {
       closedir(dir);
       return ESP_ERR_NO_MEM;
     }
@@ -119,7 +119,7 @@ esp_err_t sd_dir_list(const char *path, sd_dir_callback_t cb, void *user_data) {
   snprintf(full, PATH_BUF, "%s%s", VFS_MOUNT_POINT, path);
 
   DIR *dir = opendir(full);
-  if (!dir) {
+  if (dir == NULL) {
     ESP_LOGE(TAG, "Falha ao abrir dir: %s", full);
     return ESP_ERR_NOT_FOUND;
   }
@@ -143,7 +143,7 @@ esp_err_t sd_dir_count(const char *path, uint32_t *file_count, uint32_t *dir_cou
   snprintf(full, PATH_BUF, "%s%s", VFS_MOUNT_POINT, path);
 
   DIR *dir = opendir(full);
-  if (!dir) {
+  if (dir == NULL) {
     ESP_LOGE(TAG, "Falha ao abrir dir: %s", full);
     return ESP_ERR_NOT_FOUND;
   }
@@ -170,7 +170,7 @@ esp_err_t sd_dir_count(const char *path, uint32_t *file_count, uint32_t *dir_cou
 
 static esp_err_t _copy_internal(const char *src, const char *dst) {
   DIR *dir = opendir(src);
-  if (!dir)
+  if (dir == NULL)
     return ESP_FAIL;
 
   struct dirent *e;
@@ -241,7 +241,7 @@ esp_err_t sd_dir_copy_recursive(const char *src, const char *dst) {
 
 static uint64_t _size_internal(const char *cur) {
   DIR *dir = opendir(cur);
-  if (!dir)
+  if (dir == NULL)
     return 0;
 
   struct dirent *e;
@@ -252,7 +252,7 @@ static uint64_t _size_internal(const char *cur) {
       continue;
 
     char *child = malloc(PATH_BUF);
-    if (!child) {
+    if (child == NULL) {
       closedir(dir);
       return t;
     }

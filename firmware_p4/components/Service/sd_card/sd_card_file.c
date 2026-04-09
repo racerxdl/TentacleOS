@@ -148,20 +148,20 @@ esp_err_t sd_file_copy(const char *src, const char *dst) {
   }
 
   FILE *fs = fopen(src_full, "rb");
-  if (!fs) {
+  if (fs == NULL) {
     ESP_LOGE(TAG, "Erro abrindo origem %s: %s", src_full, strerror(errno));
     return ESP_FAIL;
   }
 
   FILE *fd = fopen(dst_full, "wb");
-  if (!fd) {
+  if (fd == NULL) {
     ESP_LOGE(TAG, "Erro criando destino %s: %s", dst_full, strerror(errno));
     fclose(fs);
     return ESP_FAIL;
   }
 
   uint8_t *buf = malloc(COPY_BUFFER_SIZE);
-  if (!buf) {
+  if (buf == NULL) {
     fclose(fs);
     fclose(fd);
     return ESP_ERR_NO_MEM;
@@ -274,7 +274,7 @@ esp_err_t sd_file_truncate(const char *path, size_t size) {
 }
 
 esp_err_t sd_file_is_empty(const char *path, bool *empty) {
-  if (!empty) {
+  if (empty == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -292,7 +292,7 @@ esp_err_t sd_file_move(const char *src, const char *dst) {
 }
 
 esp_err_t sd_file_compare(const char *path1, const char *path2, bool *equal) {
-  if (!equal) {
+  if (equal == NULL) {
     return ESP_ERR_INVALID_ARG;
   }
 
@@ -317,7 +317,7 @@ esp_err_t sd_file_compare(const char *path1, const char *path2, bool *equal) {
 
   FILE *f1 = fopen(p1, "rb");
   FILE *f2 = fopen(p2, "rb");
-  if (!f1 || !f2) {
+  if (f1 == NULL || f2 == NULL) {
     if (f1)
       fclose(f1);
     if (f2)
@@ -329,7 +329,7 @@ esp_err_t sd_file_compare(const char *path1, const char *path2, bool *equal) {
   uint8_t *b1 = malloc(COPY_BUFFER_SIZE);
   uint8_t *b2 = malloc(COPY_BUFFER_SIZE);
 
-  if (!b1 || !b2) {
+  if (b1 == NULL || b2 == NULL) {
     free(b1);
     free(b2);
     fclose(f1);
@@ -368,7 +368,7 @@ esp_err_t sd_file_get_extension(const char *path, char *ext, size_t size) {
   }
 
   const char *dot = strrchr(path, '.');
-  if (!dot || dot == path) {
+  if (dot == NULL || dot == path) {
     ext[0] = '\0';
     return ESP_OK;
   }

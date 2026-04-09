@@ -125,7 +125,7 @@ static esp_err_t littlefs_readdir(vfs_dir_t dir, vfs_stat_t *entry) {
   DIR *d = (DIR *)dir;
   struct dirent *ent = readdir(d);
 
-  if (!ent) {
+  if (ent == NULL) {
     return ESP_ERR_NOT_FOUND;
   }
 
