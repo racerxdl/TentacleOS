@@ -26,6 +26,7 @@ extern "C" {
 
 #include "highboy_nfc.h"
 #include "highboy_nfc_types.h"
+#include "highboy_nfc_compat.h"
 
 /**
  * @brief NFC manager state machine states.

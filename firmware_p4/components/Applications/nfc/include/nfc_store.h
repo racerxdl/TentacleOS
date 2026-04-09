@@ -41,6 +41,7 @@ extern "C" {
 
 #include "highboy_nfc_types.h"
 #include "highboy_nfc_error.h"
+#include "highboy_nfc_compat.h"
 
 #define NFC_STORE_MAX_ENTRIES 16
 #define NFC_STORE_NAME_MAX    32

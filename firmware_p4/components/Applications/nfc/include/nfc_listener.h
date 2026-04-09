@@ -23,6 +23,7 @@ extern "C" {
 #endif
 
 #include "highboy_nfc_error.h"
+#include "highboy_nfc_compat.h"
 #include "highboy_nfc_types.h"
 #include "mf_classic_emu.h"
 

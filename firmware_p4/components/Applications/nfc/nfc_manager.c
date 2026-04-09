@@ -89,7 +89,7 @@ static void nfc_manager_task(void *arg) {
       s_mgr.state = NFC_MANAGER_STATE_SCANNING;
     }
 
-    hb_delay_ms(100);
+    hb_nfc_timer_delay_ms(100);
   }
 
   s_mgr.state = NFC_MANAGER_STATE_IDLE;

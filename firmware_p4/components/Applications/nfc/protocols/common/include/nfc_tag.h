@@ -27,6 +27,7 @@ extern "C" {
 #include <stdbool.h>
 
 #include "highboy_nfc_error.h"
+#include "highboy_nfc_compat.h"
 #include "highboy_nfc_types.h"
 
 #include "t1t.h"

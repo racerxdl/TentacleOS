@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include "highboy_nfc_types.h"
 #include "highboy_nfc_error.h"
+#include "highboy_nfc_compat.h"
 #include "crypto1.h"
 
 #ifdef __cplusplus

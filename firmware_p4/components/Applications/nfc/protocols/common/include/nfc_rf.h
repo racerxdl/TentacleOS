@@ -26,6 +26,7 @@ extern "C" {
 #include <stdbool.h>
 #include <stddef.h>
 #include "highboy_nfc_error.h"
+#include "highboy_nfc_compat.h"
 
 /**
  * @brief NFC RF technology types.

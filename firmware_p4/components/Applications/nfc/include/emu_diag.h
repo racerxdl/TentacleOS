@@ -23,6 +23,7 @@ extern "C" {
 #endif
 
 #include "highboy_nfc_error.h"
+#include "highboy_nfc_compat.h"
 
 /**
  * @brief Run full target mode diagnostic.

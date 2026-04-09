@@ -23,6 +23,7 @@ extern "C" {
 #endif
 
 #include "highboy_nfc_error.h"
+#include "highboy_nfc_compat.h"
 
 /**
  * @brief Enable continuous wave (CW) output.

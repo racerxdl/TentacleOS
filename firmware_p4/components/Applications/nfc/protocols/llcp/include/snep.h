@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "highboy_nfc_error.h"
+#include "highboy_nfc_compat.h"
 #include "llcp.h"
 
 #ifdef __cplusplus

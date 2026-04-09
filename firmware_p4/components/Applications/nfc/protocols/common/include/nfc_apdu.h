@@ -27,6 +27,7 @@ extern "C" {
 #include <stdbool.h>
 #include "highboy_nfc_types.h"
 #include "highboy_nfc_error.h"
+#include "highboy_nfc_compat.h"
 
 /* Common SW values */
 #define APDU_SW_OK             0x9000U

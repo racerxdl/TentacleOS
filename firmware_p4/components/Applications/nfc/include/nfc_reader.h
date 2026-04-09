@@ -23,6 +23,7 @@ extern "C" {
 #endif
 
 #include "highboy_nfc_types.h"
+#include "highboy_nfc_compat.h"
 #include "mf_classic_emu.h"
 
 extern mfc_emu_card_data_t s_emu_card;

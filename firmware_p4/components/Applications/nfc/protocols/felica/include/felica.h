@@ -30,6 +30,7 @@
 #include <stddef.h>
 #include "highboy_nfc_types.h"
 #include "highboy_nfc_error.h"
+#include "highboy_nfc_compat.h"
 
 #ifdef __cplusplus
 extern "C" {

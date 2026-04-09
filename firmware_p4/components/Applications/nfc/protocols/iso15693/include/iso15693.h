@@ -36,6 +36,7 @@
 #include <stddef.h>
 #include "highboy_nfc_types.h"
 #include "highboy_nfc_error.h"
+#include "highboy_nfc_compat.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -98,7 +99,7 @@ typedef struct {
 /**
  * @brief Configure ST25R3916 for ISO 15693 polling.
  *
- * Must be called after st25r_init() + st25r_field_on().
+ * Must be called after st25r3916_core_init() + st25r3916_core_field_on().
  * Sets REG_MODE=0x30 (NFC-V), high data rate, single subcarrier.
  */
 hb_nfc_err_t iso15693_poller_init(void);
