@@ -17,7 +17,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "esp_log.h"
+
 #include "spi_bridge.h"
+
+static const char *TAG = "SKIMMER_DETECTOR";
 
 #define SPI_TIMEOUT_MS      2000
 #define SPI_DATA_TIMEOUT_MS 1000
@@ -28,12 +32,14 @@ static uint16_t s_cached_capacity = 0;
 static skimmer_detector_record_t s_empty_record;
 
 bool skimmer_detector_start(void) {
+  ESP_LOGI(TAG, "Skimmer detector started");
   skimmer_detector_clear_results();
   return (spi_bridge_send_command(SPI_ID_BT_APP_SKIMMER, NULL, 0, NULL, NULL, SPI_TIMEOUT_MS) ==
           ESP_OK);
 }
 
 void skimmer_detector_stop(void) {
+  ESP_LOGI(TAG, "Skimmer detector stopped");
   spi_bridge_send_command(SPI_ID_BT_APP_STOP, NULL, 0, NULL, NULL, SPI_TIMEOUT_MS);
   skimmer_detector_clear_results();
 }
