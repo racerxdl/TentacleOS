@@ -93,7 +93,7 @@ void kernel_init(void) {
 
   // 7. Services
   sys_monitor_start(false);
-  wifi_init();
+  wifi_service_init();
   xTaskCreate(console_task, "console_task", CONSOLE_TASK_STACK, NULL, CONSOLE_TASK_PRIO, NULL);
 
   vTaskDelay(pdMS_TO_TICKS(BOOT_SETTLE_MS));
