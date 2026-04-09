@@ -16,7 +16,11 @@
 
 #include <string.h>
 
+#include "esp_log.h"
+
 #include "spi_bridge.h"
+
+static const char *TAG = "SIGNAL_MONITOR";
 
 #define SIGNAL_MONITOR_PAYLOAD_SIZE 7
 #define SIGNAL_MONITOR_DEFAULT_RSSI (-127)
@@ -25,6 +29,7 @@
 static int8_t s_last_rssi = SIGNAL_MONITOR_DEFAULT_RSSI;
 
 void signal_monitor_start(const uint8_t *bssid, uint8_t channel) {
+  ESP_LOGI(TAG, "Signal monitor started");
   uint8_t payload[SIGNAL_MONITOR_PAYLOAD_SIZE];
   memcpy(payload, bssid, 6);
   payload[6] = channel;
@@ -33,6 +38,7 @@ void signal_monitor_start(const uint8_t *bssid, uint8_t channel) {
 }
 
 void signal_monitor_stop(void) {
+  ESP_LOGI(TAG, "Signal monitor stopped");
   spi_bridge_send_command(SPI_ID_WIFI_APP_ATTACK_STOP, NULL, 0, NULL, NULL, 2000);
 }
 

@@ -16,11 +16,16 @@
 
 #include <string.h>
 
+#include "esp_log.h"
+
 #include "spi_bridge.h"
+
+static const char *TAG = "WIFI_DEAUTHER";
 
 bool wifi_deauther_start(const wifi_ap_record_t *ap_record,
                          wifi_deauther_frame_type_t type,
                          bool is_broadcast) {
+  ESP_LOGI(TAG, "Deauth attack started");
   uint8_t payload[14];
   memcpy(payload, ap_record->bssid, 6);
   memset(payload + 6, is_broadcast ? 0xFF : 0x00, 6);
@@ -43,6 +48,7 @@ bool wifi_deauther_start_targeted(const wifi_ap_record_t *ap_record,
 }
 
 void wifi_deauther_stop(void) {
+  ESP_LOGI(TAG, "Deauth stopped");
   spi_bridge_send_command(SPI_ID_WIFI_APP_ATTACK_STOP, NULL, 0, NULL, NULL, 2000);
 }
 
