@@ -67,25 +67,73 @@ typedef struct {
   bool validate_fdt;      /* log warning if FDT < min */
 } nfc_rf_config_t;
 
-/** @brief Apply RF configuration for a given technology. */
+/**
+ * @brief Apply RF configuration for a given technology.
+ *
+ * @param cfg  Pointer to the RF configuration structure.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_INVALID_ARG if cfg is NULL
+ *   - HB_NFC_ERR on hardware failure
+ */
 hb_nfc_err_t nfc_rf_apply(const nfc_rf_config_t *cfg);
 
-/** @brief Set TX/RX bitrate (A/B/F). */
+/**
+ * @brief Set the TX and RX bitrate for NFC-A, B, or F.
+ *
+ * @param tx  Transmit bitrate.
+ * @param rx  Receive bitrate.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_INVALID_ARG if the bitrate is unsupported
+ */
 hb_nfc_err_t nfc_rf_set_bitrate(nfc_rf_bitrate_t tx, nfc_rf_bitrate_t rx);
 
-/** @brief Set raw BIT_RATE register (advanced use). */
+/**
+ * @brief Set the raw BIT_RATE register value directly.
+ *
+ * @param value  Raw register value to write.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR on hardware failure
+ */
 hb_nfc_err_t nfc_rf_set_bitrate_raw(uint8_t value);
 
-/** @brief Set AM modulation index in percent (5..40). */
+/**
+ * @brief Set the AM modulation index in percent.
+ *
+ * @param percent  Modulation index (valid range: 5..40).
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_INVALID_ARG if percent is out of range
+ */
 hb_nfc_err_t nfc_rf_set_am_modulation(uint8_t percent);
 
-/** @brief ISO14443A parity control. */
+/**
+ * @brief Configure ISO14443A TX parity generation and RX parity handling.
+ *
+ * @param tx_parity      Enable TX parity bit generation.
+ * @param rx_raw_parity  Receive parity bits in FIFO without checking.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR on hardware failure
+ */
 hb_nfc_err_t nfc_rf_set_parity(bool tx_parity, bool rx_raw_parity);
 
-/** @brief Configure timing (guard time + FDT validation). */
+/**
+ * @brief Configure guard time and frame delay time validation.
+ *
+ * @param guard_time_us  Guard time before TX in microseconds.
+ * @param fdt_min_us     Minimum frame delay time in microseconds.
+ * @param validate_fdt   Log a warning if the measured FDT is below the minimum.
+ */
 void nfc_rf_set_timing(uint32_t guard_time_us, uint32_t fdt_min_us, bool validate_fdt);
 
-/** @brief Returns last measured FDT in microseconds. */
+/**
+ * @brief Get the last measured frame delay time.
+ *
+ * @return Last measured FDT in microseconds.
+ */
 uint32_t nfc_rf_get_last_fdt_us(void);
 
 #ifdef __cplusplus

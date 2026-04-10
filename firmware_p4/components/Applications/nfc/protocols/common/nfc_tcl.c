@@ -11,14 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file nfc_tcl.c
- * @brief ISO14443-4 (T=CL) transport wrapper for A/B.
- */
+
 #include "nfc_tcl.h"
+
+#include "esp_log.h"
 
 #include "iso_dep.h"
 #include "iso14443b.h"
+
+static const char *TAG = "NFC_TCL";
 
 int nfc_tcl_transceive(hb_nfc_protocol_t proto,
                        const void *ctx,

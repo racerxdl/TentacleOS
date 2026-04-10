@@ -11,15 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file nfc_tcl.h
- * @brief ISO14443-4 (T=CL) transport wrapper for A/B.
- */
+
 #ifndef NFC_TCL_H
 #define NFC_TCL_H
 
 #include <stdint.h>
 #include <stddef.h>
+
 #include "highboy_nfc_types.h"
 #include "highboy_nfc_error.h"
 #include "highboy_nfc_compat.h"
@@ -29,12 +27,16 @@ extern "C" {
 #endif
 
 /**
- * Generic ISO14443-4 transceive.
+ * @brief Transceive data over ISO14443-4 (T=CL) for type A or B.
  *
- * @param proto   HB_PROTO_ISO14443_4A or HB_PROTO_ISO14443_4B.
- * @param ctx     For A: pointer to nfc_iso_dep_data_t
- *                For B: pointer to nfc_iso14443b_data_t
- * @return number of bytes received, 0 on failure.
+ * @param proto      HB_PROTO_ISO14443_4A or HB_PROTO_ISO14443_4B.
+ * @param ctx        Protocol context (nfc_iso_dep_data_t* for A, nfc_iso14443b_data_t* for B).
+ * @param tx         Transmit data buffer.
+ * @param tx_len     Length of the transmit data.
+ * @param[out] rx        Receive data buffer.
+ * @param rx_max     Maximum size of the receive buffer.
+ * @param timeout_ms Timeout in milliseconds.
+ * @return Number of bytes received, or 0 on failure.
  */
 int nfc_tcl_transceive(hb_nfc_protocol_t proto,
                        const void *ctx,

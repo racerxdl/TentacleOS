@@ -11,11 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file nfc_rf.c
- * @brief RF layer configuration (Phase 2).
- */
+
 #include "nfc_rf.h"
+
+#include "esp_log.h"
 
 #include "st25r3916_core.h"
 #include "st25r3916_reg.h"
@@ -23,9 +22,9 @@
 #include "hb_nfc_spi.h"
 #include "nfc_poller.h"
 
-#include "esp_log.h"
+static const char *TAG = "NFC_RF";
 
-static const char *TAG = "nfc_rf";
+#define NFC_RF_RATE_UNSUPPORTED 0xFF
 
 static uint8_t bitrate_code(nfc_rf_bitrate_t br) {
   switch (br) {
@@ -38,14 +37,14 @@ static uint8_t bitrate_code(nfc_rf_bitrate_t br) {
     case NFC_RF_BR_848:
       return 0x03;
     default:
-      return 0xFF;
+      return NFC_RF_RATE_UNSUPPORTED;
   }
 }
 
 hb_nfc_err_t nfc_rf_set_bitrate(nfc_rf_bitrate_t tx, nfc_rf_bitrate_t rx) {
   uint8_t txc = bitrate_code(tx);
   uint8_t rxc = bitrate_code(rx);
-  if (txc == 0xFF || rxc == 0xFF)
+  if (txc == NFC_RF_RATE_UNSUPPORTED || rxc == NFC_RF_RATE_UNSUPPORTED)
     return HB_NFC_ERR_PARAM;
 
   uint8_t reg = (uint8_t)((txc << 4) | (rxc & 0x03U));
@@ -150,9 +149,9 @@ hb_nfc_err_t nfc_rf_apply(const nfc_rf_config_t *cfg) {
       hb_nfc_spi_reg_write(ST25R3916_REG_ISO14443B, 0x00U);
       hb_nfc_spi_reg_write(ST25R3916_REG_ISO14443B_FELICA, 0x00U);
       if (cfg->tx_rate == NFC_RF_BR_V_HIGH && cfg->rx_rate == NFC_RF_BR_V_HIGH) {
-        err = nfc_rf_set_bitrate_raw(0x00U); /* NFC-V high data rate */
+        err = nfc_rf_set_bitrate_raw(0x00U);
       } else if (cfg->tx_rate == NFC_RF_BR_V_LOW && cfg->rx_rate == NFC_RF_BR_V_LOW) {
-        err = nfc_rf_set_bitrate_raw(0x01U); /* NFC-V low data rate (best-effort) */
+        err = nfc_rf_set_bitrate_raw(0x01U);
       } else {
         err = HB_NFC_ERR_PARAM;
       }

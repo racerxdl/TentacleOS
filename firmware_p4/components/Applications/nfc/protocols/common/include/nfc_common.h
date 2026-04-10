@@ -30,7 +30,13 @@ extern "C" {
 #include "highboy_nfc_types.h"
 #include "highboy_nfc_compat.h"
 
-/** @brief Log a byte array as hex. */
+/**
+ * @brief Log a byte array as a hex string.
+ *
+ * @param label  Descriptive label printed before the hex data.
+ * @param data   Pointer to the byte array.
+ * @param len    Number of bytes to log.
+ */
 void nfc_log_hex(const char *label, const uint8_t *data, size_t len);
 
 #ifdef __cplusplus

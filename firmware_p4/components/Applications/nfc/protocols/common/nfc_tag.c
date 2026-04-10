@@ -11,14 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file nfc_tag.c
- * @brief NFC Forum Tag Type handlers (Phase 7).
- */
+
 #include "nfc_tag.h"
 
 #include <string.h>
 #include <stdlib.h>
+
+#include "esp_log.h"
 
 #include "poller.h"
 #include "iso14443a.h"
@@ -26,12 +25,9 @@
 #include "iso_dep.h"
 #include "mf_ultralight.h"
 #include "nfc_crypto.h"
-#include "esp_log.h"
-
-#define TAG "nfc_tag"
 
 static void nfc_tag_reset(nfc_tag_t *tag) {
-  if (!tag)
+  if (tag == NULL)
     return;
   memset(tag, 0, sizeof(*tag));
   tag->type = NFC_TAG_TYPE_UNKNOWN;
@@ -64,7 +60,7 @@ const char *nfc_tag_type_str(nfc_tag_type_t type) {
 }
 
 static void nfc_tag_set_uid(nfc_tag_t *tag, const uint8_t *uid, uint8_t uid_len) {
-  if (!tag || !uid || uid_len == 0)
+  if (tag == NULL || uid == NULL || uid_len == 0)
     return;
   if (uid_len > NFC_UID_MAX_LEN)
     uid_len = NFC_UID_MAX_LEN;
@@ -73,7 +69,7 @@ static void nfc_tag_set_uid(nfc_tag_t *tag, const uint8_t *uid, uint8_t uid_len)
 }
 
 static hb_nfc_err_t nfc_tag_prepare_t4t(nfc_tag_t *tag) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
   if (tag->dep.ats_len == 0) {
     hb_nfc_err_t err = iso_dep_rats(8, 0, &tag->dep);
@@ -89,11 +85,10 @@ static hb_nfc_err_t nfc_tag_prepare_t4t(nfc_tag_t *tag) {
 }
 
 hb_nfc_err_t nfc_tag_detect(nfc_tag_t *tag) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
   nfc_tag_reset(tag);
 
-  /* Type 1 (Topaz) has no anticollision; probe first. */
   t1t_tag_t t1 = {0};
   if (t1t_select(&t1) == HB_NFC_OK) {
     tag->type = NFC_TAG_TYPE_1;
@@ -104,7 +99,6 @@ hb_nfc_err_t nfc_tag_detect(nfc_tag_t *tag) {
     return HB_NFC_OK;
   }
 
-  /* NFC-A (Type 2 / Type 4A) */
   nfc_iso14443a_data_t a = {0};
   if (iso14443a_poller_select(&a) == HB_NFC_OK) {
     tag->protocol = HB_PROTO_ISO14443_3A;
@@ -128,7 +122,6 @@ hb_nfc_err_t nfc_tag_detect(nfc_tag_t *tag) {
     return HB_NFC_OK;
   }
 
-  /* NFC-B (Type 4B) */
   nfc_iso14443b_data_t b = {0};
   if (iso14443b_poller_init() == HB_NFC_OK && iso14443b_select(&b, 0x00, 0x00) == HB_NFC_OK) {
     tag->protocol = HB_PROTO_ISO14443_3B;
@@ -138,7 +131,6 @@ hb_nfc_err_t nfc_tag_detect(nfc_tag_t *tag) {
     return HB_NFC_OK;
   }
 
-  /* NFC-F (Type 3) */
   if (felica_poller_init() == HB_NFC_OK) {
     felica_tag_t f = {0};
     if (felica_sensf_req(FELICA_SC_COMMON, &f) == HB_NFC_OK) {
@@ -151,7 +143,6 @@ hb_nfc_err_t nfc_tag_detect(nfc_tag_t *tag) {
     }
   }
 
-  /* NFC-V / ISO15693 (Type 6 / Type V) */
   if (iso15693_poller_init() == HB_NFC_OK) {
     iso15693_tag_t v = {0};
     if (iso15693_inventory(&v) == HB_NFC_OK) {
@@ -171,7 +162,7 @@ hb_nfc_err_t nfc_tag_detect(nfc_tag_t *tag) {
 }
 
 hb_nfc_err_t nfc_tag_get_uid(const nfc_tag_t *tag, uint8_t *uid, size_t *uid_len) {
-  if (!tag || !uid || !uid_len)
+  if (tag == NULL || uid == NULL || uid_len == NULL)
     return HB_NFC_ERR_PARAM;
   if (tag->uid_len == 0)
     return HB_NFC_ERR_PROTOCOL;
@@ -181,13 +172,13 @@ hb_nfc_err_t nfc_tag_get_uid(const nfc_tag_t *tag, uint8_t *uid, size_t *uid_len
 }
 
 void nfc_tag_set_felica_service(nfc_tag_t *tag, uint16_t service_code) {
-  if (!tag)
+  if (tag == NULL)
     return;
   tag->felica_service = service_code;
 }
 
 hb_nfc_err_t nfc_tag_mfp_auth_first(nfc_tag_t *tag, uint16_t block_addr, const uint8_t key[16]) {
-  if (!tag || !key)
+  if (tag == NULL || key == NULL)
     return HB_NFC_ERR_PARAM;
   if (tag->protocol != HB_PROTO_ISO14443_3A)
     return HB_NFC_ERR_PARAM;
@@ -206,7 +197,7 @@ hb_nfc_err_t nfc_tag_mfp_auth_first(nfc_tag_t *tag, uint16_t block_addr, const u
 }
 
 hb_nfc_err_t nfc_tag_mfp_auth_nonfirst(nfc_tag_t *tag, uint16_t block_addr, const uint8_t key[16]) {
-  if (!tag || !key)
+  if (tag == NULL || key == NULL)
     return HB_NFC_ERR_PARAM;
   if (tag->type != NFC_TAG_TYPE_7)
     return HB_NFC_ERR_AUTH;
@@ -219,7 +210,7 @@ static hb_nfc_err_t nfc_tag_mfp_read(nfc_tag_t *tag,
                                      uint8_t *out,
                                      size_t out_max,
                                      size_t *out_len) {
-  if (!tag || !out || !out_len)
+  if (tag == NULL || out == NULL || out_len == NULL)
     return HB_NFC_ERR_PARAM;
   if (!tag->mfp.authenticated)
     return HB_NFC_ERR_AUTH;
@@ -263,8 +254,12 @@ static hb_nfc_err_t nfc_tag_mfp_read(nfc_tag_t *tag,
   memcpy(mac_rx, resp + data_len - 8U, 8);
 
   if (tag->sec_mode == NFC_TAG_SEC_MAC) {
-    if (nfc_mac_verify(NFC_MAC_AES_CMAC_EV1_8, tag->mfp.ses_auth, 16, resp, plain_len, mac_rx, 8) !=
-        0) {
+    nfc_mac_input_t mac_in = {.type = NFC_MAC_AES_CMAC_EV1_8,
+                              .key = tag->mfp.ses_auth,
+                              .key_len = 16,
+                              .data = resp,
+                              .data_len = plain_len};
+    if (nfc_mac_verify(&mac_in, mac_rx, 8) != 0) {
       return HB_NFC_ERR_AUTH;
     }
     memcpy(out, resp, plain_len);
@@ -277,8 +272,12 @@ static hb_nfc_err_t nfc_tag_mfp_read(nfc_tag_t *tag,
     size_t dec_len = mfp_sl3_decrypt(&tag->mfp, resp, plain_len, dec, sizeof(dec));
     if (dec_len < plain_len)
       return HB_NFC_ERR_PROTOCOL;
-    if (nfc_mac_verify(NFC_MAC_AES_CMAC_EV1_8, tag->mfp.ses_auth, 16, dec, plain_len, mac_rx, 8) !=
-        0) {
+    nfc_mac_input_t mac_in = {.type = NFC_MAC_AES_CMAC_EV1_8,
+                              .key = tag->mfp.ses_auth,
+                              .key_len = 16,
+                              .data = dec,
+                              .data_len = plain_len};
+    if (nfc_mac_verify(&mac_in, mac_rx, 8) != 0) {
       return HB_NFC_ERR_AUTH;
     }
     memcpy(out, dec, plain_len);
@@ -291,7 +290,7 @@ static hb_nfc_err_t nfc_tag_mfp_read(nfc_tag_t *tag,
 
 static hb_nfc_err_t
 nfc_tag_mfp_write(nfc_tag_t *tag, uint16_t block_addr, const uint8_t *data, size_t data_len) {
-  if (!tag || !data)
+  if (tag == NULL || data == NULL)
     return HB_NFC_ERR_PARAM;
   if (!tag->mfp.authenticated)
     return HB_NFC_ERR_AUTH;
@@ -312,8 +311,12 @@ nfc_tag_mfp_write(nfc_tag_t *tag, uint16_t block_addr, const uint8_t *data, size
   uint8_t mac[8];
   size_t mac_len = 0;
   if (tag->sec_mode == NFC_TAG_SEC_MAC || tag->sec_mode == NFC_TAG_SEC_FULL) {
-    if (nfc_mac_compute(
-            NFC_MAC_AES_CMAC_EV1_8, tag->mfp.ses_auth, 16, data, data_len, mac, &mac_len) != 0) {
+    nfc_mac_input_t mac_in = {.type = NFC_MAC_AES_CMAC_EV1_8,
+                              .key = tag->mfp.ses_auth,
+                              .key_len = 16,
+                              .data = data,
+                              .data_len = data_len};
+    if (nfc_mac_compute(&mac_in, mac, &mac_len) != 0) {
       return HB_NFC_ERR_INTERNAL;
     }
   }
@@ -323,7 +326,7 @@ nfc_tag_mfp_write(nfc_tag_t *tag, uint16_t block_addr, const uint8_t *data, size
     return HB_NFC_ERR_PARAM;
 
   uint8_t *cmd = (uint8_t *)malloc(5 + lc + 1U);
-  if (!cmd)
+  if (cmd == NULL)
     return HB_NFC_ERR_INTERNAL;
 
   cmd[0] = 0x90;
@@ -349,7 +352,7 @@ nfc_tag_mfp_write(nfc_tag_t *tag, uint16_t block_addr, const uint8_t *data, size
 
 hb_nfc_err_t nfc_tag_read_block(
     nfc_tag_t *tag, uint32_t block_num, uint8_t *out, size_t out_max, size_t *out_len) {
-  if (!tag || !out || !out_len)
+  if (tag == NULL || out == NULL || out_len == NULL)
     return HB_NFC_ERR_PARAM;
 
   switch (tag->type) {
@@ -422,7 +425,7 @@ hb_nfc_err_t nfc_tag_read_block(
 
 hb_nfc_err_t
 nfc_tag_write_block(nfc_tag_t *tag, uint32_t block_num, const uint8_t *data, size_t data_len) {
-  if (!tag || !data || data_len == 0)
+  if (tag == NULL || data == NULL || data_len == 0)
     return HB_NFC_ERR_PARAM;
 
   switch (tag->type) {
@@ -466,5 +469,3 @@ nfc_tag_write_block(nfc_tag_t *tag, uint32_t block_num, const uint8_t *data, siz
   }
   return HB_NFC_ERR_PROTOCOL;
 }
-
-#undef TAG
