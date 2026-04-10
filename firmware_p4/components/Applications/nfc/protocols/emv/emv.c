@@ -11,16 +11,76 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file emv.c
- * @brief EMV contactless helpers (PPSE, AID select, GPO, READ RECORD).
- */
+
 #include "emv.h"
 
 #include <string.h>
+
+#include "esp_log.h"
+
 #include "nfc_apdu.h"
 
+static const char *TAG = "EMV";
+
+/* ---- BER-TLV encoding constants ---- */
+#define TLV_TAG_MULTI_BYTE_MASK  0x1FU /**< Low 5 bits set = multi-byte tag */
+#define TLV_TAG_CONTINUATION_BIT 0x80U /**< Bit 8 set = more tag bytes follow */
+#define TLV_LEN_LONG_FORM_BIT    0x80U /**< Bit 8 set = long-form length */
+#define TLV_LEN_NUM_BYTES_MASK   0x7FU /**< Low 7 bits = number of length bytes */
+#define TLV_CONSTRUCTED_BIT      0x20U /**< Bit 6 set = constructed (contains TLVs) */
+#define TLV_TAG_MULTI_BYTE_MAX   3     /**< Max extra tag bytes before error */
+
+/* ---- EMV tag values ---- */
+#define EMV_TAG_AID          0x4FU /**< Application Identifier (AID) */
+#define EMV_TAG_APP_LABEL    0x50U /**< Application Label */
+#define EMV_TAG_RESP_FMT1    0x80U /**< Response Message Template Format 1 */
+#define EMV_TAG_RESP_FMT2    0x77U /**< Response Message Template Format 2 */
+#define EMV_TAG_CMD_TEMPLATE 0x83U /**< Command Template */
+#define EMV_TAG_AFL          0x94U /**< Application File Locator */
+
+/* ---- APDU command bytes ---- */
+#define EMV_CLA_PROPRIETARY   0x80U /**< CLA byte for EMV proprietary commands */
+#define EMV_INS_GPO           0xA8U /**< INS byte for GET PROCESSING OPTIONS */
+#define EMV_CLA_STANDARD      0x00U /**< CLA byte for standard ISO commands */
+#define EMV_INS_READ_RECORD   0xB2U /**< INS byte for READ RECORD */
+#define EMV_P1P2_ZERO         0x00U /**< P1/P2 zero value */
+#define EMV_LE_ZERO           0x00U /**< Le = 0 (return max available) */
+#define EMV_READ_REC_SFI_FLAG 0x04U /**< P2 flag: SFI-based record addressing */
+
+/* ---- GPO APDU sizing ---- */
+#define EMV_GPO_APDU_MIN_LEN  6U    /**< Minimum GPO APDU buffer size */
+#define EMV_GPO_APDU_OVERHEAD 8U    /**< GPO APDU fixed bytes (header+Lc+tag+len+Le) */
+#define EMV_GPO_PDOL_MAX_LEN  0xFDU /**< Max PDOL data length */
+
+/* ---- AFL parsing ---- */
+#define EMV_AFL_ENTRY_SIZE 4U    /**< Bytes per AFL entry */
+#define EMV_AFL_SFI_SHIFT  3     /**< Bits to shift for SFI extraction */
+#define EMV_AFL_SFI_MASK   0x1FU /**< Mask for SFI after shift */
+#define EMV_AIP_LEN        2U    /**< Application Interchange Profile length */
+
+/* ---- Misc ---- */
+#define EMV_RECORD_MAX         0xFFU /**< Maximum record number */
+#define EMV_RUN_BASIC_MAX_APPS 8U    /**< Max apps in emv_run_basic */
+#define EMV_RUN_BASIC_MAX_AFL  12U   /**< Max AFL entries in emv_run_basic */
+
 #define EMV_PPSE_AID_LEN 14U
+
+/* ---- APDU buffer sizes ---- */
+#define EMV_APDU_SELECT_PPSE_SIZE 32U /**< Buffer size for PPSE select APDU */
+#define EMV_APDU_SELECT_AID_SIZE  48U /**< Buffer size for AID select APDU */
+#define EMV_APDU_GPO_SIZE         64U /**< Buffer size for GPO APDU */
+
+/* ---- Response buffer sizes ---- */
+#define EMV_RECORD_BUFFER_SIZE 256U /**< Buffer size for record read responses */
+#define EMV_FCI_BUFFER_SIZE    256U /**< Buffer size for FCI responses */
+
+/* ---- Response message format indices ---- */
+#define EMV_RESP_TAG_INDEX  0U /**< Response message tag at index 0 */
+#define EMV_RESP_LEN_INDEX  1U /**< Response message format 1 length at index 1 */
+#define EMV_RESP_AIP_OFFSET 2U /**< Response message format 1 AIP data at offset 2 */
+
+/* ---- Multi-byte value operations ---- */
+#define EMV_BYTE_SHIFT 8U /**< Bits to shift for multi-byte value construction */
 
 static const uint8_t k_ppse_aid[EMV_PPSE_AID_LEN] = {
     '2', 'P', 'A', 'Y', '.', 'S', 'Y', 'S', '.', 'D', 'D', 'F', '0', '1'};
@@ -34,7 +94,7 @@ typedef struct {
 } emv_tlv_t;
 
 static bool emv_tlv_next(const uint8_t *data, size_t len, size_t *pos, emv_tlv_t *out) {
-  if (!data || !pos || !out)
+  if (data == NULL || pos == NULL || out == NULL)
     return false;
   if (*pos >= len)
     return false;
@@ -43,7 +103,7 @@ static bool emv_tlv_next(const uint8_t *data, size_t len, size_t *pos, emv_tlv_t
   size_t p = *pos;
   uint8_t first = data[p++];
   uint32_t tag = first;
-  if ((first & 0x1FU) == 0x1FU) {
+  if ((first & TLV_TAG_MULTI_BYTE_MASK) == TLV_TAG_MULTI_BYTE_MASK) {
     int cnt = 0;
     uint8_t b = 0;
     do {
@@ -52,8 +112,8 @@ static bool emv_tlv_next(const uint8_t *data, size_t len, size_t *pos, emv_tlv_t
       b = data[p++];
       tag = (tag << 8) | b;
       cnt++;
-    } while ((b & 0x80U) && cnt < 3);
-    if (cnt >= 3 && (b & 0x80U))
+    } while ((b & TLV_TAG_CONTINUATION_BIT) && cnt < TLV_TAG_MULTI_BYTE_MAX);
+    if (cnt >= TLV_TAG_MULTI_BYTE_MAX && (b & TLV_TAG_CONTINUATION_BIT))
       return false;
   }
 
@@ -61,10 +121,10 @@ static bool emv_tlv_next(const uint8_t *data, size_t len, size_t *pos, emv_tlv_t
     return false;
   uint8_t l = data[p++];
   size_t vlen = 0;
-  if ((l & 0x80U) == 0) {
+  if ((l & TLV_LEN_LONG_FORM_BIT) == 0) {
     vlen = l;
   } else {
-    uint8_t n = (uint8_t)(l & 0x7FU);
+    uint8_t n = (uint8_t)(l & TLV_LEN_NUM_BYTES_MASK);
     if (n == 1U) {
       if (p >= len)
         return false;
@@ -72,7 +132,7 @@ static bool emv_tlv_next(const uint8_t *data, size_t len, size_t *pos, emv_tlv_t
     } else if (n == 2U) {
       if (p + 1U >= len)
         return false;
-      vlen = ((size_t)data[p] << 8) | data[p + 1];
+      vlen = ((size_t)data[p] << EMV_BYTE_SHIFT) | data[p + 1];
       p += 2U;
     } else {
       return false;
@@ -86,7 +146,7 @@ static bool emv_tlv_next(const uint8_t *data, size_t len, size_t *pos, emv_tlv_t
   out->len = vlen;
   out->value = &data[p];
   out->tlv_len = (p - start) + vlen;
-  out->constructed = (first & 0x20U) != 0;
+  out->constructed = (first & TLV_CONSTRUCTED_BIT) != 0;
   *pos = p + vlen;
   return true;
 }
@@ -119,10 +179,10 @@ typedef struct {
 } emv_app_list_t;
 
 static void emv_extract_cb(const emv_tlv_t *tlv, void *user) {
-  if (!tlv || !user)
+  if (tlv == NULL || user == NULL)
     return;
   emv_app_list_t *list = (emv_app_list_t *)user;
-  if (tlv->tag == 0x4FU && tlv->len > 0) {
+  if (tlv->tag == EMV_TAG_AID && tlv->len > 0) {
     if (list->count >= list->max)
       return;
     emv_app_t *app = &list->apps[list->count++];
@@ -133,7 +193,7 @@ static void emv_extract_cb(const emv_tlv_t *tlv, void *user) {
     list->last = app;
     return;
   }
-  if (tlv->tag == 0x50U && tlv->len > 0 && list->last) {
+  if (tlv->tag == EMV_TAG_APP_LABEL && tlv->len > 0 && list->last) {
     size_t copy = (tlv->len > EMV_APP_LABEL_MAX) ? EMV_APP_LABEL_MAX : tlv->len;
     memcpy(list->last->label, tlv->value, copy);
     list->last->label[copy] = '\0';
@@ -160,16 +220,23 @@ hb_nfc_err_t emv_select_ppse(hb_nfc_protocol_t proto,
                              size_t *fci_len,
                              uint16_t *sw,
                              int timeout_ms) {
-  uint8_t apdu[32];
-  size_t apdu_len =
-      nfc_apdu_build_select_aid(apdu, sizeof(apdu), k_ppse_aid, EMV_PPSE_AID_LEN, true, 0x00);
+  uint8_t apdu[EMV_APDU_SELECT_PPSE_SIZE];
+  size_t apdu_len = nfc_apdu_build_select_aid((nfc_apdu_buf_t){apdu, sizeof(apdu)},
+                                              (nfc_apdu_data_t){k_ppse_aid, EMV_PPSE_AID_LEN},
+                                              true,
+                                              EMV_P1P2_ZERO);
   if (apdu_len == 0)
     return HB_NFC_ERR_PARAM;
-  return nfc_apdu_transceive(proto, ctx, apdu, apdu_len, fci, fci_max, fci_len, sw, timeout_ms);
+  nfc_apdu_channel_t ch = {.proto = proto, .ctx = ctx, .timeout_ms = timeout_ms};
+  nfc_apdu_resp_t resp = {.buf = fci, .max = fci_max};
+  hb_nfc_err_t err = nfc_apdu_transceive(&ch, apdu, apdu_len, &resp);
+  *fci_len = resp.len;
+  *sw = resp.sw;
+  return err;
 }
 
 size_t emv_extract_aids(const uint8_t *fci, size_t fci_len, emv_app_t *out, size_t max) {
-  if (!fci || !out || max == 0)
+  if (fci == NULL || out == NULL || max == 0)
     return 0;
   emv_app_list_t list = {.apps = out, .max = max, .count = 0, .last = NULL};
   emv_tlv_scan(fci, fci_len, emv_extract_cb, &list);
@@ -185,35 +252,41 @@ hb_nfc_err_t emv_select_aid(hb_nfc_protocol_t proto,
                             size_t *fci_len,
                             uint16_t *sw,
                             int timeout_ms) {
-  uint8_t apdu[48];
-  size_t apdu_len = nfc_apdu_build_select_aid(apdu, sizeof(apdu), aid, aid_len, true, 0x00);
+  uint8_t apdu[EMV_APDU_SELECT_AID_SIZE];
+  size_t apdu_len = nfc_apdu_build_select_aid(
+      (nfc_apdu_buf_t){apdu, sizeof(apdu)}, (nfc_apdu_data_t){aid, aid_len}, true, EMV_P1P2_ZERO);
   if (apdu_len == 0)
     return HB_NFC_ERR_PARAM;
-  return nfc_apdu_transceive(proto, ctx, apdu, apdu_len, fci, fci_max, fci_len, sw, timeout_ms);
+  nfc_apdu_channel_t ch = {.proto = proto, .ctx = ctx, .timeout_ms = timeout_ms};
+  nfc_apdu_resp_t resp = {.buf = fci, .max = fci_max};
+  hb_nfc_err_t err = nfc_apdu_transceive(&ch, apdu, apdu_len, &resp);
+  *fci_len = resp.len;
+  *sw = resp.sw;
+  return err;
 }
 
 static size_t emv_build_gpo_apdu(uint8_t *out, size_t max, const uint8_t *pdol, size_t pdol_len) {
-  if (!out || max < 6U)
+  if (out == NULL || max < EMV_GPO_APDU_MIN_LEN)
     return 0;
-  if (pdol_len > 0xFD)
+  if (pdol_len > EMV_GPO_PDOL_MAX_LEN)
     return 0;
   size_t lc = 2U + pdol_len;
-  if (max < (8U + pdol_len))
+  if (max < (EMV_GPO_APDU_OVERHEAD + pdol_len))
     return 0;
 
   size_t pos = 0;
-  out[pos++] = 0x80;
-  out[pos++] = 0xA8;
-  out[pos++] = 0x00;
-  out[pos++] = 0x00;
+  out[pos++] = EMV_CLA_PROPRIETARY;
+  out[pos++] = EMV_INS_GPO;
+  out[pos++] = EMV_P1P2_ZERO;
+  out[pos++] = EMV_P1P2_ZERO;
   out[pos++] = (uint8_t)lc;
-  out[pos++] = 0x83;
+  out[pos++] = EMV_TAG_CMD_TEMPLATE;
   out[pos++] = (uint8_t)pdol_len;
   if (pdol_len > 0 && pdol) {
     memcpy(&out[pos], pdol, pdol_len);
     pos += pdol_len;
   }
-  out[pos++] = 0x00; /* Le */
+  out[pos++] = EMV_LE_ZERO; /* Le */
   return pos;
 }
 
@@ -226,37 +299,42 @@ hb_nfc_err_t emv_get_processing_options(hb_nfc_protocol_t proto,
                                         size_t *gpo_len,
                                         uint16_t *sw,
                                         int timeout_ms) {
-  uint8_t apdu[64];
+  uint8_t apdu[EMV_APDU_GPO_SIZE];
   size_t apdu_len = emv_build_gpo_apdu(apdu, sizeof(apdu), pdol, pdol_len);
   if (apdu_len == 0)
     return HB_NFC_ERR_PARAM;
-  return nfc_apdu_transceive(proto, ctx, apdu, apdu_len, gpo, gpo_max, gpo_len, sw, timeout_ms);
+  nfc_apdu_channel_t ch = {.proto = proto, .ctx = ctx, .timeout_ms = timeout_ms};
+  nfc_apdu_resp_t resp = {.buf = gpo, .max = gpo_max};
+  hb_nfc_err_t err = nfc_apdu_transceive(&ch, apdu, apdu_len, &resp);
+  *gpo_len = resp.len;
+  *sw = resp.sw;
+  return err;
 }
 
 size_t emv_parse_afl(const uint8_t *gpo, size_t gpo_len, emv_afl_entry_t *out, size_t max) {
-  if (!gpo || gpo_len < 2U || !out || max == 0)
+  if (gpo == NULL || gpo_len < 2U || out == NULL || max == 0)
     return 0;
 
   const uint8_t *afl = NULL;
   size_t afl_len = 0;
 
-  if (gpo[0] == 0x80U) {
-    size_t val_len = gpo[1];
-    if (val_len + 2U > gpo_len || val_len < 2U)
+  if (gpo[EMV_RESP_TAG_INDEX] == EMV_TAG_RESP_FMT1) {
+    size_t val_len = gpo[EMV_RESP_LEN_INDEX];
+    if (val_len + 2U > gpo_len || val_len < EMV_AIP_LEN)
       return 0;
-    afl = &gpo[2 + 2]; /* skip AIP (2 bytes) */
-    afl_len = val_len - 2U;
-  } else if (gpo[0] == 0x77U) {
-    if (!emv_tlv_find_tag(gpo, gpo_len, 0x94U, &afl, &afl_len))
+    afl = &gpo[EMV_RESP_AIP_OFFSET + EMV_AIP_LEN];
+    afl_len = val_len - EMV_AIP_LEN;
+  } else if (gpo[EMV_RESP_TAG_INDEX] == EMV_TAG_RESP_FMT2) {
+    if (!emv_tlv_find_tag(gpo, gpo_len, EMV_TAG_AFL, &afl, &afl_len))
       return 0;
   } else {
     return 0;
   }
 
   size_t count = 0;
-  for (size_t i = 0; i + 3U < afl_len && count < max; i += 4U) {
+  for (size_t i = 0; i + 3U < afl_len && count < max; i += EMV_AFL_ENTRY_SIZE) {
     emv_afl_entry_t *e = &out[count++];
-    e->sfi = (uint8_t)((afl[i] >> 3) & 0x1FU);
+    e->sfi = (uint8_t)((afl[i] >> EMV_AFL_SFI_SHIFT) & EMV_AFL_SFI_MASK);
     e->record_first = afl[i + 1];
     e->record_last = afl[i + 2];
     e->offline_auth_records = afl[i + 3];
@@ -273,15 +351,20 @@ hb_nfc_err_t emv_read_record(hb_nfc_protocol_t proto,
                              size_t *out_len,
                              uint16_t *sw,
                              int timeout_ms) {
-  if (!out || out_max < 2U)
+  if (out == NULL || out_max < 2U)
     return HB_NFC_ERR_PARAM;
   uint8_t apdu[5];
-  apdu[0] = 0x00;
-  apdu[1] = 0xB2;
+  apdu[0] = EMV_CLA_STANDARD;
+  apdu[1] = EMV_INS_READ_RECORD;
   apdu[2] = record;
-  apdu[3] = (uint8_t)((sfi << 3) | 0x04U);
-  apdu[4] = 0x00; /* Le */
-  return nfc_apdu_transceive(proto, ctx, apdu, sizeof(apdu), out, out_max, out_len, sw, timeout_ms);
+  apdu[3] = (uint8_t)((sfi << EMV_AFL_SFI_SHIFT) | EMV_READ_REC_SFI_FLAG);
+  apdu[4] = EMV_LE_ZERO; /* Le */
+  nfc_apdu_channel_t ch = {.proto = proto, .ctx = ctx, .timeout_ms = timeout_ms};
+  nfc_apdu_resp_t resp = {.buf = out, .max = out_max};
+  hb_nfc_err_t err = nfc_apdu_transceive(&ch, apdu, sizeof(apdu), &resp);
+  *out_len = resp.len;
+  *sw = resp.sw;
+  return err;
 }
 
 hb_nfc_err_t emv_read_records(hb_nfc_protocol_t proto,
@@ -291,10 +374,10 @@ hb_nfc_err_t emv_read_records(hb_nfc_protocol_t proto,
                               emv_record_cb_t cb,
                               void *user,
                               int timeout_ms) {
-  if (!afl || afl_count == 0)
+  if (afl == NULL || afl_count == 0)
     return HB_NFC_ERR_PARAM;
 
-  uint8_t resp[256];
+  uint8_t resp[EMV_RECORD_BUFFER_SIZE];
   for (size_t i = 0; i < afl_count; i++) {
     const emv_afl_entry_t *e = &afl[i];
     for (uint8_t rec = e->record_first; rec <= e->record_last; rec++) {
@@ -306,7 +389,7 @@ hb_nfc_err_t emv_read_records(hb_nfc_protocol_t proto,
         return err;
       if (cb)
         cb(e->sfi, rec, resp, rlen, user);
-      if (rec == 0xFFU)
+      if (rec == EMV_RECORD_MAX)
         break;
     }
   }
@@ -319,15 +402,15 @@ hb_nfc_err_t emv_run_basic(hb_nfc_protocol_t proto,
                            emv_record_cb_t cb,
                            void *user,
                            int timeout_ms) {
-  uint8_t fci[256];
+  uint8_t fci[EMV_FCI_BUFFER_SIZE];
   size_t fci_len = 0;
   uint16_t sw = 0;
   hb_nfc_err_t err = emv_select_ppse(proto, ctx, fci, sizeof(fci), &fci_len, &sw, timeout_ms);
   if (err != HB_NFC_OK)
     return err;
 
-  emv_app_t apps[8];
-  size_t app_count = emv_extract_aids(fci, fci_len, apps, 8);
+  emv_app_t apps[EMV_RUN_BASIC_MAX_APPS];
+  size_t app_count = emv_extract_aids(fci, fci_len, apps, EMV_RUN_BASIC_MAX_APPS);
   if (app_count == 0)
     return HB_NFC_ERR_PROTOCOL;
 
@@ -335,22 +418,22 @@ hb_nfc_err_t emv_run_basic(hb_nfc_protocol_t proto,
   if (app_out)
     *app_out = *app;
 
-  uint8_t fci_app[256];
+  uint8_t fci_app[EMV_FCI_BUFFER_SIZE];
   size_t fci_app_len = 0;
   err = emv_select_aid(
       proto, ctx, app->aid, app->aid_len, fci_app, sizeof(fci_app), &fci_app_len, &sw, timeout_ms);
   if (err != HB_NFC_OK)
     return err;
 
-  uint8_t gpo[256];
+  uint8_t gpo[EMV_FCI_BUFFER_SIZE];
   size_t gpo_len = 0;
   err =
       emv_get_processing_options(proto, ctx, NULL, 0, gpo, sizeof(gpo), &gpo_len, &sw, timeout_ms);
   if (err != HB_NFC_OK)
     return err;
 
-  emv_afl_entry_t afl[12];
-  size_t afl_count = emv_parse_afl(gpo, gpo_len, afl, 12);
+  emv_afl_entry_t afl[EMV_RUN_BASIC_MAX_AFL];
+  size_t afl_count = emv_parse_afl(gpo, gpo_len, afl, EMV_RUN_BASIC_MAX_AFL);
   if (afl_count == 0)
     return HB_NFC_ERR_PROTOCOL;
 

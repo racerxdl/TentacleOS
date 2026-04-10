@@ -56,37 +56,92 @@ extern "C" {
 #define LLCP_TLV_SN      0x06U
 #define LLCP_TLV_OPT     0x07U
 
+/**
+ * @brief LLCP link parameters.
+ */
 typedef struct {
-  uint8_t version_major;
-  uint8_t version_minor;
-  uint16_t miu;    /* Maximum Information Unit */
-  uint16_t wks;    /* Well-Known Services bitmap */
-  uint16_t lto_ms; /* Link Timeout in ms */
-  uint8_t rw;      /* Receive window */
+  uint8_t version_major; /**< LLCP major version number. */
+  uint8_t version_minor; /**< LLCP minor version number. */
+  uint16_t miu;          /**< Maximum Information Unit. */
+  uint16_t wks;          /**< Well-Known Services bitmap. */
+  uint16_t lto_ms;       /**< Link Timeout in milliseconds. */
+  uint8_t rw;            /**< Receive window size. */
 } llcp_params_t;
 
+/**
+ * @brief LLCP link state context.
+ */
 typedef struct {
-  uint8_t nfcid3[10];
-  uint8_t did;
-  uint8_t bs;
-  uint8_t br;
-  uint8_t pp;
-  uint8_t to;
-  uint16_t lr;
-  uint16_t rwt_ms;
-  uint8_t pni;
-  llcp_params_t local;
-  llcp_params_t remote;
-  llcp_params_t negotiated;
-  bool llcp_active;
+  uint8_t nfcid3[10];       /**< NFC-DEP Identifier (10 bytes). */
+  uint8_t did;              /**< Device Identifier. */
+  uint8_t bs;               /**< Supported send bit rates. */
+  uint8_t br;               /**< Supported receive bit rates. */
+  uint8_t pp;               /**< Protocol Parameters byte. */
+  uint8_t to;               /**< Timeout value. */
+  uint16_t lr;              /**< Length Reduction value. */
+  uint16_t rwt_ms;          /**< Response Waiting Time in ms. */
+  uint8_t pni;              /**< Packet Number Information. */
+  llcp_params_t local;      /**< Local link parameters. */
+  llcp_params_t remote;     /**< Remote link parameters. */
+  llcp_params_t negotiated; /**< Negotiated link parameters. */
+  bool llcp_active;         /**< true if LLCP link is active. */
 } llcp_link_t;
 
+/**
+ * @brief Fill LLCP parameters with default values.
+ *
+ * @param[out] params  Parameters to initialise.
+ */
 void llcp_params_default(llcp_params_t *params);
+
+/**
+ * @brief Initialise an LLCP link context to defaults.
+ *
+ * @param[out] link  Link context to initialise.
+ */
 void llcp_link_init(llcp_link_t *link);
+
+/**
+ * @brief Build General Bytes (GT) TLV payload from local parameters.
+ *
+ * @param params  Local LLCP parameters.
+ * @param[out] out  Output buffer for GT bytes.
+ * @param max       Output buffer capacity.
+ * @return Number of bytes written.
+ */
 size_t llcp_build_gt(const llcp_params_t *params, uint8_t *out, size_t max);
+
+/**
+ * @brief Parse General Bytes (GT) TLV payload into parameters.
+ *
+ * @param gt       Input GT bytes.
+ * @param gt_len   Length of GT bytes.
+ * @param[out] out Parsed parameters.
+ * @return true on success, false on parse error.
+ */
 bool llcp_parse_gt(const uint8_t *gt, size_t gt_len, llcp_params_t *out);
 
+/**
+ * @brief Activate LLCP as initiator over NFC-DEP.
+ *
+ * @param link  Link context (local params must be set).
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT if target does not respond
+ */
 hb_nfc_err_t llcp_initiator_activate(llcp_link_t *link);
+
+/**
+ * @brief Exchange a single LLCP PDU (send TX, receive RX).
+ *
+ * @param link        Active LLCP link context.
+ * @param tx_pdu      PDU bytes to send.
+ * @param tx_len      Length of TX PDU.
+ * @param[out] rx_pdu Receive buffer for response PDU.
+ * @param rx_max      Receive buffer capacity.
+ * @param timeout_ms  Timeout in milliseconds.
+ * @return Number of bytes received, or negative on error.
+ */
 int llcp_exchange_pdu(llcp_link_t *link,
                       const uint8_t *tx_pdu,
                       size_t tx_len,
@@ -94,7 +149,30 @@ int llcp_exchange_pdu(llcp_link_t *link,
                       size_t rx_max,
                       int timeout_ms);
 
+/**
+ * @brief Build an LLCP PDU header (DSAP/PTYPE/SSAP).
+ *
+ * @param dsap   Destination Service Access Point.
+ * @param ptype  PDU type.
+ * @param ssap   Source Service Access Point.
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @return Number of bytes written.
+ */
 size_t llcp_build_header(uint8_t dsap, uint8_t ptype, uint8_t ssap, uint8_t *out, size_t max);
+
+/**
+ * @brief Parse an LLCP PDU header.
+ *
+ * @param pdu          Input PDU buffer.
+ * @param len          PDU length.
+ * @param[out] dsap    Destination SAP.
+ * @param[out] ptype   PDU type.
+ * @param[out] ssap    Source SAP.
+ * @param[out] ns      Send sequence number (I-PDU only).
+ * @param[out] nr      Receive sequence number (I/RR/RNR only).
+ * @return true on success, false if PDU is too short.
+ */
 bool llcp_parse_header(const uint8_t *pdu,
                        size_t len,
                        uint8_t *dsap,
@@ -103,19 +181,96 @@ bool llcp_parse_header(const uint8_t *pdu,
                        uint8_t *ns,
                        uint8_t *nr);
 
+/**
+ * @brief Build a SYMM (keep-alive) PDU.
+ *
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @return Number of bytes written.
+ */
 size_t llcp_build_symm(uint8_t *out, size_t max);
+
+/**
+ * @brief Build a UI (Unnumbered Information) PDU.
+ *
+ * @param dsap      Destination SAP.
+ * @param ssap      Source SAP.
+ * @param info      Information payload.
+ * @param info_len  Length of info payload.
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @return Number of bytes written.
+ */
 size_t llcp_build_ui(
     uint8_t dsap, uint8_t ssap, const uint8_t *info, size_t info_len, uint8_t *out, size_t max);
+
+/**
+ * @brief Build a CONNECT PDU with optional service name and parameters.
+ *
+ * @param dsap          Destination SAP.
+ * @param ssap          Source SAP.
+ * @param service_name  Service name string (NULL if not needed).
+ * @param params        Connection parameters (NULL for defaults).
+ * @param[out] out      Output buffer.
+ * @param max           Output buffer capacity.
+ * @return Number of bytes written.
+ */
 size_t llcp_build_connect(uint8_t dsap,
                           uint8_t ssap,
                           const char *service_name,
                           const llcp_params_t *params,
                           uint8_t *out,
                           size_t max);
+
+/**
+ * @brief Build a CC (Connection Complete) PDU.
+ *
+ * @param dsap      Destination SAP.
+ * @param ssap      Source SAP.
+ * @param params    Connection parameters (NULL for defaults).
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @return Number of bytes written.
+ */
 size_t
 llcp_build_cc(uint8_t dsap, uint8_t ssap, const llcp_params_t *params, uint8_t *out, size_t max);
+
+/**
+ * @brief Build a DISC (Disconnect) PDU.
+ *
+ * @param dsap      Destination SAP.
+ * @param ssap      Source SAP.
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @return Number of bytes written.
+ */
 size_t llcp_build_disc(uint8_t dsap, uint8_t ssap, uint8_t *out, size_t max);
+
+/**
+ * @brief Build a DM (Disconnected Mode) PDU.
+ *
+ * @param dsap      Destination SAP.
+ * @param ssap      Source SAP.
+ * @param reason    Disconnect reason code.
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @return Number of bytes written.
+ */
 size_t llcp_build_dm(uint8_t dsap, uint8_t ssap, uint8_t reason, uint8_t *out, size_t max);
+
+/**
+ * @brief Build an I (Information) PDU.
+ *
+ * @param dsap      Destination SAP.
+ * @param ssap      Source SAP.
+ * @param ns        Send sequence number.
+ * @param nr        Receive sequence number.
+ * @param info      Information payload.
+ * @param info_len  Length of info payload.
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @return Number of bytes written.
+ */
 size_t llcp_build_i(uint8_t dsap,
                     uint8_t ssap,
                     uint8_t ns,
@@ -124,14 +279,89 @@ size_t llcp_build_i(uint8_t dsap,
                     size_t info_len,
                     uint8_t *out,
                     size_t max);
+
+/**
+ * @brief Build an RR (Receive Ready) PDU.
+ *
+ * @param dsap      Destination SAP.
+ * @param ssap      Source SAP.
+ * @param nr        Receive sequence number.
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @return Number of bytes written.
+ */
 size_t llcp_build_rr(uint8_t dsap, uint8_t ssap, uint8_t nr, uint8_t *out, size_t max);
+
+/**
+ * @brief Build an RNR (Receive Not Ready) PDU.
+ *
+ * @param dsap      Destination SAP.
+ * @param ssap      Source SAP.
+ * @param nr        Receive sequence number.
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @return Number of bytes written.
+ */
 size_t llcp_build_rnr(uint8_t dsap, uint8_t ssap, uint8_t nr, uint8_t *out, size_t max);
 
+/**
+ * @brief Encode a VERSION TLV.
+ *
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @param version   Version byte (major << 4 | minor).
+ * @return Number of bytes written.
+ */
 size_t llcp_tlv_version(uint8_t *out, size_t max, uint8_t version);
+
+/**
+ * @brief Encode a MIUX TLV.
+ *
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @param miux      MIUX value (MIU extension).
+ * @return Number of bytes written.
+ */
 size_t llcp_tlv_miux(uint8_t *out, size_t max, uint16_t miux);
+
+/**
+ * @brief Encode a WKS (Well-Known Services) TLV.
+ *
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @param wks       Well-Known Services bitmap.
+ * @return Number of bytes written.
+ */
 size_t llcp_tlv_wks(uint8_t *out, size_t max, uint16_t wks);
+
+/**
+ * @brief Encode an LTO (Link Timeout) TLV.
+ *
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @param lto       Link Timeout value (units of 10 ms).
+ * @return Number of bytes written.
+ */
 size_t llcp_tlv_lto(uint8_t *out, size_t max, uint8_t lto);
+
+/**
+ * @brief Encode an RW (Receive Window) TLV.
+ *
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @param rw        Receive Window size.
+ * @return Number of bytes written.
+ */
 size_t llcp_tlv_rw(uint8_t *out, size_t max, uint8_t rw);
+
+/**
+ * @brief Encode an SN (Service Name) TLV.
+ *
+ * @param[out] out  Output buffer.
+ * @param max       Output buffer capacity.
+ * @param sn        Null-terminated service name string.
+ * @return Number of bytes written.
+ */
 size_t llcp_tlv_sn(uint8_t *out, size_t max, const char *sn);
 
 #ifdef __cplusplus

@@ -42,11 +42,44 @@ extern "C" {
 #define SNEP_RES_UNSUPPORTED_VER 0xE1U
 #define SNEP_RES_REJECT          0xFFU
 
+/**
+ * @brief Return a human-readable string for a SNEP response code.
+ *
+ * @param code  SNEP response code byte.
+ * @return Static string describing the response code.
+ */
 const char *snep_resp_str(uint8_t code);
 
+/**
+ * @brief Send an NDEF message to a SNEP server via PUT request.
+ *
+ * @param link        Active LLCP link context.
+ * @param ndef        NDEF message bytes.
+ * @param ndef_len    Length of NDEF message.
+ * @param[out] resp_code  Server response code on success.
+ * @param timeout_ms  Timeout in milliseconds.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT if server does not respond
+ */
 hb_nfc_err_t snep_client_put(
     llcp_link_t *link, const uint8_t *ndef, size_t ndef_len, uint8_t *resp_code, int timeout_ms);
 
+/**
+ * @brief Send a SNEP GET request and receive the NDEF response.
+ *
+ * @param link            Active LLCP link context.
+ * @param req_ndef        NDEF message describing the request.
+ * @param req_len         Length of request NDEF.
+ * @param[out] out        Output buffer for response NDEF.
+ * @param out_max         Output buffer capacity.
+ * @param[out] out_len    Set to actual response length on success.
+ * @param[out] resp_code  Server response code.
+ * @param timeout_ms      Timeout in milliseconds.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT if server does not respond
+ */
 hb_nfc_err_t snep_client_get(llcp_link_t *link,
                              const uint8_t *req_ndef,
                              size_t req_len,
