@@ -14,44 +14,53 @@
 
 #include "nfc_menu_ui.h"
 
+#include "esp_log.h"
+
 #include "ui_theme.h"
 #include "menu_component_ui.h"
 #include "ui_manager.h"
 #include "buttons_gpio.h"
-#include "esp_log.h"
 
-static lv_obj_t *screen_nfc = NULL;
-static menu_component_t menu;
-static lv_timer_t *nav_timer = NULL;
+static const char *TAG = "NFC_MENU_UI";
 
-static bool btn_up_last = false;
-static bool btn_down_last = false;
-static bool btn_left_last = false;
-static bool btn_right_last = false;
-static bool btn_ok_last = false;
-static bool btn_back_last = false;
+#define NAV_TIMER_PERIOD_MS 50
 
-static const struct {
+typedef struct {
   const char *name;
   const char *icon;
   int target;
-} items[] = {
+} nfc_menu_item_t;
+
+static const nfc_menu_item_t ITEMS[] = {
     {"READ TAG", NULL, -1},
     {"WRITE TAG", NULL, -1},
     {"EMULATE", NULL, -1},
     {"SAVED TAGS", NULL, -1},
 };
+#define ITEM_COUNT (sizeof(ITEMS) / sizeof(ITEMS[0]))
 
-#define ITEM_COUNT (sizeof(items) / sizeof(items[0]))
+static lv_obj_t *s_screen = NULL;
+static menu_component_t s_menu;
+static lv_timer_t *s_nav_timer = NULL;
+
+static bool s_btn_up_last = false;
+static bool s_btn_down_last = false;
+static bool s_btn_left_last = false;
+static bool s_btn_right_last = false;
+static bool s_btn_ok_last = false;
+static bool s_btn_back_last = false;
+
+static void nav_timer_cb(lv_timer_t *t);
 
 static void nav_timer_cb(lv_timer_t *t) {
-  if (lv_screen_active() != screen_nfc) {
+  if (lv_screen_active() != s_screen) {
     lv_timer_delete(t);
-    nav_timer = NULL;
+    s_nav_timer = NULL;
     return;
   }
   if (ui_input_is_locked())
     return;
+
   bool up = up_button_is_down();
   bool down = down_button_is_down();
   bool left = left_button_is_down();
@@ -59,43 +68,50 @@ static void nav_timer_cb(lv_timer_t *t) {
   bool ok = ok_button_is_down();
   bool back = back_button_is_down();
 
-  if ((back && !btn_back_last) || (left && !btn_left_last)) {
+  if ((back && !s_btn_back_last) || (left && !s_btn_left_last)) {
     ui_switch_screen(SCREEN_MENU);
     return;
   }
-  if ((ok && !btn_ok_last) || (right && !btn_right_last)) {
-    int sel = menu_component_get_selected(&menu);
-    if (sel >= 0 && sel < (int)ITEM_COUNT && items[sel].target >= 0) {
-      ui_switch_screen(items[sel].target);
+
+  if ((ok && !s_btn_ok_last) || (right && !s_btn_right_last)) {
+    int sel = menu_component_get_selected(&s_menu);
+    if (sel >= 0 && (size_t)sel < ITEM_COUNT && ITEMS[sel].target >= 0) {
+      ui_switch_screen(ITEMS[sel].target);
     }
   }
 
-  btn_up_last = up;
-  btn_down_last = down;
-  btn_left_last = left;
-  btn_right_last = right;
-  btn_ok_last = ok;
-  btn_back_last = back;
+  if (down && !s_btn_down_last)
+    menu_component_next(&s_menu);
+  if (up && !s_btn_up_last)
+    menu_component_prev(&s_menu);
+
+  s_btn_up_last = up;
+  s_btn_down_last = down;
+  s_btn_left_last = left;
+  s_btn_right_last = right;
+  s_btn_ok_last = ok;
+  s_btn_back_last = back;
 }
 
 void ui_nfc_menu_open(void) {
-  if (screen_nfc) {
-    lv_obj_del(screen_nfc);
-    screen_nfc = NULL;
-  }
-  screen_nfc = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(screen_nfc, current_theme.screen_base, 0);
-  lv_obj_set_style_bg_opa(screen_nfc, LV_OPA_COVER, 0);
-  lv_obj_remove_flag(screen_nfc, LV_OBJ_FLAG_SCROLLABLE);
-
-  menu = menu_component_create(screen_nfc, "NFC", NULL);
-
-  for (int i = 0; i < (int)ITEM_COUNT; i++) {
-    menu_component_add_item(&menu, items[i].icon, items[i].name);
+  if (s_screen != NULL) {
+    lv_obj_del(s_screen);
+    s_screen = NULL;
   }
 
-  if (nav_timer == NULL)
-    nav_timer = lv_timer_create(nav_timer_cb, 50, NULL);
+  s_screen = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(s_screen, current_theme.screen_base, 0);
+  lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
+  lv_obj_remove_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
 
-  lv_screen_load(screen_nfc);
+  s_menu = menu_component_create(s_screen, "NFC", NULL);
+
+  for (size_t i = 0; i < ITEM_COUNT; i++) {
+    menu_component_add_item(&s_menu, ITEMS[i].icon, ITEMS[i].name);
+  }
+
+  if (s_nav_timer == NULL)
+    s_nav_timer = lv_timer_create(nav_timer_cb, NAV_TIMER_PERIOD_MS, NULL);
+
+  lv_screen_load(s_screen);
 }
