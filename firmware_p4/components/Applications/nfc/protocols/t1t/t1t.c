@@ -21,6 +21,7 @@
 #include "t1t.h"
 
 #include <string.h>
+
 #include "esp_log.h"
 
 #include "iso14443a.h"
@@ -34,7 +35,7 @@
 #include "st25r3916_core.h"
 #include "hb_nfc_spi.h"
 
-#define TAG "t1t"
+static const char *TAG = "NFC_T1T";
 
 #define T1T_ATQA0 0x0CU
 #define T1T_ATQA1 0x00U
@@ -55,6 +56,19 @@
 #define T1T_RALL_RESP_LEN   123U
 #define T1T_RALL_DATA_LEN   (T1T_RALL_RESP_LEN - 2U)
 
+#define T1T_BLOCK_SIZE      8U
+#define T1T_FIFO_CHUNK_SIZE 32U
+#define T1T_RALL_UID_MIN    9U
+
+#define T1T_HR0_TYPE_MASK    0xF0U
+#define T1T_HR0_TYPE_VALUE   0x10U
+#define T1T_HR0_VARIANT_MASK 0x0FU
+#define T1T_HR0_TOPAZ512     0x02U
+
+#define T1T_TIMEOUT_MS       20
+#define T1T_TIMEOUT_READ8_MS 30
+#define T1T_TIMEOUT_RALL_MS  50
+
 static void t1t_set_antcl(bool enable) {
   uint8_t v = 0;
   hb_nfc_spi_reg_read(ST25R3916_REG_ISO14443A, &v);
@@ -68,7 +82,7 @@ static void t1t_set_antcl(bool enable) {
 static void t1t_fifo_read_all(uint8_t *out, size_t len) {
   size_t off = 0;
   while (off < len) {
-    size_t chunk = (len - off > 32U) ? 32U : (len - off);
+    size_t chunk = (len - off > T1T_FIFO_CHUNK_SIZE) ? T1T_FIFO_CHUNK_SIZE : (len - off);
     (void)st25r3916_fifo_read(&out[off], chunk);
     off += chunk;
   }
@@ -81,7 +95,7 @@ static int t1t_tx_bits(const uint8_t *tx,
                        size_t rx_max,
                        size_t rx_min,
                        int timeout_ms) {
-  if (!tx || tx_len == 0)
+  if (tx == NULL || tx_len == 0)
     return 0;
 
   st25r3916_fifo_clear();
@@ -107,14 +121,14 @@ static int t1t_tx_bits(const uint8_t *tx,
   uint16_t count = 0;
   (void)st25r3916_fifo_wait(rx_min, timeout_ms, &count);
   if (count < rx_min) {
-    if (count > 0 && rx && rx_max > 0) {
+    if (count > 0 && rx != NULL && rx_max > 0) {
       size_t to_read = (count > rx_max) ? rx_max : count;
       t1t_fifo_read_all(rx, to_read);
     }
     return 0;
   }
 
-  if (!rx || rx_max == 0)
+  if (rx == NULL || rx_max == 0)
     return (int)count;
 
   size_t to_read = (count > rx_max) ? rx_max : count;
@@ -124,7 +138,7 @@ static int t1t_tx_bits(const uint8_t *tx,
 
 static int t1t_send_sequence(
     const uint8_t *seq, size_t seq_len, uint8_t *rx, size_t rx_max, size_t rx_min, int timeout_ms) {
-  if (!seq || seq_len == 0)
+  if (seq == NULL || seq_len == 0)
     return 0;
 
   if (t1t_tx_bits(&seq[0], 1, 7, NULL, 0, 0, 0) <= 0)
@@ -152,7 +166,7 @@ static size_t t1t_append_crc(uint8_t *buf, size_t len, size_t max) {
 }
 
 static bool t1t_uid4_valid(const t1t_tag_t *tag) {
-  return tag && tag->uid_len >= 4U;
+  return tag != NULL && tag->uid_len >= 4U;
 }
 
 hb_nfc_err_t t1t_poller_init(void) {
@@ -183,13 +197,13 @@ hb_nfc_err_t t1t_poller_init(void) {
 }
 
 bool t1t_is_atqa(const uint8_t atqa[2]) {
-  if (!atqa)
+  if (atqa == NULL)
     return false;
   return (atqa[0] == T1T_ATQA0 && atqa[1] == T1T_ATQA1);
 }
 
 hb_nfc_err_t t1t_rid(t1t_tag_t *tag) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
   memset(tag, 0, sizeof(*tag));
 
@@ -207,7 +221,7 @@ hb_nfc_err_t t1t_rid(t1t_tag_t *tag) {
     return HB_NFC_ERR_INTERNAL;
 
   uint8_t rx[16] = {0};
-  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_RID_RESP_LEN, 20);
+  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_RID_RESP_LEN, T1T_TIMEOUT_MS);
   if (len < (int)T1T_RID_RESP_LEN)
     return HB_NFC_ERR_TIMEOUT;
 
@@ -216,9 +230,9 @@ hb_nfc_err_t t1t_rid(t1t_tag_t *tag) {
   tag->hr0 = rx[0];
   tag->hr1 = rx[1];
 
-  if ((tag->hr0 & 0xF0U) != 0x10U)
+  if ((tag->hr0 & T1T_HR0_TYPE_MASK) != T1T_HR0_TYPE_VALUE)
     return HB_NFC_ERR_PROTOCOL;
-  tag->is_topaz512 = ((tag->hr0 & 0x0FU) == 0x02U);
+  tag->is_topaz512 = ((tag->hr0 & T1T_HR0_VARIANT_MASK) == T1T_HR0_TOPAZ512);
 
   tag->uid[0] = rx[2];
   tag->uid[1] = rx[3];
@@ -229,7 +243,7 @@ hb_nfc_err_t t1t_rid(t1t_tag_t *tag) {
 }
 
 hb_nfc_err_t t1t_select(t1t_tag_t *tag) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
 
   hb_nfc_err_t err = t1t_poller_init();
@@ -246,7 +260,7 @@ hb_nfc_err_t t1t_select(t1t_tag_t *tag) {
 }
 
 hb_nfc_err_t t1t_rall(t1t_tag_t *tag, uint8_t *out, size_t out_max, size_t *out_len) {
-  if (!tag || !out)
+  if (tag == NULL || out == NULL)
     return HB_NFC_ERR_PARAM;
   if (!t1t_uid4_valid(tag))
     return HB_NFC_ERR_PARAM;
@@ -264,7 +278,7 @@ hb_nfc_err_t t1t_rall(t1t_tag_t *tag, uint8_t *out, size_t out_max, size_t *out_
     return HB_NFC_ERR_INTERNAL;
 
   uint8_t rx[128] = {0};
-  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_RALL_RESP_LEN, 50);
+  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_RALL_RESP_LEN, T1T_TIMEOUT_RALL_MS);
   if (len < (int)T1T_RALL_RESP_LEN)
     return HB_NFC_ERR_TIMEOUT;
 
@@ -274,10 +288,10 @@ hb_nfc_err_t t1t_rall(t1t_tag_t *tag, uint8_t *out, size_t out_max, size_t *out_
   if (data_len > out_max)
     return HB_NFC_ERR_PARAM;
   memcpy(out, rx, data_len);
-  if (out_len)
+  if (out_len != NULL)
     *out_len = data_len;
 
-  if (data_len >= 9U) {
+  if (data_len >= T1T_RALL_UID_MIN) {
     memcpy(tag->uid, &out[2], T1T_UID_LEN);
     tag->uid_len = T1T_UID_LEN;
     tag->hr0 = out[0];
@@ -287,7 +301,7 @@ hb_nfc_err_t t1t_rall(t1t_tag_t *tag, uint8_t *out, size_t out_max, size_t *out_
 }
 
 hb_nfc_err_t t1t_read_byte(const t1t_tag_t *tag, uint8_t addr, uint8_t *data) {
-  if (!tag || !data)
+  if (tag == NULL || data == NULL)
     return HB_NFC_ERR_PARAM;
   if (!t1t_uid4_valid(tag))
     return HB_NFC_ERR_PARAM;
@@ -303,7 +317,7 @@ hb_nfc_err_t t1t_read_byte(const t1t_tag_t *tag, uint8_t addr, uint8_t *data) {
     return HB_NFC_ERR_INTERNAL;
 
   uint8_t rx[8] = {0};
-  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_READ_RESP_LEN, 20);
+  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_READ_RESP_LEN, T1T_TIMEOUT_MS);
   if (len < (int)T1T_READ_RESP_LEN)
     return HB_NFC_ERR_TIMEOUT;
   if (!iso14443a_check_crc(rx, (size_t)len))
@@ -315,7 +329,7 @@ hb_nfc_err_t t1t_read_byte(const t1t_tag_t *tag, uint8_t addr, uint8_t *data) {
 }
 
 hb_nfc_err_t t1t_write_e(const t1t_tag_t *tag, uint8_t addr, uint8_t data) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
   if (!t1t_uid4_valid(tag))
     return HB_NFC_ERR_PARAM;
@@ -332,7 +346,7 @@ hb_nfc_err_t t1t_write_e(const t1t_tag_t *tag, uint8_t addr, uint8_t data) {
     return HB_NFC_ERR_INTERNAL;
 
   uint8_t rx[8] = {0};
-  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_WRITE_RESP_LEN, 20);
+  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_WRITE_RESP_LEN, T1T_TIMEOUT_MS);
   if (len < (int)T1T_WRITE_RESP_LEN)
     return HB_NFC_ERR_TIMEOUT;
   if (!iso14443a_check_crc(rx, (size_t)len))
@@ -343,7 +357,7 @@ hb_nfc_err_t t1t_write_e(const t1t_tag_t *tag, uint8_t addr, uint8_t data) {
 }
 
 hb_nfc_err_t t1t_write_ne(const t1t_tag_t *tag, uint8_t addr, uint8_t data) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
   if (!t1t_uid4_valid(tag))
     return HB_NFC_ERR_PARAM;
@@ -360,7 +374,7 @@ hb_nfc_err_t t1t_write_ne(const t1t_tag_t *tag, uint8_t addr, uint8_t data) {
     return HB_NFC_ERR_INTERNAL;
 
   uint8_t rx[8] = {0};
-  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_WRITE_RESP_LEN, 20);
+  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_WRITE_RESP_LEN, T1T_TIMEOUT_MS);
   if (len < (int)T1T_WRITE_RESP_LEN)
     return HB_NFC_ERR_TIMEOUT;
   if (!iso14443a_check_crc(rx, (size_t)len))
@@ -371,7 +385,7 @@ hb_nfc_err_t t1t_write_ne(const t1t_tag_t *tag, uint8_t addr, uint8_t data) {
 }
 
 hb_nfc_err_t t1t_read8(const t1t_tag_t *tag, uint8_t block, uint8_t out[8]) {
-  if (!tag || !out)
+  if (tag == NULL || out == NULL)
     return HB_NFC_ERR_PARAM;
   if (!tag->is_topaz512)
     return HB_NFC_ERR_PARAM;
@@ -382,7 +396,7 @@ hb_nfc_err_t t1t_read8(const t1t_tag_t *tag, uint8_t block, uint8_t out[8]) {
   size_t pos = 0;
   cmd[pos++] = T1T_CMD_READ8;
   cmd[pos++] = block;
-  for (int i = 0; i < 8; i++)
+  for (int i = 0; i < (int)T1T_BLOCK_SIZE; i++)
     cmd[pos++] = 0x00U;
   memcpy(&cmd[pos], tag->uid, T1T_UID4_LEN);
   pos += T1T_UID4_LEN;
@@ -391,19 +405,19 @@ hb_nfc_err_t t1t_read8(const t1t_tag_t *tag, uint8_t block, uint8_t out[8]) {
     return HB_NFC_ERR_INTERNAL;
 
   uint8_t rx[16] = {0};
-  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_READ8_RESP_LEN, 30);
+  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_READ8_RESP_LEN, T1T_TIMEOUT_READ8_MS);
   if (len < (int)T1T_READ8_RESP_LEN)
     return HB_NFC_ERR_TIMEOUT;
   if (!iso14443a_check_crc(rx, (size_t)len))
     return HB_NFC_ERR_CRC;
   if (rx[0] != block)
     return HB_NFC_ERR_PROTOCOL;
-  memcpy(out, &rx[1], 8);
+  memcpy(out, &rx[1], T1T_BLOCK_SIZE);
   return HB_NFC_OK;
 }
 
 hb_nfc_err_t t1t_write_e8(const t1t_tag_t *tag, uint8_t block, const uint8_t data[8]) {
-  if (!tag || !data)
+  if (tag == NULL || data == NULL)
     return HB_NFC_ERR_PARAM;
   if (!tag->is_topaz512)
     return HB_NFC_ERR_PARAM;
@@ -414,8 +428,8 @@ hb_nfc_err_t t1t_write_e8(const t1t_tag_t *tag, uint8_t block, const uint8_t dat
   size_t pos = 0;
   cmd[pos++] = T1T_CMD_WRITE_E8;
   cmd[pos++] = block;
-  memcpy(&cmd[pos], data, 8);
-  pos += 8;
+  memcpy(&cmd[pos], data, T1T_BLOCK_SIZE);
+  pos += T1T_BLOCK_SIZE;
   memcpy(&cmd[pos], tag->uid, T1T_UID4_LEN);
   pos += T1T_UID4_LEN;
   pos = t1t_append_crc(cmd, pos, sizeof(cmd));
@@ -423,14 +437,14 @@ hb_nfc_err_t t1t_write_e8(const t1t_tag_t *tag, uint8_t block, const uint8_t dat
     return HB_NFC_ERR_INTERNAL;
 
   uint8_t rx[16] = {0};
-  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_WRITE8_RESP_LEN, 30);
+  int len = t1t_send_sequence(cmd, pos, rx, sizeof(rx), T1T_WRITE8_RESP_LEN, T1T_TIMEOUT_READ8_MS);
   if (len < (int)T1T_WRITE8_RESP_LEN)
     return HB_NFC_ERR_TIMEOUT;
   if (!iso14443a_check_crc(rx, (size_t)len))
     return HB_NFC_ERR_CRC;
   if (rx[0] != block)
     return HB_NFC_ERR_PROTOCOL;
-  if (memcmp(&rx[1], data, 8) != 0)
+  if (memcmp(&rx[1], data, T1T_BLOCK_SIZE) != 0)
     return HB_NFC_ERR_PROTOCOL;
   return HB_NFC_OK;
 }
