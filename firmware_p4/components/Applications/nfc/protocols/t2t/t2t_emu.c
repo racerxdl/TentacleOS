@@ -41,6 +41,7 @@
 
 #include <string.h>
 #include <stdio.h>
+
 #include "esp_log.h"
 #include "esp_random.h"
 #include "freertos/FreeRTOS.h"
@@ -54,7 +55,7 @@
 #include "st25r3916_irq.h"
 #include "hb_nfc_spi.h"
 
-static const char *TAG = "t2t_emu";
+static const char *TAG = "NFC_T2T_EMU";
 
 #define T2T_PAGE_SIZE 4
 #define T2T_MAX_PAGES 256
@@ -73,6 +74,60 @@ static const char *TAG = "t2t_emu";
 #define NTAG_ACCESS_PROT 0x80
 
 #define OP_CTRL_TARGET 0xC3
+
+#define IC_IDENTITY_NOT_RESPONDING_LO 0x00
+#define IC_IDENTITY_NOT_RESPONDING_HI 0xFF
+#define T2T_IO_CONF2_SUP_AAT          0x80
+#define T2T_AUX_DEF_NFC_N             0x10
+#define T2T_PT_MOD_OOK                0x60
+#define T2T_BIT_RATE_RX_212           0x10
+
+#define AUX_DISPLAY_OSC_MASK 0x14U
+#define FIFO_LEN_MASK        0x7FU
+
+#define PTA_STATE_MASK        0x0FU
+#define PTA_STATE_IDLE        0x00U
+#define PTA_STATE_READY_A     0x01U
+#define PTA_STATE_READY_Ax    0x02U
+#define PTA_STATE_ACTIVE      0x03U
+#define PTA_STATE_SELECTED    0x05U
+#define PTA_STATE_ACTIVE_STAR 0x0DU
+
+#define PT_MEM_SIZE   15
+#define PT_IDX_ATQA_0 10
+#define PT_IDX_ATQA_1 11
+#define PT_IDX_CT     12
+#define PT_IDX_SAK    13
+
+#define ISO14443A_CASCADE_TAG 0x88U
+#define ISO14443A_CT_BYTE     0x04U
+
+#define T2T_INTERNAL_BYTE     0x48U
+#define T2T_CC_NDEF_MAGIC     0xE1U
+#define T2T_CC_VERSION_10     0x10U
+#define T2T_READ_RESP_SIZE    16
+#define T2T_FAST_READ_MAX_LEN 256
+#define T2T_COMP_WRITE_LEN    16
+
+#define T2T_STATIC_LOCK_BYTE0      10
+#define T2T_STATIC_LOCK_BYTE1      11
+#define T2T_FIRST_LOCKED_PAGE      2
+#define T2T_STATIC_LOCK_START      3
+#define T2T_STATIC_LOCK_END        19
+#define T2T_DYN_LOCK_BASE          19
+#define T2T_DYN_LOCK_PAGES_PER_BIT 4U
+
+#define NDEF_TLV_MESSAGE     0x03U
+#define NDEF_TLV_TERMINATOR  0xFEU
+#define NDEF_REC_HDR_TEXT    0xD1U
+#define NDEF_TYPE_LEN_TEXT   0x01U
+#define NDEF_TEXT_UTF8_LANG2 0x02U
+
+#define T2T_OSC_TIMEOUT_MS    200
+#define T2T_DELAY_SHORT_MS    2
+#define T2T_DELAY_MEDIUM_MS   5
+#define T2T_DELAY_LONG_MS     10
+#define T2T_IDLE_LOG_INTERVAL 500U
 
 static const uint8_t k_atqa[2] = {0x44, 0x00};
 static const uint8_t k_sak = 0x00;
@@ -201,7 +256,8 @@ static bool wait_oscillator(int timeout_ms) {
     hb_nfc_spi_reg_read(ST25R3916_REG_AUX_DISPLAY, &aux);
     hb_nfc_spi_reg_read(ST25R3916_REG_MAIN_INT, &mi);
     hb_nfc_spi_reg_read(ST25R3916_REG_TARGET_INT, &ti);
-    if (((aux & 0x14) != 0) || ((mi & 0x80) != 0) || ((ti & 0x08) != 0)) {
+    if (((aux & AUX_DISPLAY_OSC_MASK) != 0) || ((mi & ST25R3916_IRQ_MAIN_OSC) != 0) ||
+        ((ti & ST25R3916_IRQ_TGT_OSCF) != 0)) {
       ESP_LOGI(TAG, "Osc OK in %dms: AUX=0x%02X MAIN=0x%02X TGT=0x%02X", i, aux, mi, ti);
       return true;
     }
@@ -228,7 +284,7 @@ static void t2t_reset_auth(void) {
 }
 
 static uint16_t get_static_lock_bits(void) {
-  return (uint16_t)s_mem[10] | ((uint16_t)s_mem[11] << 8);
+  return (uint16_t)s_mem[T2T_STATIC_LOCK_BYTE0] | ((uint16_t)s_mem[T2T_STATIC_LOCK_BYTE1] << 8);
 }
 
 static uint16_t get_dynamic_lock_bits(void) {
@@ -239,19 +295,18 @@ static uint16_t get_dynamic_lock_bits(void) {
 }
 
 static bool is_page_locked(uint16_t page) {
-  if (page < 2)
+  if (page < T2T_FIRST_LOCKED_PAGE)
     return true;
 
   uint16_t static_bits = get_static_lock_bits();
-  if (page >= 3 && page < 19) {
-    int bit = (int)(page - 3);
+  if (page >= T2T_STATIC_LOCK_START && page < T2T_STATIC_LOCK_END) {
+    int bit = (int)(page - T2T_STATIC_LOCK_START);
     return ((static_bits >> bit) & 0x01U) != 0;
   }
 
   uint16_t dyn_bits = get_dynamic_lock_bits();
-  int base = 19;
-  if (page >= base) {
-    int idx = (int)((page - base) / 4U);
+  if (page >= T2T_DYN_LOCK_BASE) {
+    int idx = (int)((page - T2T_DYN_LOCK_BASE) / T2T_DYN_LOCK_PAGES_PER_BIT);
     if (idx >= 0 && idx < 16)
       return ((dyn_bits >> idx) & 0x01U) != 0;
   }
@@ -311,45 +366,51 @@ static void rotate_left_8(uint8_t *out, const uint8_t *in) {
   out[7] = in[0];
 }
 
-static bool des3_cbc_crypt(bool encrypt,
-                           const uint8_t key[16],
-                           const uint8_t iv_in[8],
-                           const uint8_t *in,
-                           size_t len,
-                           uint8_t *out,
-                           uint8_t iv_out[8]) {
-  if ((len % 8) != 0 || !key || !iv_in || !in || !out)
+/**
+ * @brief Parameters for des3_cbc_crypt().
+ */
+typedef struct {
+  bool encrypt;         /**< @brief true for encrypt, false for decrypt. */
+  const uint8_t *key;   /**< @brief 16-byte 2-key 3DES key. */
+  const uint8_t *iv_in; /**< @brief 8-byte input IV. */
+  uint8_t *iv_out;      /**< @brief 8-byte output IV (NULL to discard). */
+} des3_cbc_params_t;
+
+static bool
+des3_cbc_crypt(const des3_cbc_params_t *p, const uint8_t *in, size_t len, uint8_t *out) {
+  if (!p || (len % 8) != 0 || !p->key || !p->iv_in || !in || !out)
     return false;
 
   mbedtls_des3_context ctx;
   mbedtls_des3_init(&ctx);
-  int rc = encrypt ? mbedtls_des3_set2key_enc(&ctx, key) : mbedtls_des3_set2key_dec(&ctx, key);
+  int rc =
+      p->encrypt ? mbedtls_des3_set2key_enc(&ctx, p->key) : mbedtls_des3_set2key_dec(&ctx, p->key);
   if (rc != 0) {
     mbedtls_des3_free(&ctx);
     return false;
   }
 
   uint8_t iv[8];
-  memcpy(iv, iv_in, 8);
+  memcpy(iv, p->iv_in, 8);
   rc = mbedtls_des3_crypt_cbc(
-      &ctx, encrypt ? MBEDTLS_DES_ENCRYPT : MBEDTLS_DES_DECRYPT, len, iv, in, out);
-  if (iv_out)
-    memcpy(iv_out, iv, 8);
+      &ctx, p->encrypt ? MBEDTLS_DES_ENCRYPT : MBEDTLS_DES_DECRYPT, len, iv, in, out);
+  if (p->iv_out)
+    memcpy(p->iv_out, iv, 8);
   mbedtls_des3_free(&ctx);
   return rc == 0;
 }
 
 static hb_nfc_err_t load_pt_memory(void) {
-  uint8_t ptm[15] = {0};
+  uint8_t ptm[PT_MEM_SIZE] = {0};
 
   if (s_uid_len == 4) {
     ptm[0] = s_uid[0];
     ptm[1] = s_uid[1];
     ptm[2] = s_uid[2];
     ptm[3] = s_uid[3];
-    ptm[10] = k_atqa[0];
-    ptm[11] = k_atqa[1];
-    ptm[13] = k_sak;
+    ptm[PT_IDX_ATQA_0] = k_atqa[0];
+    ptm[PT_IDX_ATQA_1] = k_atqa[1];
+    ptm[PT_IDX_SAK] = k_sak;
   } else {
     ptm[0] = s_uid[0];
     ptm[1] = s_uid[1];
@@ -358,32 +419,32 @@ static hb_nfc_err_t load_pt_memory(void) {
     ptm[4] = s_uid[4];
     ptm[5] = s_uid[5];
     ptm[6] = s_uid[6];
-    ptm[10] = k_atqa[0];
-    ptm[11] = k_atqa[1];
-    ptm[12] = 0x04;
-    ptm[13] = k_sak;
+    ptm[PT_IDX_ATQA_0] = k_atqa[0];
+    ptm[PT_IDX_ATQA_1] = k_atqa[1];
+    ptm[PT_IDX_CT] = ISO14443A_CT_BYTE;
+    ptm[PT_IDX_SAK] = k_sak;
   }
 
   ESP_LOGI(TAG, "PT Memory (write):");
-  ESP_LOG_BUFFER_HEX_LEVEL(TAG, ptm, 15, ESP_LOG_INFO);
+  ESP_LOG_BUFFER_HEX_LEVEL(TAG, ptm, PT_MEM_SIZE, ESP_LOG_INFO);
 
-  hb_nfc_err_t err = hb_nfc_spi_pt_mem_write(ST25R3916_SPI_PT_MEM_A_WRITE, ptm, 15);
+  hb_nfc_err_t err = hb_nfc_spi_pt_mem_write(ST25R3916_SPI_PT_MEM_A_WRITE, ptm, PT_MEM_SIZE);
   if (err != HB_NFC_OK) {
     ESP_LOGE(TAG, "PT write fail: %d", err);
     return err;
   }
-  vTaskDelay(pdMS_TO_TICKS(2));
+  vTaskDelay(pdMS_TO_TICKS(T2T_DELAY_SHORT_MS));
 
-  uint8_t rb[15] = {0};
-  err = hb_nfc_spi_pt_mem_read(rb, 15);
+  uint8_t rb[PT_MEM_SIZE] = {0};
+  err = hb_nfc_spi_pt_mem_read(rb, PT_MEM_SIZE);
   if (err != HB_NFC_OK) {
     ESP_LOGE(TAG, "PT readback fail: %d", err);
     return err;
   }
   ESP_LOGI(TAG, "PT Memory (readback):");
-  ESP_LOG_BUFFER_HEX_LEVEL(TAG, rb, 15, ESP_LOG_INFO);
+  ESP_LOG_BUFFER_HEX_LEVEL(TAG, rb, PT_MEM_SIZE, ESP_LOG_INFO);
 
-  if (memcmp(ptm, rb, 15) != 0) {
+  if (memcmp(ptm, rb, PT_MEM_SIZE) != 0) {
     ESP_LOGE(TAG, "PT Memory mismatch!");
     return HB_NFC_ERR_INTERNAL;
   }
@@ -395,9 +456,9 @@ static hb_nfc_err_t load_pt_memory(void) {
              ptm[1],
              ptm[2],
              ptm[3],
-             ptm[10],
-             ptm[11],
-             ptm[13]);
+             ptm[PT_IDX_ATQA_0],
+             ptm[PT_IDX_ATQA_1],
+             ptm[PT_IDX_SAK]);
   } else {
     ESP_LOGI(TAG,
              "PT OK: UID=%02X%02X%02X%02X%02X%02X%02X ATQA=%02X%02X SAK=%02X",
@@ -408,9 +469,9 @@ static hb_nfc_err_t load_pt_memory(void) {
              ptm[4],
              ptm[5],
              ptm[6],
-             ptm[10],
-             ptm[11],
-             ptm[13]);
+             ptm[PT_IDX_ATQA_0],
+             ptm[PT_IDX_ATQA_1],
+             ptm[PT_IDX_SAK]);
   }
   return HB_NFC_OK;
 }
@@ -418,7 +479,7 @@ static hb_nfc_err_t load_pt_memory(void) {
 static void build_memory(const char *text) {
   memset(s_mem, 0x00, s_mem_size);
 
-  uint8_t bcc0 = 0x88 ^ s_uid[0] ^ s_uid[1] ^ s_uid[2];
+  uint8_t bcc0 = ISO14443A_CASCADE_TAG ^ s_uid[0] ^ s_uid[1] ^ s_uid[2];
   uint8_t bcc1 = s_uid[3] ^ s_uid[4] ^ s_uid[5] ^ s_uid[6];
 
   s_mem[0] = s_uid[0];
@@ -430,10 +491,10 @@ static void build_memory(const char *text) {
   s_mem[6] = s_uid[5];
   s_mem[7] = s_uid[6];
   s_mem[8] = bcc1;
-  s_mem[9] = 0x48;
+  s_mem[9] = T2T_INTERNAL_BYTE;
 
-  s_mem[12] = 0xE1;
-  s_mem[13] = 0x10;
+  s_mem[12] = T2T_CC_NDEF_MAGIC;
+  s_mem[13] = T2T_CC_VERSION_10;
   s_mem[14] = s_prof.cc_size;
   s_mem[15] = 0x00;
 
@@ -477,18 +538,18 @@ static void build_memory(const char *text) {
   }
 
   int p = (int)(s_prof.user_start * T2T_PAGE_SIZE);
-  s_mem[p++] = 0x03;
+  s_mem[p++] = NDEF_TLV_MESSAGE;
   s_mem[p++] = (uint8_t)rl;
-  s_mem[p++] = 0xD1;
-  s_mem[p++] = 0x01;
+  s_mem[p++] = NDEF_REC_HDR_TEXT;
+  s_mem[p++] = NDEF_TYPE_LEN_TEXT;
   s_mem[p++] = (uint8_t)pl;
   s_mem[p++] = 'T';
-  s_mem[p++] = 0x02;
+  s_mem[p++] = NDEF_TEXT_UTF8_LANG2;
   s_mem[p++] = 'p';
   s_mem[p++] = 't';
   memcpy(&s_mem[p], text, (size_t)tl);
   p += tl;
-  s_mem[p] = 0xFE;
+  s_mem[p] = NDEF_TLV_TERMINATOR;
 }
 
 hb_nfc_err_t t2t_emu_init(const t2t_emu_config_t *cfg) {
@@ -575,34 +636,34 @@ hb_nfc_err_t t2t_emu_configure_target(void) {
 
   ESP_LOGI(TAG, "T2T configure target");
 
-  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, 0x00);
-  vTaskDelay(pdMS_TO_TICKS(5));
+  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, ST25R3916_OP_CTRL_FIELD_OFF);
+  vTaskDelay(pdMS_TO_TICKS(T2T_DELAY_MEDIUM_MS));
   hb_nfc_spi_direct_cmd(ST25R3916_CMD_SET_DEFAULT);
-  vTaskDelay(pdMS_TO_TICKS(10));
+  vTaskDelay(pdMS_TO_TICKS(T2T_DELAY_LONG_MS));
 
-  hb_nfc_spi_reg_write(0x04, 0x10);
-  vTaskDelay(pdMS_TO_TICKS(2));
+  hb_nfc_spi_reg_write(ST25R3916_REG_BIT_RATE, T2T_BIT_RATE_RX_212);
+  vTaskDelay(pdMS_TO_TICKS(T2T_DELAY_SHORT_MS));
 
   uint8_t ic = 0;
   hb_nfc_spi_reg_read(ST25R3916_REG_IC_IDENTITY, &ic);
-  if (ic == 0x00 || ic == 0xFF) {
+  if (ic == IC_IDENTITY_NOT_RESPONDING_LO || ic == IC_IDENTITY_NOT_RESPONDING_HI) {
     ESP_LOGE(TAG, "Chip not responding: IC=0x%02X", ic);
     return HB_NFC_ERR_INTERNAL;
   }
   ESP_LOGI(TAG, "Chip OK: IC=0x%02X", ic);
 
-  hb_nfc_spi_reg_write(ST25R3916_REG_IO_CONF2, 0x80);
-  vTaskDelay(pdMS_TO_TICKS(2));
+  hb_nfc_spi_reg_write(ST25R3916_REG_IO_CONF2, T2T_IO_CONF2_SUP_AAT);
+  vTaskDelay(pdMS_TO_TICKS(T2T_DELAY_SHORT_MS));
 
-  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, 0x80);
-  wait_oscillator(200);
+  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, ST25R3916_OP_CTRL_EN);
+  wait_oscillator(T2T_OSC_TIMEOUT_MS);
 
   hb_nfc_spi_direct_cmd(ST25R3916_CMD_ADJUST_REGULATORS);
-  vTaskDelay(pdMS_TO_TICKS(10));
+  vTaskDelay(pdMS_TO_TICKS(T2T_DELAY_LONG_MS));
 
-  hb_nfc_spi_reg_write(ST25R3916_REG_MODE, 0x88);
+  hb_nfc_spi_reg_write(ST25R3916_REG_MODE, ST25R3916_MODE_TARGET_NFCA);
 
-  hb_nfc_spi_reg_write(ST25R3916_REG_AUX_DEF, (s_uid_len == 7) ? 0x10 : 0x00);
+  hb_nfc_spi_reg_write(ST25R3916_REG_AUX_DEF, (s_uid_len == 7) ? T2T_AUX_DEF_NFC_N : 0x00);
 
   hb_nfc_spi_reg_write(ST25R3916_REG_BIT_RATE, 0x00);
   hb_nfc_spi_reg_write(ST25R3916_REG_ISO14443A, 0x00);
@@ -611,7 +672,7 @@ hb_nfc_err_t t2t_emu_configure_target(void) {
   hb_nfc_spi_reg_write(ST25R3916_REG_FIELD_THRESH_ACT, 0x00);
   hb_nfc_spi_reg_write(ST25R3916_REG_FIELD_THRESH_DEACT, 0x00);
 
-  hb_nfc_spi_reg_write(ST25R3916_REG_PT_MOD, 0x60);
+  hb_nfc_spi_reg_write(ST25R3916_REG_PT_MOD, T2T_PT_MOD_OOK);
 
   hb_nfc_err_t err = load_pt_memory();
   if (err != HB_NFC_OK)
@@ -630,26 +691,18 @@ hb_nfc_err_t t2t_emu_configure_target(void) {
   uint8_t mode_rb = 0, aux_rb = 0;
   hb_nfc_spi_reg_read(ST25R3916_REG_MODE, &mode_rb);
   hb_nfc_spi_reg_read(ST25R3916_REG_AUX_DEF, &aux_rb);
-  if (mode_rb != 0x88) {
-    ESP_LOGE(TAG, "MODE readback mismatch: 0x%02X (expected 0x88)", mode_rb);
+  if (mode_rb != ST25R3916_MODE_TARGET_NFCA) {
+    ESP_LOGE(TAG,
+             "MODE readback mismatch: 0x%02X (expected 0x%02X)",
+             mode_rb,
+             ST25R3916_MODE_TARGET_NFCA);
     return HB_NFC_ERR_INTERNAL;
   }
   ESP_LOGI(TAG, "Regs OK: MODE=0x%02X AUX=0x%02X", mode_rb, aux_rb);
   ESP_LOGI(TAG, "T2T target configured");
   return HB_NFC_OK;
 }
-/**
- * Activate emulation: enter SLEEP (not SENSE).
- *
- * Correct flow:
- *  ST25R3916_CMD_GOTO_SLEEP: chip stays low power and monitors field via EFD
- *  WU_A triggers run_step, which sends ST25R3916_CMD_GOTO_SENSE
- *  REQA received: hardware replies automatically via PT Memory
- *  SDD_C triggers tag selected, software handles commands
- *
- * ST25R3916_CMD_GOTO_SLEEP + en_fd=11 is the only way for the `efd` bit and WU_A IRQ
- * to work on the ST25R3916. In SENSE, the chip does not monitor field via EFD.
- */
+
 hb_nfc_err_t t2t_emu_start(void) {
   if (!s_init_done)
     return HB_NFC_ERR_INTERNAL;
@@ -660,10 +713,10 @@ hb_nfc_err_t t2t_emu_start(void) {
   }
 
   hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, OP_CTRL_TARGET);
-  vTaskDelay(pdMS_TO_TICKS(5));
+  vTaskDelay(pdMS_TO_TICKS(T2T_DELAY_MEDIUM_MS));
 
   hb_nfc_spi_direct_cmd(ST25R3916_CMD_GOTO_SLEEP);
-  vTaskDelay(pdMS_TO_TICKS(2));
+  vTaskDelay(pdMS_TO_TICKS(T2T_DELAY_SHORT_MS));
 
   s_state = T2T_STATE_SLEEP;
   t2t_reset_auth();
@@ -679,7 +732,7 @@ hb_nfc_err_t t2t_emu_start(void) {
 }
 
 void t2t_emu_stop(void) {
-  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, 0x00);
+  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, ST25R3916_OP_CTRL_FIELD_OFF);
   s_state = T2T_STATE_SLEEP;
   s_init_done = false;
   t2t_reset_auth();
@@ -708,13 +761,13 @@ static void tx_4bit_nack(uint8_t code) {
 }
 
 static int rx_poll(uint8_t *buf, int max, uint8_t main_irq) {
-  if (main_irq & 0x02)
+  if (main_irq & ST25R3916_IRQ_MAIN_COL)
     return -1;
   if (!(main_irq & ST25R3916_IRQ_MAIN_RXE))
     return 0;
   uint8_t fs1 = 0;
   hb_nfc_spi_reg_read(ST25R3916_REG_FIFO_STATUS1, &fs1);
-  int n = fs1 & 0x7F;
+  int n = fs1 & FIFO_LEN_MASK;
   if (n == 0)
     return 0;
   if (n > max)
@@ -775,12 +828,12 @@ static void handle_read(uint8_t page) {
     }
   }
 
-  uint8_t resp[16];
-  for (int i = 0; i < 16; i++) {
+  uint8_t resp[T2T_READ_RESP_SIZE];
+  for (int i = 0; i < T2T_READ_RESP_SIZE; i++) {
     resp[i] = s_mem[(page + (i / 4)) * T2T_PAGE_SIZE + (i % 4)];
   }
   ESP_LOGI(TAG, "READ pg=%d %02X %02X %02X %02X", page, resp[0], resp[1], resp[2], resp[3]);
-  tx_with_crc(resp, 16);
+  tx_with_crc(resp, T2T_READ_RESP_SIZE);
 }
 
 static void handle_fast_read(uint8_t start, uint8_t end) {
@@ -791,12 +844,12 @@ static void handle_fast_read(uint8_t start, uint8_t end) {
 
   uint16_t pages = (uint16_t)(end - start + 1);
   uint16_t len = pages * T2T_PAGE_SIZE;
-  if (len > 256) {
+  if (len > T2T_FAST_READ_MAX_LEN) {
     tx_4bit_nack(0x00);
     return;
   }
 
-  uint8_t resp[256];
+  uint8_t resp[T2T_FAST_READ_MAX_LEN];
   uint16_t pos = 0;
   for (uint16_t p = start; p <= end; p++) {
     if (!can_read_page((uint8_t)p)) {
@@ -833,7 +886,7 @@ static void handle_comp_write_data(const uint8_t *data, int len) {
     return;
   s_comp_write_pending = false;
 
-  if (len < 16) {
+  if (len < T2T_COMP_WRITE_LEN) {
     tx_4bit_nack(0x00);
     return;
   }
@@ -893,7 +946,12 @@ static void handle_ulc_auth_start(void) {
   ulc_random(s_ulc_rndb, sizeof(s_ulc_rndb));
   uint8_t iv[8] = {0};
   uint8_t enc[8] = {0};
-  if (!des3_cbc_crypt(true, s_ulc_key, iv, s_ulc_rndb, sizeof(s_ulc_rndb), enc, s_ulc_last_iv)) {
+  if (!des3_cbc_crypt(
+          &(des3_cbc_params_t){
+              .encrypt = true, .key = s_ulc_key, .iv_in = iv, .iv_out = s_ulc_last_iv},
+          s_ulc_rndb,
+          sizeof(s_ulc_rndb),
+          enc)) {
     tx_4bit_nack(0x00);
     return;
   }
@@ -909,7 +967,12 @@ static void handle_ulc_auth_step2(const uint8_t *data, int len) {
   }
 
   uint8_t plain[16] = {0};
-  if (!des3_cbc_crypt(false, s_ulc_key, s_ulc_last_iv, data, 16, plain, NULL)) {
+  if (!des3_cbc_crypt(
+          &(des3_cbc_params_t){
+              .encrypt = false, .key = s_ulc_key, .iv_in = s_ulc_last_iv, .iv_out = NULL},
+          data,
+          16,
+          plain)) {
     tx_4bit_nack(0x00);
     s_ulc_state = ULC_AUTH_IDLE;
     return;
@@ -928,7 +991,11 @@ static void handle_ulc_auth_step2(const uint8_t *data, int len) {
   uint8_t iv_enc[8];
   memcpy(iv_enc, &data[8], 8);
   uint8_t enc[8] = {0};
-  if (!des3_cbc_crypt(true, s_ulc_key, iv_enc, rnda_rot, 8, enc, NULL)) {
+  if (!des3_cbc_crypt(
+          &(des3_cbc_params_t){.encrypt = true, .key = s_ulc_key, .iv_in = iv_enc, .iv_out = NULL},
+          rnda_rot,
+          8,
+          enc)) {
     tx_4bit_nack(0x00);
     s_ulc_state = ULC_AUTH_IDLE;
     return;
@@ -950,11 +1017,11 @@ void t2t_emu_run_step(void) {
 
   uint8_t pts = 0;
   hb_nfc_spi_reg_read(ST25R3916_REG_PASSIVE_TARGET_STS, &pts);
-  uint8_t pta_state = pts & 0x0F;
+  uint8_t pta_state = pts & PTA_STATE_MASK;
 
   if (s_state == T2T_STATE_SLEEP) {
-    if (pta_state == 0x01 || pta_state == 0x02 || pta_state == 0x03 ||
-        (tgt_irq & ST25R3916_IRQ_TGT_WU_A)) {
+    if (pta_state == PTA_STATE_READY_A || pta_state == PTA_STATE_READY_Ax ||
+        pta_state == PTA_STATE_ACTIVE || (tgt_irq & ST25R3916_IRQ_TGT_WU_A)) {
       ESP_LOGI(TAG, "SLEEP SENSE (pta=%d)", pta_state);
       s_state = T2T_STATE_SENSE;
       hb_nfc_spi_direct_cmd(ST25R3916_CMD_GOTO_SENSE);
@@ -966,15 +1033,16 @@ void t2t_emu_run_step(void) {
   }
 
   if (s_state == T2T_STATE_SENSE) {
-    if (pta_state == 0x05 || pta_state == 0x0D || (tgt_irq & ST25R3916_IRQ_TGT_SDD_C)) {
+    if (pta_state == PTA_STATE_SELECTED || pta_state == PTA_STATE_ACTIVE_STAR ||
+        (tgt_irq & ST25R3916_IRQ_TGT_SDD_C)) {
       ESP_LOGI(TAG, "SENSE ACTIVE (pta=%d)", pta_state);
       s_state = T2T_STATE_ACTIVE;
       hb_nfc_spi_reg_read(ST25R3916_REG_TARGET_INT, &tgt_irq);
       hb_nfc_spi_reg_read(ST25R3916_REG_MAIN_INT, &main_irq);
       hb_nfc_spi_reg_read(ST25R3916_REG_TIMER_NFC_INT, &timer_irq);
-      if (!(main_irq & 0x10))
+      if (!(main_irq & ST25R3916_IRQ_MAIN_FWL))
         return;
-    } else if (timer_irq & 0x08) {
+    } else if (timer_irq & ST25R3916_IRQ_TGT_OSCF) {
       ESP_LOGI(TAG, "SENSE: field lost SLEEP");
       s_state = T2T_STATE_SLEEP;
       t2t_reset_auth();
@@ -982,7 +1050,7 @@ void t2t_emu_run_step(void) {
       return;
     } else if (!tgt_irq && !main_irq && !timer_irq) {
       static uint32_t idle_sense = 0;
-      if ((++idle_sense % 500U) == 0U) {
+      if ((++idle_sense % T2T_IDLE_LOG_INTERVAL) == 0U) {
         uint8_t aux = 0;
         hb_nfc_spi_reg_read(ST25R3916_REG_AUX_DISPLAY, &aux);
         ESP_LOGI(TAG, "[SENSE] AUX=0x%02X pta=%d", aux, pta_state);
@@ -993,7 +1061,7 @@ void t2t_emu_run_step(void) {
       return;
   }
 
-  if (timer_irq & 0x08) {
+  if (timer_irq & ST25R3916_IRQ_TGT_OSCF) {
     ESP_LOGI(TAG, "ACTIVE: field lost SLEEP");
     s_state = T2T_STATE_SLEEP;
     t2t_reset_auth();
@@ -1003,7 +1071,7 @@ void t2t_emu_run_step(void) {
 
   if (!tgt_irq && !main_irq && !timer_irq) {
     static uint32_t idle_active = 0;
-    if ((++idle_active % 500U) == 0U) {
+    if ((++idle_active % T2T_IDLE_LOG_INTERVAL) == 0U) {
       uint8_t aux = 0;
       hb_nfc_spi_reg_read(ST25R3916_REG_AUX_DISPLAY, &aux);
       ESP_LOGI(TAG, "[ACTIVE] AUX=0x%02X pta=%d", aux, pta_state);
@@ -1011,14 +1079,14 @@ void t2t_emu_run_step(void) {
     return;
   }
 
-  if (!(main_irq & 0x10))
+  if (!(main_irq & ST25R3916_IRQ_MAIN_FWL))
     return;
 
   uint8_t buf[32] = {0};
 
   uint8_t fs1 = 0;
   hb_nfc_spi_reg_read(ST25R3916_REG_FIFO_STATUS1, &fs1);
-  int n = fs1 & 0x7F;
+  int n = fs1 & FIFO_LEN_MASK;
   if (n <= 0)
     return;
   if (n > (int)sizeof(buf))
