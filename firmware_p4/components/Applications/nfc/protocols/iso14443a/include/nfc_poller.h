@@ -28,23 +28,31 @@
 extern "C" {
 #endif
 
-/** Initialize poller: set NFC-A mode + field on. */
+/**
+ * @brief Initialize poller in NFC-A mode with field on.
+ *
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_IO on hardware failure
+ */
 hb_nfc_err_t nfc_poller_start(void);
 
-/** Stop poller: field off. */
+/**
+ * @brief Stop poller and turn field off.
+ */
 void nfc_poller_stop(void);
 
 /**
- * Transmit a frame and read the response from FIFO.
+ * @brief Transmit a frame and read the response from FIFO.
  *
- * @param tx Data to transmit.
- * @param tx_len TX length in bytes.
- * @param with_crc true = CMD_TX_WITH_CRC, false = CMD_TX_WO_CRC.
- * @param rx Buffer for received data.
- * @param rx_max Max RX buffer size.
- * @param rx_min Minimum expected RX bytes (0 = don't wait).
- * @param timeout_ms RX FIFO wait timeout.
- * @return Number of bytes received, 0 on failure.
+ * @param tx          Data to transmit.
+ * @param tx_len      TX length in bytes.
+ * @param with_crc    True for CMD_TX_WITH_CRC, false for CMD_TX_WO_CRC.
+ * @param[out] rx     Buffer for received data.
+ * @param rx_max      Maximum RX buffer size.
+ * @param rx_min      Minimum expected RX bytes (0 to not wait).
+ * @param timeout_ms  RX FIFO wait timeout in milliseconds.
+ * @return Number of bytes received, or 0 on failure.
  */
 int nfc_poller_transceive(const uint8_t *tx,
                           size_t tx_len,
@@ -54,10 +62,20 @@ int nfc_poller_transceive(const uint8_t *tx,
                           size_t rx_min,
                           int timeout_ms);
 
-/** Configure guard time and FDT validation (best-effort). */
+/**
+ * @brief Configure guard time and FDT validation.
+ *
+ * @param guard_time_us  Guard time in microseconds.
+ * @param fdt_min_us     Minimum FDT in microseconds.
+ * @param validate_fdt   True to enable FDT validation.
+ */
 void nfc_poller_set_timing(uint32_t guard_time_us, uint32_t fdt_min_us, bool validate_fdt);
 
-/** Get last measured FDT in microseconds. */
+/**
+ * @brief Get last measured FDT in microseconds.
+ *
+ * @return Last measured FDT value.
+ */
 uint32_t nfc_poller_get_last_fdt_us(void);
 
 #ifdef __cplusplus

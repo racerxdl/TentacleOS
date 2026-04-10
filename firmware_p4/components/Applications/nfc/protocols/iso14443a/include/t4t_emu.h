@@ -25,19 +25,41 @@
 extern "C" {
 #endif
 
-/** Initialize default NDEF + CC. */
+/**
+ * @brief Initialize default NDEF and CC data for emulation.
+ *
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_NO_MEM on allocation failure
+ */
 hb_nfc_err_t t4t_emu_init_default(void);
 
-/** Configure ST25R3916 as NFC-A target for ISO-DEP. */
+/**
+ * @brief Configure ST25R3916 as NFC-A target for ISO-DEP.
+ *
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_IO on hardware failure
+ */
 hb_nfc_err_t t4t_emu_configure_target(void);
 
-/** Start emulation (enter SLEEP). */
+/**
+ * @brief Start emulation and enter SLEEP state.
+ *
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_IO on hardware failure
+ */
 hb_nfc_err_t t4t_emu_start(void);
 
-/** Stop emulation. */
+/**
+ * @brief Stop emulation.
+ */
 void t4t_emu_stop(void);
 
-/** Run one emulation step (call in tight loop). */
+/**
+ * @brief Run one emulation step (call in tight loop).
+ */
 void t4t_emu_run_step(void);
 
 #ifdef __cplusplus

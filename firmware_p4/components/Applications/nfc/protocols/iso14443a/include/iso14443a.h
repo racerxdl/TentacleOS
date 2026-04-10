@@ -26,10 +26,26 @@
 extern "C" {
 #endif
 
-/** Calculate CRC_A. Initial value 0x6363. */
+#define NFC_LOG_HEX_BUF_SIZE 128
+
+/**
+ * @brief Calculate CRC_A with initial value 0x6363.
+ *
+ * @param data  Input data buffer.
+ * @param len   Length of data in bytes.
+ * @param[out] crc  Output buffer for 2-byte CRC result.
+ */
 void iso14443a_crc(const uint8_t *data, size_t len, uint8_t crc[2]);
 
-/** Verify CRC_A on received data (last 2 bytes are CRC). */
+/**
+ * @brief Verify CRC_A on received data.
+ *
+ * @param data  Input data with CRC in the last 2 bytes.
+ * @param len   Total length including CRC bytes.
+ * @return
+ *   - true if CRC is valid
+ *   - false otherwise
+ */
 bool iso14443a_check_crc(const uint8_t *data, size_t len);
 
 #ifdef __cplusplus

@@ -11,33 +11,44 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file t4t.c
- * @brief ISO14443-4 / Type 4 Tag (T4T) NDEF reader helpers.
- */
+
 #include "t4t.h"
 
 #include <string.h>
+
 #include "esp_log.h"
 
 #include "iso_dep.h"
 #include "nfc_common.h"
 
-#define TAG "t4t"
+static const char *TAG = "NFC_T4T";
 
-#define T4T_AID_LEN 7
-#define T4T_CC_FILE 0xE103U
+#define T4T_AID_LEN       7
+#define T4T_CC_FILE       0xE103U
+#define T4T_CC_SIZE       15
+#define T4T_NLEN_SIZE     2
+#define T4T_APDU_HDR_SIZE 5
+#define T4T_MAX_LE        0xFFU
+#define T4T_BUF_SIZE      260
+
+#define T4T_CLA            0x00U
+#define T4T_INS_SELECT     0xA4U
+#define T4T_INS_READ_BIN   0xB0U
+#define T4T_INS_UPDATE_BIN 0xD6U
+#define T4T_SW_OK          0x9000U
+#define T4T_SW_MORE_MASK   0xFF00U
+#define T4T_SW_MORE        0x6100U
 
 static const uint8_t T4T_AID[T4T_AID_LEN] = {0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01};
 
-static hb_nfc_err_t t4t_apdu(const nfc_iso_dep_data_t *dep,
-                             const uint8_t *apdu,
-                             size_t apdu_len,
-                             uint8_t *out,
-                             size_t out_max,
-                             size_t *out_len,
-                             uint16_t *sw) {
-  if (!dep || !apdu || apdu_len == 0 || !out)
+static hb_nfc_err_t apdu_transceive(const nfc_iso_dep_data_t *dep,
+                                    const uint8_t *apdu,
+                                    size_t apdu_len,
+                                    uint8_t *out,
+                                    size_t out_max,
+                                    size_t *out_len,
+                                    uint16_t *sw) {
+  if (dep == NULL || apdu == NULL || apdu_len == 0 || out == NULL)
     return HB_NFC_ERR_PARAM;
 
   int len = iso_dep_apdu_transceive(dep, apdu, apdu_len, out, out_max, 0);
@@ -53,7 +64,7 @@ static hb_nfc_err_t t4t_apdu(const nfc_iso_dep_data_t *dep,
   return HB_NFC_OK;
 }
 
-static hb_nfc_err_t t4t_select_ndef_app(const nfc_iso_dep_data_t *dep) {
+static hb_nfc_err_t select_ndef_app(const nfc_iso_dep_data_t *dep) {
   uint8_t apdu[5 + T4T_AID_LEN + 1];
   size_t pos = 0;
   apdu[pos++] = 0x00;
@@ -63,12 +74,12 @@ static hb_nfc_err_t t4t_select_ndef_app(const nfc_iso_dep_data_t *dep) {
   apdu[pos++] = T4T_AID_LEN;
   memcpy(&apdu[pos], T4T_AID, T4T_AID_LEN);
   pos += T4T_AID_LEN;
-  apdu[pos++] = 0x00; /* Le */
+  apdu[pos++] = 0x00;
 
   uint8_t rsp[64] = {0};
   size_t rsp_len = 0;
   uint16_t sw = 0;
-  hb_nfc_err_t err = t4t_apdu(dep, apdu, pos, rsp, sizeof(rsp), &rsp_len, &sw);
+  hb_nfc_err_t err = apdu_transceive(dep, apdu, pos, rsp, sizeof(rsp), &rsp_len, &sw);
   if (err != HB_NFC_OK)
     return err;
   if (sw != 0x9000 && (sw & 0xFF00U) != 0x6100U) {
@@ -78,12 +89,12 @@ static hb_nfc_err_t t4t_select_ndef_app(const nfc_iso_dep_data_t *dep) {
   return HB_NFC_OK;
 }
 
-static hb_nfc_err_t t4t_select_file(const nfc_iso_dep_data_t *dep, uint16_t fid) {
+static hb_nfc_err_t select_file(const nfc_iso_dep_data_t *dep, uint16_t fid) {
   uint8_t apdu[7];
   apdu[0] = 0x00;
   apdu[1] = 0xA4;
   apdu[2] = 0x00;
-  apdu[3] = 0x0C; /* no FCI */
+  apdu[3] = 0x0C;
   apdu[4] = 0x02;
   apdu[5] = (uint8_t)((fid >> 8) & 0xFFU);
   apdu[6] = (uint8_t)(fid & 0xFFU);
@@ -91,7 +102,7 @@ static hb_nfc_err_t t4t_select_file(const nfc_iso_dep_data_t *dep, uint16_t fid)
   uint8_t rsp[32] = {0};
   size_t rsp_len = 0;
   uint16_t sw = 0;
-  hb_nfc_err_t err = t4t_apdu(dep, apdu, sizeof(apdu), rsp, sizeof(rsp), &rsp_len, &sw);
+  hb_nfc_err_t err = apdu_transceive(dep, apdu, sizeof(apdu), rsp, sizeof(rsp), &rsp_len, &sw);
   if (err != HB_NFC_OK)
     return err;
   if (sw != 0x9000) {
@@ -102,8 +113,8 @@ static hb_nfc_err_t t4t_select_file(const nfc_iso_dep_data_t *dep, uint16_t fid)
 }
 
 static hb_nfc_err_t
-t4t_read_binary(const nfc_iso_dep_data_t *dep, uint16_t offset, uint8_t *out, size_t out_len) {
-  if (!out || out_len == 0 || out_len > 0xFF)
+read_binary(const nfc_iso_dep_data_t *dep, uint16_t offset, uint8_t *out, size_t out_len) {
+  if (out == NULL || out_len == 0 || out_len > 0xFF)
     return HB_NFC_ERR_PARAM;
 
   uint8_t apdu[5];
@@ -116,7 +127,7 @@ t4t_read_binary(const nfc_iso_dep_data_t *dep, uint16_t offset, uint8_t *out, si
   uint8_t rsp[260] = {0};
   size_t rsp_len = 0;
   uint16_t sw = 0;
-  hb_nfc_err_t err = t4t_apdu(dep, apdu, sizeof(apdu), rsp, sizeof(rsp), &rsp_len, &sw);
+  hb_nfc_err_t err = apdu_transceive(dep, apdu, sizeof(apdu), rsp, sizeof(rsp), &rsp_len, &sw);
   if (err != HB_NFC_OK)
     return err;
   if (sw != 0x9000) {
@@ -129,11 +140,11 @@ t4t_read_binary(const nfc_iso_dep_data_t *dep, uint16_t offset, uint8_t *out, si
   return HB_NFC_OK;
 }
 
-static hb_nfc_err_t t4t_update_binary(const nfc_iso_dep_data_t *dep,
-                                      uint16_t offset,
-                                      const uint8_t *data,
-                                      size_t data_len) {
-  if (!data || data_len == 0 || data_len > 0xFF)
+static hb_nfc_err_t update_binary(const nfc_iso_dep_data_t *dep,
+                                  uint16_t offset,
+                                  const uint8_t *data,
+                                  size_t data_len) {
+  if (data == NULL || data_len == 0 || data_len > 0xFF)
     return HB_NFC_ERR_PARAM;
 
   uint8_t apdu[5 + 0xFF];
@@ -147,7 +158,7 @@ static hb_nfc_err_t t4t_update_binary(const nfc_iso_dep_data_t *dep,
   uint8_t rsp[16] = {0};
   size_t rsp_len = 0;
   uint16_t sw = 0;
-  hb_nfc_err_t err = t4t_apdu(dep, apdu, 5 + data_len, rsp, sizeof(rsp), &rsp_len, &sw);
+  hb_nfc_err_t err = apdu_transceive(dep, apdu, 5 + data_len, rsp, sizeof(rsp), &rsp_len, &sw);
   if (err != HB_NFC_OK)
     return err;
   if (sw != 0x9000) {
@@ -158,20 +169,20 @@ static hb_nfc_err_t t4t_update_binary(const nfc_iso_dep_data_t *dep,
 }
 
 hb_nfc_err_t t4t_read_cc(const nfc_iso_dep_data_t *dep, t4t_cc_t *cc) {
-  if (!dep || !cc)
+  if (dep == NULL || cc == NULL)
     return HB_NFC_ERR_PARAM;
   memset(cc, 0, sizeof(*cc));
 
-  hb_nfc_err_t err = t4t_select_ndef_app(dep);
+  hb_nfc_err_t err = select_ndef_app(dep);
   if (err != HB_NFC_OK)
     return err;
 
-  err = t4t_select_file(dep, T4T_CC_FILE);
+  err = select_file(dep, T4T_CC_FILE);
   if (err != HB_NFC_OK)
     return err;
 
   uint8_t buf[15] = {0};
-  err = t4t_read_binary(dep, 0x0000, buf, sizeof(buf));
+  err = read_binary(dep, 0x0000, buf, sizeof(buf));
   if (err != HB_NFC_OK)
     return err;
 
@@ -197,10 +208,10 @@ hb_nfc_err_t t4t_read_ndef(const nfc_iso_dep_data_t *dep,
                            uint8_t *out,
                            size_t out_max,
                            size_t *out_len) {
-  if (!dep || !cc || !out || out_max < 2)
+  if (dep == NULL || cc == NULL || out == NULL || out_max < 2)
     return HB_NFC_ERR_PARAM;
 
-  hb_nfc_err_t err = t4t_select_ndef_app(dep);
+  hb_nfc_err_t err = select_ndef_app(dep);
   if (err != HB_NFC_OK)
     return err;
 
@@ -209,12 +220,12 @@ hb_nfc_err_t t4t_read_ndef(const nfc_iso_dep_data_t *dep,
     return HB_NFC_ERR_PROTOCOL;
   }
 
-  err = t4t_select_file(dep, cc->ndef_fid);
+  err = select_file(dep, cc->ndef_fid);
   if (err != HB_NFC_OK)
     return err;
 
   uint8_t len_buf[2] = {0};
-  err = t4t_read_binary(dep, 0x0000, len_buf, sizeof(len_buf));
+  err = read_binary(dep, 0x0000, len_buf, sizeof(len_buf));
   if (err != HB_NFC_OK)
     return err;
 
@@ -239,7 +250,7 @@ hb_nfc_err_t t4t_read_ndef(const nfc_iso_dep_data_t *dep,
     if (chunk > mle)
       chunk = mle;
 
-    err = t4t_read_binary(dep, offset, &out[ndef_len - remaining], chunk);
+    err = read_binary(dep, offset, &out[ndef_len - remaining], chunk);
     if (err != HB_NFC_OK)
       return err;
 
@@ -256,10 +267,10 @@ hb_nfc_err_t t4t_write_ndef(const nfc_iso_dep_data_t *dep,
                             const t4t_cc_t *cc,
                             const uint8_t *data,
                             size_t data_len) {
-  if (!dep || !cc || !data)
+  if (dep == NULL || cc == NULL || data == NULL)
     return HB_NFC_ERR_PARAM;
 
-  hb_nfc_err_t err = t4t_select_ndef_app(dep);
+  hb_nfc_err_t err = select_ndef_app(dep);
   if (err != HB_NFC_OK)
     return err;
 
@@ -273,13 +284,12 @@ hb_nfc_err_t t4t_write_ndef(const nfc_iso_dep_data_t *dep,
     return HB_NFC_ERR_PARAM;
   }
 
-  err = t4t_select_file(dep, cc->ndef_fid);
+  err = select_file(dep, cc->ndef_fid);
   if (err != HB_NFC_OK)
     return err;
 
-  /* Set NLEN = 0 first (atomic update pattern) */
   uint8_t zero[2] = {0x00, 0x00};
-  err = t4t_update_binary(dep, 0x0000, zero, sizeof(zero));
+  err = update_binary(dep, 0x0000, zero, sizeof(zero));
   if (err != HB_NFC_OK)
     return err;
 
@@ -291,7 +301,7 @@ hb_nfc_err_t t4t_write_ndef(const nfc_iso_dep_data_t *dep,
   size_t remaining = data_len;
   while (remaining > 0) {
     uint16_t chunk = (remaining > mlc) ? mlc : (uint16_t)remaining;
-    err = t4t_update_binary(dep, offset, data + (data_len - remaining), chunk);
+    err = update_binary(dep, offset, data + (data_len - remaining), chunk);
     if (err != HB_NFC_OK)
       return err;
     offset += chunk;
@@ -302,7 +312,7 @@ hb_nfc_err_t t4t_write_ndef(const nfc_iso_dep_data_t *dep,
   uint8_t nlen[2];
   nlen[0] = (uint8_t)((data_len >> 8) & 0xFFU);
   nlen[1] = (uint8_t)(data_len & 0xFFU);
-  return t4t_update_binary(dep, 0x0000, nlen, sizeof(nlen));
+  return update_binary(dep, 0x0000, nlen, sizeof(nlen));
 }
 
 hb_nfc_err_t t4t_read_binary_ndef(const nfc_iso_dep_data_t *dep,
@@ -313,21 +323,21 @@ hb_nfc_err_t t4t_read_binary_ndef(const nfc_iso_dep_data_t *dep,
   if (!dep || !cc || !out || out_len == 0)
     return HB_NFC_ERR_PARAM;
 
-  hb_nfc_err_t err = t4t_select_ndef_app(dep);
+  hb_nfc_err_t err = select_ndef_app(dep);
   if (err != HB_NFC_OK)
     return err;
 
   if (cc->read_access != 0x00U)
     return HB_NFC_ERR_PROTOCOL;
 
-  err = t4t_select_file(dep, cc->ndef_fid);
+  err = select_file(dep, cc->ndef_fid);
   if (err != HB_NFC_OK)
     return err;
 
   if ((size_t)offset + out_len > (size_t)cc->ndef_max + 2U) {
     return HB_NFC_ERR_PARAM;
   }
-  return t4t_read_binary(dep, offset, out, out_len);
+  return read_binary(dep, offset, out, out_len);
 }
 
 hb_nfc_err_t t4t_update_binary_ndef(const nfc_iso_dep_data_t *dep,
@@ -338,19 +348,19 @@ hb_nfc_err_t t4t_update_binary_ndef(const nfc_iso_dep_data_t *dep,
   if (!dep || !cc || !data || data_len == 0)
     return HB_NFC_ERR_PARAM;
 
-  hb_nfc_err_t err = t4t_select_ndef_app(dep);
+  hb_nfc_err_t err = select_ndef_app(dep);
   if (err != HB_NFC_OK)
     return err;
 
   if (cc->write_access != 0x00U)
     return HB_NFC_ERR_PROTOCOL;
 
-  err = t4t_select_file(dep, cc->ndef_fid);
+  err = select_file(dep, cc->ndef_fid);
   if (err != HB_NFC_OK)
     return err;
 
   if ((size_t)offset + data_len > (size_t)cc->ndef_max + 2U) {
     return HB_NFC_ERR_PARAM;
   }
-  return t4t_update_binary(dep, offset, data, data_len);
+  return update_binary(dep, offset, data, data_len);
 }
