@@ -36,8 +36,8 @@
  *  - Only high-data-rate / single-subcarrier supported.
  *
  * Supported commands (emulated in software):
- *  -  *  - INVENTORY        -> reply [resp_flags][DSFID][UID]
- *  -  *  - GET_SYSTEM_INFO  -> reply with block_count, block_size, DSFID, AFI
+ *  - INVENTORY        -> reply [resp_flags][DSFID][UID]
+ *  - GET_SYSTEM_INFO  -> reply with block_count, block_size, DSFID, AFI
  *  - READ_SINGLE_BLOCK
  *  - WRITE_SINGLE_BLOCK
  *  - READ_MULTIPLE_BLOCKS
@@ -45,7 +45,7 @@
  *  - WRITE_AFI / LOCK_AFI
  *  - WRITE_DSFID / LOCK_DSFID
  *  - GET_MULTI_BLOCK_SEC
- *  -  *  - STAY_QUIET       -> go to SLEEP (stop responding until power cycle)
+ *  - STAY_QUIET       -> go to SLEEP (stop responding until power cycle)
  */
 #ifndef ISO15693_EMU_H
 #define ISO15693_EMU_H
@@ -65,7 +65,10 @@ extern "C" {
 #define ISO15693_EMU_MAX_BLOCKS     256
 #define ISO15693_EMU_MAX_BLOCK_SIZE 4 /**< bytes per block (default)  */
 #define ISO15693_EMU_MEM_SIZE       (ISO15693_EMU_MAX_BLOCKS * ISO15693_EMU_MAX_BLOCK_SIZE)
-/* Card profile */
+
+/**
+ * @brief ISO 15693 emulated card profile.
+ */
 typedef struct {
   uint8_t uid[ISO15693_UID_LEN];      /**< 8-byte UID, LSB first              */
   uint8_t dsfid;                      /**< Data Storage Format Identifier      */
@@ -75,20 +78,30 @@ typedef struct {
   uint8_t block_size;                 /**< bytes per block   (<= MAX_BLOCK_SIZE)*/
   uint8_t mem[ISO15693_EMU_MEM_SIZE]; /**< tag memory flat array           */
 } iso15693_emu_card_t;
+
 /* API */
+
 /**
  * @brief Initialise emulator with a card profile.
  *
  * Must be called before configure_target.
+ *
  * @param card  Card data (copied internally).
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_INVALID_ARG if card is NULL
  */
 hb_nfc_err_t iso15693_emu_init(const iso15693_emu_card_t *card);
 
 /**
- * @brief Populate a card from a previously read iso15693_tag_t + raw dump.
+ * @brief Populate a card from a previously read iso15693_tag_t and raw dump.
  *
  * Convenience helper: fills uid/dsfid/afi/block_count/block_size from tag,
- *  * copies raw_mem (block_count x block_size bytes) into card->mem.
+ * copies raw_mem (block_count x block_size bytes) into card->mem.
+ *
+ * @param[out] card  Card profile to populate.
+ * @param tag        Tag descriptor from a prior read.
+ * @param raw_mem    Raw block data (block_count * block_size bytes).
  */
 void iso15693_emu_card_from_tag(iso15693_emu_card_t *card,
                                 const iso15693_tag_t *tag,
@@ -98,15 +111,22 @@ void iso15693_emu_card_from_tag(iso15693_emu_card_t *card,
  * @brief Create a minimal writable NFC-V tag for testing.
  *
  * UID is fixed to the values passed in.
- *  * Initialises 8 blocks x 4 bytes = 32 bytes of zeroed memory.
+ * Initialises 8 blocks x 4 bytes = 32 bytes of zeroed memory.
+ *
+ * @param[out] card  Card profile to populate.
+ * @param uid        8-byte UID to assign.
  */
 void iso15693_emu_card_default(iso15693_emu_card_t *card, const uint8_t uid[ISO15693_UID_LEN]);
 
 /**
  * @brief Configure ST25R3916 as NFC-V target.
  *
- *  * Resets chip -> oscillator -> registers -> starts field detector.
+ * Resets chip -> oscillator -> registers -> starts field detector.
  * Does NOT activate the field (we are a target, not an initiator).
+ *
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_IO on communication failure
  */
 hb_nfc_err_t iso15693_emu_configure_target(void);
 
@@ -114,6 +134,10 @@ hb_nfc_err_t iso15693_emu_configure_target(void);
  * @brief Activate emulation (enter SLEEP state, field detector on).
  *
  * After this call, iso15693_emu_run_step() must be called in a tight loop.
+ *
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_IO on communication failure
  */
 hb_nfc_err_t iso15693_emu_start(void);
 
@@ -123,14 +147,16 @@ hb_nfc_err_t iso15693_emu_start(void);
 void iso15693_emu_stop(void);
 
 /**
- * @brief  * @brief Single polling step - call as fast as possible in a FreeRTOS task.
+ * @brief Single polling step - call as fast as possible in a FreeRTOS task.
  *
- * Non-blocking.  Checks IRQs, transitions state machine, handles commands.
+ * Non-blocking. Checks IRQs, transitions state machine, handles commands.
  */
 void iso15693_emu_run_step(void);
 
 /**
  * @brief Return pointer to internal tag memory (for live inspection).
+ *
+ * @return Pointer to the emulated tag memory array.
  */
 uint8_t *iso15693_emu_get_mem(void);
 

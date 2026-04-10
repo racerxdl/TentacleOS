@@ -53,11 +53,11 @@ extern "C" {
 /* Response flags (byte 0 of every response) */
 #define ISO15693_RESP_ERROR (1U << 0) /**< error flag; rx[1] = code  */
 /* Common flag combinations */
-/** INVENTORY, high data rate (0x06) */
+/** @brief INVENTORY, high data rate (0x06). */
 #define ISO15693_FLAGS_INVENTORY (ISO15693_FLAG_INVENTORY | ISO15693_FLAG_DATA_RATE)
-/** Addressed + high data rate (0x22) */
+/** @brief Addressed + high data rate (0x22). */
 #define ISO15693_FLAGS_ADDRESSED (ISO15693_FLAG_ADDRESS | ISO15693_FLAG_DATA_RATE)
-/** Broadcast + high data rate, no address (0x02) */
+/** @brief Broadcast + high data rate, no address (0x02). */
 #define ISO15693_FLAGS_UNADDRESSED (ISO15693_FLAG_DATA_RATE)
 /* Command codes */
 #define ISO15693_CMD_INVENTORY            0x01U
@@ -83,7 +83,10 @@ extern "C" {
 #define ISO15693_MAX_BLOCK_SIZE 32
 #define ISO15693_MAX_BLOCKS     256
 #define ISO15693_UID_LEN        8
-/* Tag descriptor */
+
+/**
+ * @brief ISO 15693 tag descriptor.
+ */
 typedef struct {
   uint8_t uid[ISO15693_UID_LEN]; /**< UID LSB first (as on wire)             */
   uint8_t dsfid;                 /**< Data Storage Format Identifier         */
@@ -101,6 +104,10 @@ typedef struct {
  *
  * Must be called after st25r3916_core_init() + st25r3916_core_field_on().
  * Sets REG_MODE=0x30 (NFC-V), high data rate, single subcarrier.
+ *
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_IO on communication failure
  */
 hb_nfc_err_t iso15693_poller_init(void);
 
@@ -108,7 +115,11 @@ hb_nfc_err_t iso15693_poller_init(void);
  * @brief Send INVENTORY and collect the first responding tag.
  *
  * Uses broadcast mode (no mask). Populates tag->uid and tag->dsfid.
- * Returns HB_NFC_ERR_NO_CARD if no response within timeout.
+ *
+ * @param[out] tag  Populated with UID and DSFID on success.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_NO_CARD if no response within timeout
  */
 hb_nfc_err_t iso15693_inventory(iso15693_tag_t *tag);
 
@@ -117,6 +128,11 @@ hb_nfc_err_t iso15693_inventory(iso15693_tag_t *tag);
  *
  * Fills tag->block_count, tag->block_size, tag->afi, tag->dsfid.
  * tag->uid must be valid (from iso15693_inventory).
+ *
+ * @param tag  Tag with valid UID; additional fields populated on success.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT on no response
  */
 hb_nfc_err_t iso15693_get_system_info(iso15693_tag_t *tag);
 
@@ -126,18 +142,23 @@ hb_nfc_err_t iso15693_get_system_info(iso15693_tag_t *tag);
  * Each discovered tag is silenced (STAY_QUIET) and the inventory
  * is repeated until no response.
  *
- * @return number of tags found (up to max_tags).
+ * @param[out] out     Output array of discovered tags.
+ * @param max_tags     Maximum entries in output array.
+ * @return Number of tags found (up to max_tags).
  */
 int iso15693_inventory_all(iso15693_tag_t *out, size_t max_tags);
 
 /**
  * @brief Read a single block (addressed mode).
  *
- * @param tag      Tag with valid UID.
- * @param block    Block number (0-based).
- * @param data     Output buffer.
- * @param data_max Output buffer capacity.
- * @param data_len Set to number of bytes written on success.
+ * @param tag       Tag with valid UID.
+ * @param block     Block number (0-based).
+ * @param[out] data      Output buffer.
+ * @param data_max  Output buffer capacity.
+ * @param[out] data_len  Set to number of bytes written on success.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT on no response
  */
 hb_nfc_err_t iso15693_read_single_block(
     const iso15693_tag_t *tag, uint8_t block, uint8_t *data, size_t data_max, size_t *data_len);
@@ -145,10 +166,13 @@ hb_nfc_err_t iso15693_read_single_block(
 /**
  * @brief Write a single block (addressed mode).
  *
- * @param tag      Tag with valid UID.
- * @param block    Block number (0-based).
- * @param data     Data to write (must match block_size).
- * @param data_len Number of bytes to write.
+ * @param tag       Tag with valid UID.
+ * @param block     Block number (0-based).
+ * @param data      Data to write (must match block_size).
+ * @param data_len  Number of bytes to write.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT on no response
  */
 hb_nfc_err_t iso15693_write_single_block(const iso15693_tag_t *tag,
                                          uint8_t block,
@@ -157,18 +181,27 @@ hb_nfc_err_t iso15693_write_single_block(const iso15693_tag_t *tag,
 
 /**
  * @brief Lock a single block (addressed mode).
+ *
+ * @param tag    Tag with valid UID.
+ * @param block  Block number to lock.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT on no response
  */
 hb_nfc_err_t iso15693_lock_block(const iso15693_tag_t *tag, uint8_t block);
 
 /**
  * @brief Read multiple consecutive blocks (addressed mode).
  *
- * @param tag         Tag with valid UID.
- * @param first_block Starting block number.
- * @param count       Number of blocks to read.
- * @param out_buf     Output buffer (count * block_size bytes needed).
- * @param out_max     Output buffer capacity.
- * @param out_len     Set to bytes written on success.
+ * @param tag          Tag with valid UID.
+ * @param first_block  Starting block number.
+ * @param count        Number of blocks to read.
+ * @param[out] out_buf Output buffer (count * block_size bytes needed).
+ * @param out_max      Output buffer capacity.
+ * @param[out] out_len Set to bytes written on success.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT on no response
  */
 hb_nfc_err_t iso15693_read_multiple_blocks(const iso15693_tag_t *tag,
                                            uint8_t first_block,
@@ -179,28 +212,58 @@ hb_nfc_err_t iso15693_read_multiple_blocks(const iso15693_tag_t *tag,
 
 /**
  * @brief Write AFI (addressed mode).
+ *
+ * @param tag  Tag with valid UID.
+ * @param afi  Application Family Identifier value to write.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT on no response
  */
 hb_nfc_err_t iso15693_write_afi(const iso15693_tag_t *tag, uint8_t afi);
 
 /**
  * @brief Lock AFI (addressed mode).
+ *
+ * @param tag  Tag with valid UID.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT on no response
  */
 hb_nfc_err_t iso15693_lock_afi(const iso15693_tag_t *tag);
 
 /**
  * @brief Write DSFID (addressed mode).
+ *
+ * @param tag    Tag with valid UID.
+ * @param dsfid  Data Storage Format Identifier value to write.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT on no response
  */
 hb_nfc_err_t iso15693_write_dsfid(const iso15693_tag_t *tag, uint8_t dsfid);
 
 /**
  * @brief Lock DSFID (addressed mode).
+ *
+ * @param tag  Tag with valid UID.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT on no response
  */
 hb_nfc_err_t iso15693_lock_dsfid(const iso15693_tag_t *tag);
 
 /**
  * @brief Get multiple block security status (addressed mode).
  *
- * @param out_buf Output buffer (count bytes).
+ * @param tag          Tag with valid UID.
+ * @param first_block  Starting block number.
+ * @param count        Number of blocks to query.
+ * @param[out] out_buf Output buffer (count bytes).
+ * @param out_max      Output buffer capacity.
+ * @param[out] out_len Set to bytes written on success.
+ * @return
+ *   - HB_NFC_OK on success
+ *   - HB_NFC_ERR_TIMEOUT on no response
  */
 hb_nfc_err_t iso15693_get_multi_block_sec(const iso15693_tag_t *tag,
                                           uint8_t first_block,
@@ -212,17 +275,27 @@ hb_nfc_err_t iso15693_get_multi_block_sec(const iso15693_tag_t *tag,
 /**
  * @brief Full tag dump: inventory -> system info -> all blocks.
  *
- * Prints everything via ESP_LOGI.  No output parameters.
+ * Prints everything via ESP_LOGI. No output parameters.
  */
 void iso15693_dump_card(void);
+
 /* Utility */
+
 /**
  * @brief Compute ISO 15693 CRC-16 (poly=0x8408, init=0xFFFF, ~result).
+ *
+ * @param data  Input data buffer.
+ * @param len   Number of bytes.
+ * @return Computed CRC-16 value.
  */
 uint16_t iso15693_crc16(const uint8_t *data, size_t len);
 
 /**
  * @brief Verify CRC appended to a response buffer (last 2 bytes).
+ *
+ * @param data  Response buffer including trailing CRC.
+ * @param len   Total length including CRC bytes.
+ * @return true if CRC matches, false otherwise.
  */
 bool iso15693_check_crc(const uint8_t *data, size_t len);
 

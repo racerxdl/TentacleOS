@@ -11,18 +11,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file iso15693.c
- * @brief ISO 15693 (NFC-V) reader/poller for ST25R3916.
- *
- * Uses nfc_poller_transceive() as transport. CRC is appended by the chip
- * when ST25R3916_CMD_TX_WITH_CRC is used in NFC-V mode.
- */
+
 #include "iso15693.h"
 
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "esp_log.h"
 
 #include "nfc_poller.h"
@@ -32,16 +27,34 @@
 #include "hb_nfc_spi.h"
 #include "nfc_rf.h"
 
-#define TAG "iso15693"
+static const char *TAG = "NFC_ISO15693";
+
+#define ISO15693_CRC_LEN             2
+#define ISO15693_CRC_INIT            0xFFFFU
+#define ISO15693_CRC_POLY            0x8408U
+#define ISO15693_DEFAULT_BLOCK_SIZE  4
+#define ISO15693_DEFAULT_BLOCK_COUNT 16
+#define ISO15693_BLOCK_SIZE_MASK     0x1FU
+#define ISO15693_INVENTORY_MIN_LEN   10
+#define ISO15693_AM_MOD_PERCENT      10
+
+#define ISO15693_SYSINFO_FLAG_DSFID 0x01U
+#define ISO15693_SYSINFO_FLAG_AFI   0x02U
+#define ISO15693_SYSINFO_FLAG_MEM   0x04U
+#define ISO15693_SYSINFO_FLAG_IC    0x08U
+
+#define ISO15693_TIMEOUT_MS       30
+#define ISO15693_TIMEOUT_QUIET_MS 10
+#define ISO15693_TIMEOUT_MULTI_MS 50
 
 static int strip_crc_len(const uint8_t *buf, int len) {
-  if (len >= 3 && iso15693_check_crc(buf, (size_t)len))
-    return len - 2;
+  if (len >= (int)(ISO15693_CRC_LEN + 1) && iso15693_check_crc(buf, (size_t)len))
+    return len - ISO15693_CRC_LEN;
   return len;
 }
 
 static hb_nfc_err_t iso15693_stay_quiet(const iso15693_tag_t *tag) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
 
   uint8_t cmd[2 + ISO15693_UID_LEN];
@@ -52,7 +65,7 @@ static hb_nfc_err_t iso15693_stay_quiet(const iso15693_tag_t *tag) {
   pos += ISO15693_UID_LEN;
 
   uint8_t rx[8] = {0};
-  (void)nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 0, 10);
+  (void)nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 0, ISO15693_TIMEOUT_QUIET_MS);
   return HB_NFC_OK;
 }
 
@@ -61,7 +74,7 @@ hb_nfc_err_t iso15693_poller_init(void) {
       .tech = NFC_RF_TECH_V,
       .tx_rate = NFC_RF_BR_V_HIGH,
       .rx_rate = NFC_RF_BR_V_HIGH,
-      .am_mod_percent = 10, /* ISO15693 typically 10% ASK */
+      .am_mod_percent = ISO15693_AM_MOD_PERCENT,
       .tx_parity = true,
       .rx_raw_parity = false,
       .guard_time_us = 0,
@@ -83,16 +96,15 @@ hb_nfc_err_t iso15693_poller_init(void) {
 }
 
 hb_nfc_err_t iso15693_inventory(iso15693_tag_t *tag) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
   memset(tag, 0, sizeof(*tag));
 
-  /* INVENTORY: [flags][cmd][mask_len=0] */
   uint8_t cmd[3] = {ISO15693_FLAGS_INVENTORY, ISO15693_CMD_INVENTORY, 0x00U};
 
   uint8_t rx[32] = {0};
-  int len = nfc_poller_transceive(cmd, sizeof(cmd), true, rx, sizeof(rx), 1, 30);
-  if (len < 10) {
+  int len = nfc_poller_transceive(cmd, sizeof(cmd), true, rx, sizeof(rx), 1, ISO15693_TIMEOUT_MS);
+  if (len < ISO15693_INVENTORY_MIN_LEN) {
     if (len > 0)
       nfc_log_hex("INVENTORY partial:", rx, (size_t)len);
     return HB_NFC_ERR_NO_CARD;
@@ -103,7 +115,7 @@ hb_nfc_err_t iso15693_inventory(iso15693_tag_t *tag) {
     ESP_LOGW(TAG, "INVENTORY error: 0x%02X", rx[1]);
     return HB_NFC_ERR_PROTOCOL;
   }
-  if (plen < 10)
+  if (plen < ISO15693_INVENTORY_MIN_LEN)
     return HB_NFC_ERR_PROTOCOL;
 
   tag->dsfid = rx[1];
@@ -123,7 +135,7 @@ hb_nfc_err_t iso15693_inventory(iso15693_tag_t *tag) {
 }
 
 hb_nfc_err_t iso15693_get_system_info(iso15693_tag_t *tag) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
 
   uint8_t cmd[2 + ISO15693_UID_LEN];
@@ -134,7 +146,7 @@ hb_nfc_err_t iso15693_get_system_info(iso15693_tag_t *tag) {
   pos += ISO15693_UID_LEN;
 
   uint8_t rx[64] = {0};
-  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, 30);
+  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, ISO15693_TIMEOUT_MS);
   if (len < 2) {
     if (len > 0)
       nfc_log_hex("SYSINFO partial:", rx, (size_t)len);
@@ -152,22 +164,21 @@ hb_nfc_err_t iso15693_get_system_info(iso15693_tag_t *tag) {
   uint8_t info_flags = rx[1];
   pos = 2;
 
-  /* UID is always present */
   memcpy(tag->uid, &rx[pos], ISO15693_UID_LEN);
   pos += ISO15693_UID_LEN;
 
-  if (info_flags & 0x01U) {
+  if (info_flags & ISO15693_SYSINFO_FLAG_DSFID) {
     tag->dsfid = rx[pos++];
   }
-  if (info_flags & 0x02U) {
+  if (info_flags & ISO15693_SYSINFO_FLAG_AFI) {
     tag->afi = rx[pos++];
   }
-  if (info_flags & 0x04U) {
-    tag->block_count = (uint16_t)rx[pos++] + 1U;           /* n-1 */
-    tag->block_size = (uint8_t)((rx[pos++] & 0x1FU) + 1U); /* n-1 */
+  if (info_flags & ISO15693_SYSINFO_FLAG_MEM) {
+    tag->block_count = (uint16_t)rx[pos++] + 1U;
+    tag->block_size = (uint8_t)((rx[pos++] & ISO15693_BLOCK_SIZE_MASK) + 1U);
     tag->info_valid = true;
   }
-  if (info_flags & 0x08U) {
+  if (info_flags & ISO15693_SYSINFO_FLAG_IC) {
     tag->ic_ref = rx[pos++];
   }
 
@@ -181,7 +192,7 @@ hb_nfc_err_t iso15693_get_system_info(iso15693_tag_t *tag) {
 }
 
 int iso15693_inventory_all(iso15693_tag_t *out, size_t max_tags) {
-  if (!out || max_tags == 0)
+  if (out == NULL || max_tags == 0)
     return 0;
 
   int count = 0;
@@ -213,9 +224,9 @@ int iso15693_inventory_all(iso15693_tag_t *out, size_t max_tags) {
 
 hb_nfc_err_t iso15693_read_single_block(
     const iso15693_tag_t *tag, uint8_t block, uint8_t *data, size_t data_max, size_t *data_len) {
-  if (!tag || !data)
+  if (tag == NULL || data == NULL)
     return HB_NFC_ERR_PARAM;
-  uint8_t blk_size = tag->block_size ? tag->block_size : 4;
+  uint8_t blk_size = tag->block_size ? tag->block_size : ISO15693_DEFAULT_BLOCK_SIZE;
   if (data_max < blk_size)
     return HB_NFC_ERR_PARAM;
 
@@ -228,7 +239,7 @@ hb_nfc_err_t iso15693_read_single_block(
   cmd[pos++] = block;
 
   uint8_t rx[64] = {0};
-  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, 30);
+  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, ISO15693_TIMEOUT_MS);
   if (len < 2)
     return HB_NFC_ERR_NO_CARD;
 
@@ -241,7 +252,7 @@ hb_nfc_err_t iso15693_read_single_block(
   if (plen < 1 + (int)blk_size)
     return HB_NFC_ERR_PROTOCOL;
   memcpy(data, &rx[1], blk_size);
-  if (data_len)
+  if (data_len != NULL)
     *data_len = blk_size;
   return HB_NFC_OK;
 }
@@ -250,9 +261,9 @@ hb_nfc_err_t iso15693_write_single_block(const iso15693_tag_t *tag,
                                          uint8_t block,
                                          const uint8_t *data,
                                          size_t data_len) {
-  if (!tag || !data)
+  if (tag == NULL || data == NULL)
     return HB_NFC_ERR_PARAM;
-  uint8_t blk_size = tag->block_size ? tag->block_size : 4;
+  uint8_t blk_size = tag->block_size ? tag->block_size : ISO15693_DEFAULT_BLOCK_SIZE;
   if (data_len != blk_size)
     return HB_NFC_ERR_PARAM;
 
@@ -267,7 +278,7 @@ hb_nfc_err_t iso15693_write_single_block(const iso15693_tag_t *tag,
   pos += blk_size;
 
   uint8_t rx[8] = {0};
-  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, 30);
+  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, ISO15693_TIMEOUT_MS);
   if (len < 1)
     return HB_NFC_ERR_NO_CARD;
 
@@ -282,7 +293,7 @@ hb_nfc_err_t iso15693_write_single_block(const iso15693_tag_t *tag,
 }
 
 hb_nfc_err_t iso15693_lock_block(const iso15693_tag_t *tag, uint8_t block) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
 
   uint8_t cmd[3 + ISO15693_UID_LEN];
@@ -294,7 +305,7 @@ hb_nfc_err_t iso15693_lock_block(const iso15693_tag_t *tag, uint8_t block) {
   cmd[pos++] = block;
 
   uint8_t rx[8] = {0};
-  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, 30);
+  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, ISO15693_TIMEOUT_MS);
   if (len < 1)
     return HB_NFC_ERR_NO_CARD;
 
@@ -314,7 +325,7 @@ hb_nfc_err_t iso15693_read_multiple_blocks(const iso15693_tag_t *tag,
                                            uint8_t *out_buf,
                                            size_t out_max,
                                            size_t *out_len) {
-  if (!tag || !out_buf || count == 0)
+  if (tag == NULL || out_buf == NULL || count == 0)
     return HB_NFC_ERR_PARAM;
   if (!tag->block_size)
     return HB_NFC_ERR_PARAM;
@@ -330,15 +341,15 @@ hb_nfc_err_t iso15693_read_multiple_blocks(const iso15693_tag_t *tag,
   memcpy(&cmd[pos], tag->uid, ISO15693_UID_LEN);
   pos += ISO15693_UID_LEN;
   cmd[pos++] = first_block;
-  cmd[pos++] = (uint8_t)(count - 1U); /* n-1 encoding */
+  cmd[pos++] = (uint8_t)(count - 1U);
 
-  size_t rx_cap = 1 + total + 2; /* flags + data + CRC */
+  size_t rx_cap = 1 + total + 2;
   uint8_t *rx = (uint8_t *)malloc(rx_cap);
-  if (!rx)
+  if (rx == NULL)
     return HB_NFC_ERR_INTERNAL;
   memset(rx, 0, rx_cap);
 
-  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, rx_cap, 1, 50);
+  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, rx_cap, 1, ISO15693_TIMEOUT_MULTI_MS);
   if (len < 2) {
     free(rx);
     return HB_NFC_ERR_NO_CARD;
@@ -356,14 +367,14 @@ hb_nfc_err_t iso15693_read_multiple_blocks(const iso15693_tag_t *tag,
   }
 
   memcpy(out_buf, &rx[1], total);
-  if (out_len)
+  if (out_len != NULL)
     *out_len = total;
   free(rx);
   return HB_NFC_OK;
 }
 
 hb_nfc_err_t iso15693_write_afi(const iso15693_tag_t *tag, uint8_t afi) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
 
   uint8_t cmd[3 + ISO15693_UID_LEN];
@@ -375,7 +386,7 @@ hb_nfc_err_t iso15693_write_afi(const iso15693_tag_t *tag, uint8_t afi) {
   cmd[pos++] = afi;
 
   uint8_t rx[8] = {0};
-  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, 30);
+  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, ISO15693_TIMEOUT_MS);
   if (len < 1)
     return HB_NFC_ERR_NO_CARD;
 
@@ -390,7 +401,7 @@ hb_nfc_err_t iso15693_write_afi(const iso15693_tag_t *tag, uint8_t afi) {
 }
 
 hb_nfc_err_t iso15693_lock_afi(const iso15693_tag_t *tag) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
 
   uint8_t cmd[2 + ISO15693_UID_LEN];
@@ -401,7 +412,7 @@ hb_nfc_err_t iso15693_lock_afi(const iso15693_tag_t *tag) {
   pos += ISO15693_UID_LEN;
 
   uint8_t rx[8] = {0};
-  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, 30);
+  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, ISO15693_TIMEOUT_MS);
   if (len < 1)
     return HB_NFC_ERR_NO_CARD;
 
@@ -416,7 +427,7 @@ hb_nfc_err_t iso15693_lock_afi(const iso15693_tag_t *tag) {
 }
 
 hb_nfc_err_t iso15693_write_dsfid(const iso15693_tag_t *tag, uint8_t dsfid) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
 
   uint8_t cmd[3 + ISO15693_UID_LEN];
@@ -428,7 +439,7 @@ hb_nfc_err_t iso15693_write_dsfid(const iso15693_tag_t *tag, uint8_t dsfid) {
   cmd[pos++] = dsfid;
 
   uint8_t rx[8] = {0};
-  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, 30);
+  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, ISO15693_TIMEOUT_MS);
   if (len < 1)
     return HB_NFC_ERR_NO_CARD;
 
@@ -443,7 +454,7 @@ hb_nfc_err_t iso15693_write_dsfid(const iso15693_tag_t *tag, uint8_t dsfid) {
 }
 
 hb_nfc_err_t iso15693_lock_dsfid(const iso15693_tag_t *tag) {
-  if (!tag)
+  if (tag == NULL)
     return HB_NFC_ERR_PARAM;
 
   uint8_t cmd[2 + ISO15693_UID_LEN];
@@ -454,7 +465,7 @@ hb_nfc_err_t iso15693_lock_dsfid(const iso15693_tag_t *tag) {
   pos += ISO15693_UID_LEN;
 
   uint8_t rx[8] = {0};
-  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, 30);
+  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, ISO15693_TIMEOUT_MS);
   if (len < 1)
     return HB_NFC_ERR_NO_CARD;
 
@@ -474,7 +485,7 @@ hb_nfc_err_t iso15693_get_multi_block_sec(const iso15693_tag_t *tag,
                                           uint8_t *out_buf,
                                           size_t out_max,
                                           size_t *out_len) {
-  if (!tag || !out_buf || count == 0)
+  if (tag == NULL || out_buf == NULL || count == 0)
     return HB_NFC_ERR_PARAM;
   if (out_max < count)
     return HB_NFC_ERR_PARAM;
@@ -489,7 +500,7 @@ hb_nfc_err_t iso15693_get_multi_block_sec(const iso15693_tag_t *tag,
   cmd[pos++] = (uint8_t)(count - 1U);
 
   uint8_t rx[64] = {0};
-  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, 30);
+  int len = nfc_poller_transceive(cmd, (size_t)pos, true, rx, sizeof(rx), 1, ISO15693_TIMEOUT_MS);
   if (len < 2)
     return HB_NFC_ERR_NO_CARD;
 
@@ -502,7 +513,7 @@ hb_nfc_err_t iso15693_get_multi_block_sec(const iso15693_tag_t *tag,
     return HB_NFC_ERR_PROTOCOL;
 
   memcpy(out_buf, &rx[1], count);
-  if (out_len)
+  if (out_len != NULL)
     *out_len = count;
   return HB_NFC_OK;
 }
@@ -517,9 +528,9 @@ void iso15693_dump_card(void) {
 
   err = iso15693_get_system_info(&tag);
   if (err != HB_NFC_OK) {
-    ESP_LOGW(TAG, "SYSINFO failed, using default block size 4");
-    tag.block_size = 4;
-    tag.block_count = 16;
+    ESP_LOGW(TAG, "SYSINFO failed, using default block size");
+    tag.block_size = ISO15693_DEFAULT_BLOCK_SIZE;
+    tag.block_count = ISO15693_DEFAULT_BLOCK_COUNT;
   }
 
   uint8_t blk[ISO15693_MAX_BLOCK_SIZE];
@@ -553,12 +564,12 @@ void iso15693_dump_card(void) {
 }
 
 uint16_t iso15693_crc16(const uint8_t *data, size_t len) {
-  uint16_t crc = 0xFFFFU;
+  uint16_t crc = ISO15693_CRC_INIT;
   for (size_t i = 0; i < len; i++) {
     crc ^= data[i];
     for (int b = 0; b < 8; b++) {
       if (crc & 0x0001U)
-        crc = (crc >> 1) ^ 0x8408U;
+        crc = (crc >> 1) ^ ISO15693_CRC_POLY;
       else
         crc >>= 1;
     }
@@ -567,9 +578,9 @@ uint16_t iso15693_crc16(const uint8_t *data, size_t len) {
 }
 
 bool iso15693_check_crc(const uint8_t *data, size_t len) {
-  if (!data || len < 2)
+  if (data == NULL || len < ISO15693_CRC_LEN)
     return false;
-  uint16_t calc = iso15693_crc16(data, len - 2);
+  uint16_t calc = iso15693_crc16(data, len - ISO15693_CRC_LEN);
   uint16_t rx = (uint16_t)data[len - 2] | ((uint16_t)data[len - 1] << 8);
   return (calc == rx);
 }
