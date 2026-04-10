@@ -13,30 +13,50 @@
 // limitations under the License.
 
 #include "menu_ui.h"
+
+#include <stdio.h>
+
+#include "esp_log.h"
+#include "lvgl.h"
+
 #include "home_ui.h"
 #include "header_ui.h"
 #include "ui_theme.h"
 #include "ui_manager.h"
 #include "lv_port_indev.h"
-#include "lvgl.h"
-#include "esp_log.h"
-#include <stdio.h>
 #include "assets_manager.h"
 #include "page_dots_ui.h"
 #include "st7789.h"
 
-extern lv_group_t *main_group;
 static const char *TAG = "UI_MENU";
+
+#define MENU_ITEM_FRAME_COUNT 3
+#define MENU_ITEM_COUNT       (sizeof(s_menu_data) / sizeof(s_menu_data[0]))
+#define ANIM_MS               400
+#define LABEL_FADE_MS         300
+#define FONT_PATH             "A:assets/fonts/Inter.bin"
+#define ICON_CENTER_OFFSET_Y  (-10)
+#define LABEL_OFFSET_Y        (-40)
+#define DOTS_OFFSET_Y         (-20)
+
+// Carousel position table: far-left, left, center, right, far-right
+static const int32_t CAROUSEL_PX[] = {-120, -75, 0, 75, 120};
+static const int32_t CAROUSEL_PY[] = {-25, -12, 0, -12, -25};
+static const int32_t CAROUSEL_SC[] = {128, 184, 280, 184, 128};
+static const int32_t CAROUSEL_OP[] = {LV_OPA_40, LV_OPA_70, LV_OPA_COVER, LV_OPA_70, LV_OPA_40};
+static const int32_t CAROUSEL_Z[] = {0, 1, 2, 1, 0};
+#define CAROUSEL_SLOTS  5
+#define CAROUSEL_CENTER 2
 
 typedef struct {
   const char *name;
-  const char *icon_frames[3];
-  const char *base_frames[3];
-  lv_image_dsc_t *icon_dscs[3];
-  lv_image_dsc_t *base_dscs[3];
-} menu_item_t;
+  const char *icon_frames[MENU_ITEM_FRAME_COUNT];
+  const char *base_frames[MENU_ITEM_FRAME_COUNT];
+  lv_image_dsc_t *icon_dscs[MENU_ITEM_FRAME_COUNT];
+  lv_image_dsc_t *base_dscs[MENU_ITEM_FRAME_COUNT];
+} menu_ui_item_t;
 
-static menu_item_t menu_data[] = {
+static menu_ui_item_t s_menu_data[] = {
     {"WIFI",
      {"/assets/frames/wifi_frame_0.bin",
       "/assets/frames/wifi_frame_1.bin",
@@ -129,197 +149,218 @@ static menu_item_t menu_data[] = {
      {NULL}},
 };
 
-#define N       (sizeof(menu_data) / sizeof(menu_data[0]))
-#define ANIM_MS 400
+extern lv_group_t *main_group;
 
-static lv_obj_t *scr = NULL;
-static lv_obj_t *lbl = NULL;
-static lv_obj_t *bi[N]; /* base images */
-static lv_obj_t *ii[N]; /* icon images */
-static page_dots_t pg_dots;
-static uint8_t sel = 0;
-static lv_font_t *fnt = NULL;
-static bool animating = false;
+static lv_obj_t *s_screen = NULL;
+static lv_obj_t *s_label = NULL;
+static lv_obj_t *s_base_imgs[MENU_ITEM_COUNT];
+static lv_obj_t *s_icon_imgs[MENU_ITEM_COUNT];
+static page_dots_t s_page_dots;
+static uint8_t s_selected = 0;
+static lv_font_t *s_font = NULL;
+static bool s_is_animating = false;
 
-/*              far-L   left  center  right  far-R  */
-static const int PX[] = {-120, -75, 0, 75, 120};
-static const int PY[] = {-25, -12, 0, -12, -25};
-static const int SC[] = {128, 184, 280, 184, 128};
-static const int OP[] = {LV_OPA_40, LV_OPA_70, LV_OPA_COVER, LV_OPA_70, LV_OPA_40};
+static int32_t carousel_slot(size_t item_idx);
+static void load_item_frame(size_t item_idx, int frame);
+static void place_item(size_t item_idx, bool anim);
+static void fix_z_order(void);
+static void update_view(bool anim);
+static void on_anim_done(lv_anim_t *a);
+static void on_key_event(lv_event_t *e);
 
-static int vis(int i) {
-  int d = (i - sel + N) % N;
-  if (d > (int)N / 2)
-    d -= N;
-  int v = 2 + d;
-  return (v >= 0 && v <= 4) ? v : -1;
+static int32_t carousel_slot(size_t item_idx) {
+  int32_t n = (int32_t)MENU_ITEM_COUNT;
+  int32_t d = ((int32_t)item_idx - (int32_t)s_selected + n) % n;
+  if (d > n / 2)
+    d -= n;
+  int32_t slot = CAROUSEL_CENTER + d;
+  return (slot >= 0 && slot < CAROUSEL_SLOTS) ? slot : -1;
 }
 
-static void anim_done_cb(lv_anim_t *a) {
-  animating = false;
+static void on_anim_done(lv_anim_t *a) {
+  s_is_animating = false;
 }
 
-static void load(int i, int f) {
-  if (!menu_data[i].icon_dscs[f])
-    menu_data[i].icon_dscs[f] = assets_get(menu_data[i].icon_frames[f]);
-  if (!menu_data[i].base_dscs[f])
-    menu_data[i].base_dscs[f] = assets_get(menu_data[i].base_frames[f]);
+static void load_item_frame(size_t item_idx, int frame) {
+  if (s_menu_data[item_idx].icon_dscs[frame] == NULL)
+    s_menu_data[item_idx].icon_dscs[frame] = assets_get(s_menu_data[item_idx].icon_frames[frame]);
+  if (s_menu_data[item_idx].base_dscs[frame] == NULL)
+    s_menu_data[item_idx].base_dscs[frame] = assets_get(s_menu_data[item_idx].base_frames[frame]);
 }
 
-static void place(int i, bool anim) {
-  int vp = vis(i);
-  if (vp < 0) {
-    /* Fade out then hide */
-    lv_obj_set_style_opa(bi[i], LV_OPA_TRANSP, 0);
-    lv_obj_set_style_opa(ii[i], LV_OPA_TRANSP, 0);
-    lv_obj_add_flag(bi[i], LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(ii[i], LV_OBJ_FLAG_HIDDEN);
+static void place_item(size_t item_idx, bool anim) {
+  int32_t slot = carousel_slot(item_idx);
+
+  if (slot < 0) {
+    lv_obj_set_style_opa(s_base_imgs[item_idx], LV_OPA_TRANSP, 0);
+    lv_obj_set_style_opa(s_icon_imgs[item_idx], LV_OPA_TRANSP, 0);
+    lv_obj_add_flag(s_base_imgs[item_idx], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(s_icon_imgs[item_idx], LV_OBJ_FLAG_HIDDEN);
     return;
   }
-  lv_obj_remove_flag(bi[i], LV_OBJ_FLAG_HIDDEN);
-  lv_obj_remove_flag(ii[i], LV_OBJ_FLAG_HIDDEN);
 
-  int f = (vp < 2) ? 1 : (vp > 2) ? 2 : 0;
-  load(i, f);
-  if (menu_data[i].base_dscs[f])
-    lv_image_set_src(bi[i], menu_data[i].base_dscs[f]);
-  if (menu_data[i].icon_dscs[f])
-    lv_image_set_src(ii[i], menu_data[i].icon_dscs[f]);
+  lv_obj_remove_flag(s_base_imgs[item_idx], LV_OBJ_FLAG_HIDDEN);
+  lv_obj_remove_flag(s_icon_imgs[item_idx], LV_OBJ_FLAG_HIDDEN);
 
-  int tx = PX[vp], ty = PY[vp], ts = SC[vp], to = OP[vp];
-  bool is_center = (vp == 2);
+  int frame = (slot < CAROUSEL_CENTER) ? 1 : (slot > CAROUSEL_CENTER) ? 2 : 0;
+  load_item_frame(item_idx, frame);
 
-  /* Center item must have zero transparency */
+  if (s_menu_data[item_idx].base_dscs[frame] != NULL)
+    lv_image_set_src(s_base_imgs[item_idx], s_menu_data[item_idx].base_dscs[frame]);
+  if (s_menu_data[item_idx].icon_dscs[frame] != NULL)
+    lv_image_set_src(s_icon_imgs[item_idx], s_menu_data[item_idx].icon_dscs[frame]);
+
+  int32_t tx = CAROUSEL_PX[slot];
+  int32_t ty = CAROUSEL_PY[slot];
+  int32_t ts = CAROUSEL_SC[slot];
+  int32_t to = CAROUSEL_OP[slot];
+  bool is_center = (slot == CAROUSEL_CENTER);
+
   if (is_center) {
-    lv_obj_set_style_opa(bi[i], LV_OPA_COVER, 0);
-    lv_obj_set_style_opa(ii[i], LV_OPA_COVER, 0);
-    lv_obj_set_style_image_opa(bi[i], LV_OPA_COVER, 0);
-    lv_obj_set_style_image_opa(ii[i], LV_OPA_COVER, 0);
+    lv_obj_set_style_opa(s_base_imgs[item_idx], LV_OPA_COVER, 0);
+    lv_obj_set_style_opa(s_icon_imgs[item_idx], LV_OPA_COVER, 0);
+    lv_obj_set_style_image_opa(s_base_imgs[item_idx], LV_OPA_COVER, 0);
+    lv_obj_set_style_image_opa(s_icon_imgs[item_idx], LV_OPA_COVER, 0);
   }
 
   if (anim) {
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_duration(&a, ANIM_MS);
-
     lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
 
-    /* base X */
-    lv_anim_set_var(&a, bi[i]);
-    lv_anim_set_values(&a, lv_obj_get_x_aligned(bi[i]), tx);
+    lv_anim_set_var(&a, s_base_imgs[item_idx]);
+    lv_anim_set_values(&a, lv_obj_get_x_aligned(s_base_imgs[item_idx]), tx);
     lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_x);
     if (is_center)
-      lv_anim_set_completed_cb(&a, anim_done_cb);
-    lv_anim_start(&a);
-    /* icon X */
-    lv_anim_set_var(&a, ii[i]);
-    lv_anim_set_values(&a, lv_obj_get_x_aligned(ii[i]), tx);
+      lv_anim_set_completed_cb(&a, on_anim_done);
     lv_anim_start(&a);
 
-    /* base Y */
-    lv_anim_set_var(&a, bi[i]);
-    lv_anim_set_values(&a, lv_obj_get_y_aligned(bi[i]), ty);
+    lv_anim_set_var(&a, s_icon_imgs[item_idx]);
+    lv_anim_set_values(&a, lv_obj_get_x_aligned(s_icon_imgs[item_idx]), tx);
+    lv_anim_start(&a);
+
+    lv_anim_set_var(&a, s_base_imgs[item_idx]);
+    lv_anim_set_values(&a, lv_obj_get_y_aligned(s_base_imgs[item_idx]), ty);
     lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_y);
     lv_anim_start(&a);
-    /* icon Y */
-    lv_anim_set_var(&a, ii[i]);
-    lv_anim_set_values(&a, lv_obj_get_y_aligned(ii[i]), ty);
+
+    lv_anim_set_var(&a, s_icon_imgs[item_idx]);
+    lv_anim_set_values(&a, lv_obj_get_y_aligned(s_icon_imgs[item_idx]), ty);
     lv_anim_start(&a);
 
-    /* base scale */
-    lv_anim_set_var(&a, bi[i]);
-    lv_anim_set_values(&a, lv_image_get_scale(bi[i]), ts);
+    lv_anim_set_var(&a, s_base_imgs[item_idx]);
+    lv_anim_set_values(&a, lv_image_get_scale(s_base_imgs[item_idx]), ts);
     lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_image_set_scale);
     lv_anim_start(&a);
-    /* icon scale */
-    lv_anim_set_var(&a, ii[i]);
-    lv_anim_set_values(&a, lv_image_get_scale(ii[i]), ts);
+
+    lv_anim_set_var(&a, s_icon_imgs[item_idx]);
+    lv_anim_set_values(&a, lv_image_get_scale(s_icon_imgs[item_idx]), ts);
     lv_anim_start(&a);
 
-    /* base opacity */
-    lv_anim_set_var(&a, bi[i]);
-    lv_anim_set_values(&a, lv_obj_get_style_opa(bi[i], 0), to);
+    lv_anim_set_var(&a, s_base_imgs[item_idx]);
+    lv_anim_set_values(&a, lv_obj_get_style_opa(s_base_imgs[item_idx], 0), to);
     lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_style_opa);
     lv_anim_start(&a);
-    /* icon opacity */
-    lv_anim_set_var(&a, ii[i]);
-    lv_anim_set_values(&a, lv_obj_get_style_opa(ii[i], 0), to);
+
+    lv_anim_set_var(&a, s_icon_imgs[item_idx]);
+    lv_anim_set_values(&a, lv_obj_get_style_opa(s_icon_imgs[item_idx], 0), to);
     lv_anim_start(&a);
   } else {
-    lv_obj_align(bi[i], LV_ALIGN_CENTER, tx, ty);
-    lv_obj_align(ii[i], LV_ALIGN_CENTER, tx, ty);
-    lv_image_set_scale(bi[i], ts);
-    lv_image_set_scale(ii[i], ts);
-    lv_obj_set_style_opa(bi[i], to, 0);
-    lv_obj_set_style_opa(ii[i], to, 0);
+    lv_obj_align(s_base_imgs[item_idx], LV_ALIGN_CENTER, tx, ty);
+    lv_obj_align(s_icon_imgs[item_idx], LV_ALIGN_CENTER, tx, ty);
+    lv_image_set_scale(s_base_imgs[item_idx], ts);
+    lv_image_set_scale(s_icon_imgs[item_idx], ts);
+    lv_obj_set_style_opa(s_base_imgs[item_idx], to, 0);
+    lv_obj_set_style_opa(s_icon_imgs[item_idx], to, 0);
   }
 }
 
-static void zfix(void) {
-  static const int zp[] = {0, 1, 2, 1, 0};
+static void fix_z_order(void) {
   typedef struct {
-    int i, z;
-  } z_t;
-  z_t v[5];
-  int c = 0;
-  for (int i = 0; i < (int)N; i++) {
-    int vp = vis(i);
-    if (vp >= 0 && c < 5) {
-      v[c].i = i;
-      v[c].z = zp[vp];
-      c++;
+    size_t item_idx;
+    int32_t z;
+  } z_entry_t;
+
+  z_entry_t visible[CAROUSEL_SLOTS];
+  size_t count = 0;
+
+  for (size_t i = 0; i < MENU_ITEM_COUNT; i++) {
+    int32_t slot = carousel_slot(i);
+    if (slot >= 0 && count < CAROUSEL_SLOTS) {
+      visible[count].item_idx = i;
+      visible[count].z = CAROUSEL_Z[slot];
+      count++;
     }
   }
-  for (int i = 0; i < c - 1; i++)
-    for (int j = i + 1; j < c; j++)
-      if (v[i].z > v[j].z) {
-        z_t t = v[i];
-        v[i] = v[j];
-        v[j] = t;
+
+  // Insertion sort by z ascending
+  for (size_t i = 0; i < count - 1; i++) {
+    for (size_t j = i + 1; j < count; j++) {
+      if (visible[i].z > visible[j].z) {
+        z_entry_t tmp = visible[i];
+        visible[i] = visible[j];
+        visible[j] = tmp;
       }
-  for (int i = 0; i < c; i++) {
-    lv_obj_move_foreground(bi[v[i].i]);
-    lv_obj_move_foreground(ii[v[i].i]);
+    }
+  }
+
+  for (size_t i = 0; i < count; i++) {
+    lv_obj_move_foreground(s_base_imgs[visible[i].item_idx]);
+    lv_obj_move_foreground(s_icon_imgs[visible[i].item_idx]);
   }
 }
 
-static void update(bool anim) {
-  lv_label_set_text_fmt(lbl, LV_SYMBOL_LEFT "   %s   " LV_SYMBOL_RIGHT, menu_data[sel].name);
+static void update_view(bool anim) {
+  lv_label_set_text_fmt(
+      s_label, LV_SYMBOL_LEFT "   %s   " LV_SYMBOL_RIGHT, s_menu_data[s_selected].name);
+
   if (anim) {
     lv_anim_t a;
     lv_anim_init(&a);
-    lv_anim_set_var(&a, lbl);
+    lv_anim_set_var(&a, s_label);
     lv_anim_set_values(&a, LV_OPA_0, LV_OPA_COVER);
-    lv_anim_set_duration(&a, 300);
+    lv_anim_set_duration(&a, LABEL_FADE_MS);
     lv_anim_set_exec_cb(&a, (lv_anim_exec_xcb_t)lv_obj_set_style_opa);
     lv_anim_start(&a);
   }
 
-  page_dots_set(&pg_dots, sel);
+  page_dots_set(&s_page_dots, s_selected);
 
-  for (int i = 0; i < (int)N; i++)
-    place(i, anim);
-  zfix();
+  for (size_t i = 0; i < MENU_ITEM_COUNT; i++)
+    place_item(i, anim);
+
+  fix_z_order();
 }
 
-static void ev(lv_event_t *e) {
+static void on_key_event(lv_event_t *e) {
   if (lv_event_get_code(e) != LV_EVENT_KEY)
     return;
+
   uint32_t k = lv_event_get_key(e);
+  size_t n = MENU_ITEM_COUNT;
+
   if (k == LV_KEY_RIGHT || k == LV_KEY_LEFT) {
-    if (animating)
+    if (s_is_animating)
       return;
-    animating = true;
+    s_is_animating = true;
 
     if (k == LV_KEY_RIGHT)
-      sel = (sel + 1) % N;
+      s_selected = (s_selected + 1) % n;
     else
-      sel = (sel == 0) ? N - 1 : sel - 1;
-    update(true);
-  } else if (k == LV_KEY_ESC) {
+      s_selected = (s_selected == 0) ? (uint8_t)(n - 1) : s_selected - 1;
+
+    update_view(true);
+    return;
+  }
+
+  if (k == LV_KEY_ESC) {
     ui_switch_screen(SCREEN_HOME);
-  } else if (k == LV_KEY_ENTER) {
-    switch (sel) {
+    return;
+  }
+
+  if (k == LV_KEY_ENTER) {
+    switch (s_selected) {
       case 0:
         ui_switch_screen(SCREEN_WIFI_MENU);
         break;
@@ -339,57 +380,61 @@ static void ev(lv_event_t *e) {
         ui_switch_screen(SCREEN_FILES);
         break;
       default:
-        ESP_LOGW(TAG, "NOT DEFINED");
+        ESP_LOGW(TAG, "No screen mapped for menu item %u", (unsigned)s_selected);
         break;
     }
   }
 }
 
 void ui_menu_open(void) {
-  if (scr) {
-    lv_obj_del(scr);
-    scr = NULL;
+  if (s_screen != NULL) {
+    lv_obj_del(s_screen);
+    s_screen = NULL;
   }
-  animating = false;
 
-  /* Invalidate cached asset pointers — they may be stale after theme change */
-  for (int i = 0; i < (int)N; i++) {
-    for (int f = 0; f < 3; f++) {
-      menu_data[i].icon_dscs[f] = NULL;
-      menu_data[i].base_dscs[f] = NULL;
+  s_is_animating = false;
+
+  // Invalidate cached asset pointers — may be stale after a theme change
+  for (size_t i = 0; i < MENU_ITEM_COUNT; i++) {
+    for (int f = 0; f < MENU_ITEM_FRAME_COUNT; f++) {
+      s_menu_data[i].icon_dscs[f] = NULL;
+      s_menu_data[i].base_dscs[f] = NULL;
     }
   }
-  scr = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(scr, current_theme.screen_base, 0);
-  lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
-  lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
-  if (!fnt)
-    fnt = lv_binfont_create("A:assets/fonts/Inter.bin");
+  s_screen = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(s_screen, current_theme.screen_base, 0);
+  lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
+  lv_obj_remove_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
 
-  for (int i = 0; i < (int)N; i++) {
-    bi[i] = lv_image_create(scr);
-    lv_obj_align(bi[i], LV_ALIGN_CENTER, 0, -10);
+  if (s_font == NULL)
+    s_font = lv_binfont_create(FONT_PATH);
 
-    ii[i] = lv_image_create(scr);
-    lv_obj_align(ii[i], LV_ALIGN_CENTER, 0, -10);
+  for (size_t i = 0; i < MENU_ITEM_COUNT; i++) {
+    s_base_imgs[i] = lv_image_create(s_screen);
+    lv_obj_align(s_base_imgs[i], LV_ALIGN_CENTER, 0, ICON_CENTER_OFFSET_Y);
+
+    s_icon_imgs[i] = lv_image_create(s_screen);
+    lv_obj_align(s_icon_imgs[i], LV_ALIGN_CENTER, 0, ICON_CENTER_OFFSET_Y);
   }
 
-  header_ui_create(scr);
+  header_ui_create(s_screen);
 
-  lbl = lv_label_create(scr);
-  lv_obj_align(lbl, LV_ALIGN_BOTTOM_MID, 0, -40);
-  lv_obj_set_style_text_color(lbl, current_theme.text_main, 0);
-  lv_obj_set_style_text_font(lbl, fnt ? fnt : &lv_font_montserrat_14, 0);
+  s_label = lv_label_create(s_screen);
+  lv_obj_align(s_label, LV_ALIGN_BOTTOM_MID, 0, LABEL_OFFSET_Y);
+  lv_obj_set_style_text_color(s_label, current_theme.text_main, 0);
+  lv_obj_set_style_text_font(s_label, s_font != NULL ? s_font : &lv_font_montserrat_14, 0);
 
-  pg_dots = page_dots_create(scr, N, LV_ALIGN_BOTTOM_MID, 0, -20);
+  s_page_dots = page_dots_create(s_screen, MENU_ITEM_COUNT, LV_ALIGN_BOTTOM_MID, 0, DOTS_OFFSET_Y);
 
-  update(false);
-  lv_obj_add_event_cb(scr, ev, LV_EVENT_KEY, NULL);
+  update_view(false);
 
-  if (main_group) {
-    lv_group_add_obj(main_group, scr);
-    lv_group_focus_obj(scr);
+  lv_obj_add_event_cb(s_screen, on_key_event, LV_EVENT_KEY, NULL);
+
+  if (main_group != NULL) {
+    lv_group_add_obj(main_group, s_screen);
+    lv_group_focus_obj(s_screen);
   }
-  lv_screen_load(scr);
+
+  lv_screen_load(s_screen);
 }
