@@ -18,7 +18,7 @@
     ["@semantic-release/release-notes-generator", {
       "preset": "conventionalcommits",
       "writerOpts": {
-        "commitPartial": "* {{#if scope}}**{{scope}}:** {{/if}}{{subject}} ({{hash}}) - @{{authorName}}\n"
+        "commitPartial": "* {{#if scope}}**{{scope}}:** {{/if}}{{subject}} ({{hash}}) - [@{{authorName}}](https://github.com/{{authorName}})\n"
       }
     }],
     ["@semantic-release/changelog", {
