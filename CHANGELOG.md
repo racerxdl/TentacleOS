@@ -1,3 +1,9 @@
+## [1.2.1](https://github.com/HighCodeh/TentacleOS/compare/v1.2.0...v1.2.1) (2026-04-11)
+
+### Bug Fixes
+
+* **ci:** author names to release changelogs (06756513618de9f33abc1fc6453cf2b78da9a578) —
+
 ## [1.2.0](https://github.com/HighCodeh/TentacleOS/compare/v1.1.0...v1.2.0) (2026-04-11)
 
 ### Features
