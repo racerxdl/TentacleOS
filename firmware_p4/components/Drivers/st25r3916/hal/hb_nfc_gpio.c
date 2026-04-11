@@ -20,8 +20,9 @@
 
 static const char *TAG = "hb_nfc_gpio";
 
-#define HB_NFC_GPIO_IRQ_WAIT_US 1000 /* Polling interval for hb_nfc_gpio_irq_wait() (1 ms in µs). \
-                                      */
+#define HB_NFC_GPIO_IRQ_WAIT_US                                      \
+  1000 /* Polling interval for hb_nfc_gpio_irq_wait() (1 ms in µs). \
+        */
 
 static gpio_num_t s_pin_irq = GPIO_NUM_NC;
 

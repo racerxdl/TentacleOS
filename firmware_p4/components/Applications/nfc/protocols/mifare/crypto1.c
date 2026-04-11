@@ -15,7 +15,7 @@
 #include "crypto1.h"
 
 #define SWAPENDIAN(x) \
-  ((x) = ((x) >> 8 & 0xff00ffU) | ((x)&0xff00ffU) << 8, (x) = (x) >> 16 | (x) << 16)
+  ((x) = ((x) >> 8 & 0xff00ffU) | ((x) & 0xff00ffU) << 8, (x) = (x) >> 16 | (x) << 16)
 
 #define BIT(x, n)   (((x) >> (n)) & 1U)
 #define BEBIT(x, n) BIT((x), (n) ^ 24)

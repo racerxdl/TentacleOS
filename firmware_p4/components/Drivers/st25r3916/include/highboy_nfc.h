@@ -45,11 +45,16 @@ typedef struct {
 /**
  * @brief Default configuration based on ESP32-P4 reference wiring.
  */
-#define HIGHBOY_NFC_CONFIG_DEFAULT()                                                   \
-  {                                                                                    \
-    .pin_mosi = GPIO_NUM_18, .pin_miso = GPIO_NUM_19, .pin_sclk = GPIO_NUM_17,         \
-    .pin_cs = GPIO_NUM_3, .pin_irq = GPIO_NUM_8, .spi_host = SPI2_HOST, .spi_mode = 1, \
-    .spi_clock_hz = 500000,                                                            \
+#define HIGHBOY_NFC_CONFIG_DEFAULT() \
+  {                                  \
+      .pin_mosi = GPIO_NUM_18,       \
+      .pin_miso = GPIO_NUM_19,       \
+      .pin_sclk = GPIO_NUM_17,       \
+      .pin_cs = GPIO_NUM_3,          \
+      .pin_irq = GPIO_NUM_8,         \
+      .spi_host = SPI2_HOST,         \
+      .spi_mode = 1,                 \
+      .spi_clock_hz = 500000,        \
   }
 
 /**

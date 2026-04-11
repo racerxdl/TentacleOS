@@ -674,7 +674,7 @@ void iso14443b_emu_run_step(void) {
   s_active_tick = xTaskGetTickCount();
   return;
 
-idle_active : {
+idle_active: {
   TickType_t now = xTaskGetTickCount();
   if ((now - s_active_tick) > pdMS_TO_TICKS(ISO14443B_ACTIVE_TIMEOUT_MS)) {
     ESP_LOGI(TAG, "ACTIVE: idle timeout -> SLEEP");

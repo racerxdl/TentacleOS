@@ -48,7 +48,7 @@ static inline void nested_bit_set(uint8_t *buf, size_t bitpos, uint8_t v) {
   if (v)
     buf[bitpos >> 3] |= (uint8_t)(1U << (bitpos & 7U));
   else
-    buf[bitpos >> 3] &= (uint8_t) ~(1U << (bitpos & 7U));
+    buf[bitpos >> 3] &= (uint8_t)~(1U << (bitpos & 7U));
 }
 
 static inline uint8_t nested_bit_get(const uint8_t *buf, size_t bitpos) {

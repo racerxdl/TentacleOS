@@ -179,7 +179,7 @@ esp_err_t st25r3916_core_set_mode_nfca(void) {
 
   uint8_t iso_config = 0;
   hb_nfc_spi_reg_read(ST25R3916_REG_ISO14443A, &iso_config);
-  iso_config &= (uint8_t) ~(ST25R3916_ISO14443A_NO_TX_PAR | ST25R3916_ISO14443A_ANTCL);
+  iso_config &= (uint8_t)~(ST25R3916_ISO14443A_NO_TX_PAR | ST25R3916_ISO14443A_ANTCL);
   hb_nfc_spi_reg_write(ST25R3916_REG_ISO14443A, iso_config);
 
   return ESP_OK;
