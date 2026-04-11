@@ -20,7 +20,7 @@
 
 #include "esp_log.h"
 
-static const char *TAG = "SUBGHZ_ANALYZERR";
+static const char *TAG = "SUBGHZ_ANALYZER";
 
 #define HIST_BIN_SIZE      50
 #define HIST_MAX_VAL       5000
