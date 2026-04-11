@@ -12,21 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include "ble_tracker.h"
-#include "bluetooth_service.h"
+
 #include "esp_log.h"
 
-static const char *TAG = "BLE_TRACKER";
-static int latest_rssi = -120;
+#include "bluetooth_service.h"
 
-static void tracker_rssi_callback(int rssi) {
-  latest_rssi = rssi;
+static const char *TAG = "BLE_TRACKER";
+
+#define TRACKER_DEFAULT_RSSI -120
+
+static int s_latest_rssi = TRACKER_DEFAULT_RSSI;
+
+static void rssi_callback(int rssi) {
+  s_latest_rssi = rssi;
 }
 
 esp_err_t ble_tracker_start(const uint8_t *addr) {
-  latest_rssi = -120;
-  return bluetooth_service_start_tracker(addr, tracker_rssi_callback);
+  s_latest_rssi = TRACKER_DEFAULT_RSSI;
+  return bluetooth_service_start_tracker(addr, rssi_callback);
 }
 
 void ble_tracker_stop(void) {
@@ -34,5 +38,5 @@ void ble_tracker_stop(void) {
 }
 
 int ble_tracker_get_rssi(void) {
-  return latest_rssi;
+  return s_latest_rssi;
 }

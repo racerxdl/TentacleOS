@@ -11,38 +11,76 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file st25r3916_fifo.h
- * @brief ST25R3916 FIFO load, read, count, TX byte setup.
- */
+
 #ifndef ST25R3916_FIFO_H
 #define ST25R3916_FIFO_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <stddef.h>
-#include "highboy_nfc_error.h"
+#include <stdbool.h>
 
-/** Get number of bytes currently in FIFO (0-512). */
-uint16_t st25r_fifo_count(void);
-
-/** Clear FIFO via direct command. */
-void st25r_fifo_clear(void);
-
-/** Load data into FIFO for transmission. Max 512 bytes (full FIFO). */
-hb_nfc_err_t st25r_fifo_load(const uint8_t* data, size_t len);
-
-/** Read data from FIFO. Max 512 bytes (full FIFO). */
-hb_nfc_err_t st25r_fifo_read(uint8_t* data, size_t len);
+#include "esp_err.h"
 
 /**
- * Set TX byte and bit count registers.
+ * @brief Get the number of bytes currently in the FIFO.
+ *
+ * @return Byte count (0–512).
  */
-void st25r_set_tx_bytes(uint16_t nbytes, uint8_t nbtx_bits);
+uint16_t st25r3916_fifo_get_count(void);
 
 /**
- * Wait for FIFO to reach min_bytes, polling every 1ms.
- * Returns actual count. Sets *final_count if non-NULL.
+ * @brief Clear the FIFO via ST25R3916_CMD_CLEAR direct command.
  */
-int st25r_fifo_wait(size_t min_bytes, int timeout_ms, uint16_t* final_count);
+void st25r3916_fifo_clear(void);
 
+/**
+ * @brief Load data into the FIFO for transmission.
+ *
+ * @param data  Source buffer. Must not be NULL.
+ * @param len   Number of bytes to load.
+ * @return
+ * - ESP_OK on success
+ * - ESP_ERR_INVALID_ARG if data is NULL
+ */
+esp_err_t st25r3916_fifo_load(const uint8_t *data, size_t len);
+
+/**
+ * @brief Read data from the FIFO after reception.
+ *
+ * @param[out] out_data  Destination buffer. Must not be NULL.
+ * @param len            Number of bytes to read.
+ * @return
+ * - ESP_OK on success
+ * - ESP_ERR_INVALID_ARG if out_data is NULL
+ */
+esp_err_t st25r3916_fifo_read(uint8_t *out_data, size_t len);
+
+/**
+ * @brief Set the TX byte and partial-bit count registers.
+ *
+ * @param nbytes    Total number of complete bytes to transmit.
+ * @param nbtx_bits Extra bits in the final byte.
+ */
+void st25r3916_fifo_set_tx_bytes(uint16_t nbytes, uint8_t nbtx_bits);
+
+/**
+ * @brief Poll the FIFO until it contains at least min_bytes.
+ *
+ * @param min_bytes         Target byte count.
+ * @param timeout_ms        Maximum wait time.
+ * @param[out] out_final_count Final FIFO count. May be NULL.
+ * @return
+ * - ESP_OK if condition met
+ * - ESP_ERR_TIMEOUT if target not reached
+ */
+esp_err_t st25r3916_fifo_wait(size_t min_bytes, int32_t timeout_ms, uint16_t *out_final_count);
+
+#ifdef __cplusplus
+}
 #endif
+
+#endif // ST25R3916_FIFO_H

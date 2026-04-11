@@ -19,34 +19,31 @@ file(GLOB_RECURSE C5_FLASHER_SRCS "c5_flasher/*.c")
 file(GLOB_RECURSE SPI_BRIDGE_SRCS "spi_bridge/*.c")
 file(GLOB_RECURSE BRIDGE_MANAGER_SRCS "bridge_manager/*.c")
 file(GLOB_RECURSE BT_SERVICE_SRCS "bluetooth/*.c")
+file(GLOB_RECURSE STORAGE_API_SRCS "storage_api/*.c")
+file(GLOB_RECURSE STORAGE_VFS_SRCS "storage_vfs/*.c")
+file(GLOB_RECURSE STORAGE_ASSETS_SRCS "storage_assets/*.c")
 
-idf_component_register(SRCS 
+idf_component_register(SRCS
   "font/font.c"
   "icons/icons.c"
   "wifi/wifi_service.c"
 
-  "storage_api/storage_impl.c"
-  "storage_api/storage_init.c"
-  "storage_api/storage_read.c"
-  "storage_api/storage_write.c"
-  "storage_api/storage_mkdir.c"
-  "storage_vfs/vfs_auto.c"
-  "storage_vfs/vfs_core.c"
-  "storage_vfs/vfs_littlefs.c"
-  "storage_vfs/vfs_sdcard.c"
-  "storage_assets/storage_assets.c"
+  ${STORAGE_API_SRCS}
+  ${STORAGE_VFS_SRCS}
+  ${STORAGE_ASSETS_SRCS}
 
-  "ir/ir_encoder.c"
-  "ir/ir_common.c"
-  "ir/ir_tx.c"
-  "ir/ir_rx.c"
-  "ir/ir_storage.c"
-  "ir/protocol_nec.c"
-  "ir/protocol_rc6.c"
-  "ir/protocol_rc5.c"
-  "ir/protocol_samsung32.c"
-  "ir/protocol_sony.c"
-  "ir/ir_burst.c"
+  "ir/ir.c"
+  "ir/ir_file.c"
+  "ir/ir_protocol.c"
+  "ir/ir_protocol_nec.c"
+  "ir/ir_protocol_samsung.c"
+  "ir/ir_protocol_lg.c"
+  "ir/ir_protocol_jvc.c"
+  "ir/ir_protocol_denon.c"
+  "ir/ir_protocol_panasonic.c"
+  "ir/ir_protocol_rc6.c"
+  "ir/ir_protocol_rc5.c"
+  "ir/ir_protocol_sony.c"
   "lvgl_port/lv_port_indev.c"
   "lvgl_port/lv_port_disp.c"
   ${SD_CARD_SERVICE_SRCS}
@@ -100,9 +97,13 @@ idf_component_register(SRCS
 
 # Embed C5 Firmware Binary into Service component (used by c5_flasher)
 set(C5_BIN_PATH "${CMAKE_SOURCE_DIR}/../firmware_c5/build/TentacleOS_C5.bin")
+set(C5_FIRMWARE_EMBEDDED 0)
 if(EXISTS ${C5_BIN_PATH})
     target_add_binary_data(${COMPONENT_LIB} "${C5_BIN_PATH}" BINARY)
+    set(C5_FIRMWARE_EMBEDDED 1)
     message(STATUS "Embedding C5 Firmware: ${C5_BIN_PATH}")
 else()
     message(WARNING "C5 Firmware binary not found at ${C5_BIN_PATH}. Firmware update feature will be disabled.")
 endif()
+
+target_compile_definitions(${COMPONENT_LIB} PRIVATE C5_FIRMWARE_EMBEDDED=${C5_FIRMWARE_EMBEDDED})

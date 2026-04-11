@@ -12,140 +12,166 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include "signal_monitor.h"
-#include "wifi_service.h"
-#include "wifi_80211.h"
-#include "esp_wifi.h"
+
+#include <string.h>
+
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esp_heap_caps.h"
-#include <string.h>
+
+#include "wifi_80211.h"
+#include "wifi_service.h"
 
 static const char *TAG = "SIGNAL_MONITOR";
 
-static uint8_t target_bssid[6] = {0};
-static int8_t last_rssi = -127;
-static int64_t last_seen_time = 0;
-static bool is_running = false;
+#define MONITOR_STACK_SIZE       4096
+#define MONITOR_TASK_PRIORITY    5
+#define SIGNAL_TIMEOUT_MS        5000
+#define SIGNAL_CHECK_INTERVAL_MS 500
+#define SIGNAL_STOP_WAIT_MS      600
+#define RSSI_NO_SIGNAL           (-127)
+#define BSSID_LEN                6
+#define US_PER_MS                1000
 
-// Task Handles
-static TaskHandle_t monitor_task_handle = NULL;
-static StackType_t *monitor_task_stack = NULL;
-static StaticTask_t *monitor_task_tcb = NULL;
-#define MONITOR_STACK_SIZE 4096
-#define SIGNAL_TIMEOUT_MS 5000 // Reset RSSI if no packet for 5s
+static uint8_t s_target_bssid[BSSID_LEN] = {0};
+static int8_t s_last_rssi = RSSI_NO_SIGNAL;
+static int64_t s_last_seen_time = 0;
+static bool s_is_running = false;
 
-static void monitor_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
-  if (!is_running) return;
+static TaskHandle_t s_monitor_task_handle = NULL;
+static StackType_t *s_monitor_task_stack = NULL;
+static StaticTask_t *s_monitor_task_tcb = NULL;
 
-  const wifi_promiscuous_pkt_t *ppkt = (wifi_promiscuous_pkt_t *)buf;
-  const wifi_mac_header_t *mac_header = (const wifi_mac_header_t *)ppkt->payload;
-
-  if (memcmp(mac_header->addr2, target_bssid, 6) == 0) {
-    last_rssi = ppkt->rx_ctrl.rssi;
-    last_seen_time = esp_timer_get_time();
-  }
-}
-
-static void signal_monitor_task(void *pvParameters) {
-  while (is_running) {
-    if (last_seen_time > 0) {
-      int64_t now = esp_timer_get_time();
-      int64_t diff_ms = (now - last_seen_time) / 1000;
-
-      // Signal Lost Logic
-      if (diff_ms > SIGNAL_TIMEOUT_MS) {
-        last_rssi = -127; 
-      }
-    }
-    vTaskDelay(pdMS_TO_TICKS(500)); // Check every 500ms
-  }
-  vTaskDelete(NULL);
-}
+static void monitor_callback(void *buf, wifi_promiscuous_pkt_type_t type);
+static void monitor_task(void *pvParameters);
 
 void signal_monitor_start(const uint8_t *bssid, uint8_t channel) {
-  if (is_running) {
+  if (s_is_running) {
     signal_monitor_stop();
   }
 
-  if (bssid == NULL) return;
+  if (bssid == NULL)
+    return;
 
-  memcpy(target_bssid, bssid, 6);
-  last_rssi = -127;
-  last_seen_time = 0;
-  is_running = true;
+  memcpy(s_target_bssid, bssid, BSSID_LEN);
+  s_last_rssi = RSSI_NO_SIGNAL;
+  s_last_seen_time = 0;
+  s_is_running = true;
 
-  ESP_LOGI(TAG, "Starting Signal Monitor for Target: %02x:%02x:%02x:%02x:%02x:%02x on Ch %d",
-           bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], channel);
+  ESP_LOGI(TAG,
+           "Starting Signal Monitor for Target: %02x:%02x:%02x:%02x:%02x:%02x on Ch %d",
+           bssid[0],
+           bssid[1],
+           bssid[2],
+           bssid[3],
+           bssid[4],
+           bssid[5],
+           channel);
 
   esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
 
-  wifi_promiscuous_filter_t filter = {
-    .filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT | WIFI_PROMIS_FILTER_MASK_DATA
-  };
+  wifi_promiscuous_filter_t filter = {.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT |
+                                                     WIFI_PROMIS_FILTER_MASK_DATA};
 
   wifi_service_promiscuous_start(monitor_callback, &filter);
 
-  if (monitor_task_stack == NULL) {
-    monitor_task_stack = (StackType_t *)heap_caps_malloc(MONITOR_STACK_SIZE * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
+  if (s_monitor_task_stack == NULL) {
+    s_monitor_task_stack = (StackType_t *)heap_caps_malloc(MONITOR_STACK_SIZE * sizeof(StackType_t),
+                                                           MALLOC_CAP_SPIRAM);
   }
-  if (monitor_task_tcb == NULL) {
-    monitor_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  if (s_monitor_task_tcb == NULL) {
+    s_monitor_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t),
+                                                          MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   }
 
-  if (monitor_task_stack == NULL || monitor_task_tcb == NULL) {
+  if (s_monitor_task_stack == NULL || s_monitor_task_tcb == NULL) {
     ESP_LOGE(TAG, "Failed to allocate monitor task memory in PSRAM!");
-    if (monitor_task_stack) { heap_caps_free(monitor_task_stack); monitor_task_stack = NULL; }
-    if (monitor_task_tcb) { heap_caps_free(monitor_task_tcb); monitor_task_tcb = NULL; }
+    if (s_monitor_task_stack != NULL) {
+      free(s_monitor_task_stack);
+      s_monitor_task_stack = NULL;
+    }
+    if (s_monitor_task_tcb != NULL) {
+      free(s_monitor_task_tcb);
+      s_monitor_task_tcb = NULL;
+    }
     return;
   }
 
-  monitor_task_handle = xTaskCreateStatic(
-    signal_monitor_task,
-    "sig_mon_task",
-    MONITOR_STACK_SIZE,
-    NULL,
-    5,
-    monitor_task_stack,
-    monitor_task_tcb
-  );
+  s_monitor_task_handle = xTaskCreateStatic(monitor_task,
+                                            "sig_mon_task",
+                                            MONITOR_STACK_SIZE,
+                                            NULL,
+                                            MONITOR_TASK_PRIORITY,
+                                            s_monitor_task_stack,
+                                            s_monitor_task_tcb);
 }
 
 void signal_monitor_stop(void) {
-  if (!is_running) return;
+  if (!s_is_running)
+    return;
 
-  is_running = false;
+  s_is_running = false;
 
   wifi_service_promiscuous_stop();
 
   // Give task time to exit
-  vTaskDelay(pdMS_TO_TICKS(600)); 
+  vTaskDelay(pdMS_TO_TICKS(SIGNAL_STOP_WAIT_MS));
 
-  monitor_task_handle = NULL;
+  s_monitor_task_handle = NULL;
 
-  if (monitor_task_stack) {
-    heap_caps_free(monitor_task_stack);
-    monitor_task_stack = NULL;
+  if (s_monitor_task_stack != NULL) {
+    free(s_monitor_task_stack);
+    s_monitor_task_stack = NULL;
   }
-  if (monitor_task_tcb) {
-    heap_caps_free(monitor_task_tcb);
-    monitor_task_tcb = NULL;
+  if (s_monitor_task_tcb != NULL) {
+    free(s_monitor_task_tcb);
+    s_monitor_task_tcb = NULL;
   }
 
-  memset(target_bssid, 0, 6);
+  memset(s_target_bssid, 0, BSSID_LEN);
   ESP_LOGI(TAG, "Signal Monitor Stopped");
 }
 
 int8_t signal_monitor_get_rssi(void) {
-  return last_rssi;
+  return s_last_rssi;
 }
 
 uint32_t signal_monitor_get_last_seen_ms(void) {
-  if (last_seen_time == 0) return UINT32_MAX;
+  if (s_last_seen_time == 0)
+    return UINT32_MAX;
 
   int64_t now = esp_timer_get_time();
-  return (uint32_t)((now - last_seen_time) / 1000);
+  return (uint32_t)((now - s_last_seen_time) / US_PER_MS);
+}
+
+static void monitor_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
+  if (!s_is_running)
+    return;
+
+  const wifi_promiscuous_pkt_t *ppkt = (wifi_promiscuous_pkt_t *)buf;
+  const wifi_mac_header_t *mac_header = (const wifi_mac_header_t *)ppkt->payload;
+
+  if (memcmp(mac_header->addr2, s_target_bssid, BSSID_LEN) == 0) {
+    s_last_rssi = ppkt->rx_ctrl.rssi;
+    s_last_seen_time = esp_timer_get_time();
+  }
+}
+
+static void monitor_task(void *pvParameters) {
+  while (s_is_running) {
+    if (s_last_seen_time > 0) {
+      int64_t now = esp_timer_get_time();
+      int64_t diff_ms = (now - s_last_seen_time) / US_PER_MS;
+
+      if (diff_ms > SIGNAL_TIMEOUT_MS) {
+        s_last_rssi = RSSI_NO_SIGNAL;
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(SIGNAL_CHECK_INTERVAL_MS));
+  }
+  vTaskDelete(NULL);
 }

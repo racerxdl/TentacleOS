@@ -4,7 +4,7 @@ The VFS system provides a unified, low-level abstraction layer for multiple stor
 
 ## Overview
 
-- **Location:** `components/storage/vfs/`
+- **Location:** `components/Service/storage_vfs/`
 - **Main Headers:** 
   - `include/vfs_core.h` (Core API)
   - `include/vfs_config.h` (Backend selection)

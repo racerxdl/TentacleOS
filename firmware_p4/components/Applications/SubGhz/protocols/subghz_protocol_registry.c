@@ -13,10 +13,14 @@
 // limitations under the License.
 
 #include "subghz_protocol_registry.h"
+
 #include <stddef.h>
 #include <string.h>
 
-// Forward declarations of protocols
+#include "esp_log.h"
+
+static const char *TAG = "PROTOCOL_REGISTRY";
+
 extern subghz_protocol_t protocol_rcswitch;
 extern subghz_protocol_t protocol_came;
 extern subghz_protocol_t protocol_nice_flo;
@@ -28,8 +32,7 @@ extern subghz_protocol_t protocol_liftmaster;
 extern subghz_protocol_t protocol_linear;
 extern subghz_protocol_t protocol_rossi;
 
-// Registry of available protocols
-static const subghz_protocol_t* protocols[] = {
+static const subghz_protocol_t *REGISTERED_PROTOCOLS[] = {
     &protocol_rcswitch,
     &protocol_came,
     &protocol_nice_flo,
@@ -42,30 +45,35 @@ static const subghz_protocol_t* protocols[] = {
     &protocol_rossi,
 };
 
-#define PROTOCOL_COUNT (sizeof(protocols) / sizeof(protocols[0]))
+#define REGISTERED_PROTOCOLS_COUNT (sizeof(REGISTERED_PROTOCOLS) / sizeof(REGISTERED_PROTOCOLS[0]))
 
-void subghz_protocol_registry_init(void) {
-    // Initialization logic if needed
+void subghz_protocol_registry_init(void) {}
+
+bool subghz_protocol_registry_decode_all(const int32_t *pulses,
+                                         size_t count,
+                                         subghz_data_t *out_data) {
+  for (size_t i = 0; i < REGISTERED_PROTOCOLS_COUNT; i++) {
+    if (REGISTERED_PROTOCOLS[i]->decode != NULL &&
+        REGISTERED_PROTOCOLS[i]->decode(pulses, count, out_data)) {
+      ESP_LOGD(TAG, "Decoded protocol: %s", REGISTERED_PROTOCOLS[i]->name);
+      return true;
+    }
+  }
+  return false;
 }
 
-bool subghz_protocol_registry_decode_all(const int32_t* pulses, size_t count, subghz_data_t* out_data) {
-    for (size_t i = 0; i < PROTOCOL_COUNT; i++) {
-        if (protocols[i]->decode && protocols[i]->decode(pulses, count, out_data)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-const subghz_protocol_t* subghz_protocol_registry_get_by_name(const char* name) {
-    for (size_t i = 0; i < PROTOCOL_COUNT; i++) {
-        // Special case for RCSwitch which has dynamic names in out_data
-        if (strcmp(protocols[i]->name, "RCSwitch") == 0 && strstr(name, "RCSwitch") != NULL) {
-            return protocols[i];
-        }
-        if (strcmp(protocols[i]->name, name) == 0) {
-            return protocols[i];
-        }
-    }
+const subghz_protocol_t *subghz_protocol_registry_get_by_name(const char *name) {
+  if (name == NULL) {
     return NULL;
+  }
+  for (size_t i = 0; i < REGISTERED_PROTOCOLS_COUNT; i++) {
+    if (strcmp(REGISTERED_PROTOCOLS[i]->name, "RCSwitch") == 0 &&
+        strstr(name, "RCSwitch") != NULL) {
+      return REGISTERED_PROTOCOLS[i];
+    }
+    if (strcmp(REGISTERED_PROTOCOLS[i]->name, name) == 0) {
+      return REGISTERED_PROTOCOLS[i];
+    }
+  }
+  return NULL;
 }

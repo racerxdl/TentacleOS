@@ -57,7 +57,7 @@ Performs a blocking discovery procedure for the specified duration. Results are 
 
 #### `Scan Results`
 - `bluetooth_service_get_scan_count()`: Returns the number of unique devices found.
-- `bluetooth_service_get_scan_result(uint16_t index)`: Returns a pointer to a `ble_scan_result_t` structure containing name, RSSI, and MAC address.
+- `bluetooth_service_get_scan_result(uint16_t index)`: Returns a pointer to a `bluetooth_service_scan_result_t` structure containing name, RSSI, and MAC address.
 
 ### Advertising Management
 
@@ -105,30 +105,30 @@ Sets TX power to `ESP_PWR_LVL_P9` (+9dBm) for advertising and connections.
 
 ### Configuration & Persistence
 
-#### `bluetooth_save_announce_config`
+#### `bluetooth_service_save_announce_config`
 ```c
-esp_err_t bluetooth_save_announce_config(const char *name, uint8_t max_conn);
+esp_err_t bluetooth_service_save_announce_config(const char *name, uint8_t max_conn);
 ```
 Saves the main device announcement settings (Device Name) to `/assets/config/bluetooth/ble_announce.conf`.
 
-#### `bluetooth_load_spam_list`
+#### `bluetooth_service_load_spam_list`
 ```c
-esp_err_t bluetooth_load_spam_list(char ***list, size_t *count);
+esp_err_t bluetooth_service_load_spam_list(char ***list, size_t *count);
 ```
 Loads a list of beacon names/payloads from `/assets/config/bluetooth/beacon_list.conf` used for specific application logic (e.g., spam functions).
-- **Memory:** Allocates an array of strings. The caller **must** free this memory using `bluetooth_free_spam_list`.
+- **Memory:** Allocates an array of strings. The caller **must** free this memory using `bluetooth_service_free_spam_list`.
 
-#### `bluetooth_save_spam_list`
+#### `bluetooth_service_save_spam_list`
 ```c
-esp_err_t bluetooth_save_spam_list(const char * const *list, size_t count);
+esp_err_t bluetooth_service_save_spam_list(const char * const *list, size_t count);
 ```
 Saves a list of strings to the beacon configuration file.
 
-#### `bluetooth_free_spam_list`
+#### `bluetooth_service_free_spam_list`
 ```c
-void bluetooth_free_spam_list(char **list, size_t count);
+void bluetooth_service_free_spam_list(char **list, size_t count);
 ```
-Helper function to safely free the memory allocated by `bluetooth_load_spam_list`.
+Helper function to safely free the memory allocated by `bluetooth_service_load_spam_list`.
 
 ## Internal Implementation Details
 

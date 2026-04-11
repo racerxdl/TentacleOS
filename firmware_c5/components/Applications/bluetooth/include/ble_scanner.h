@@ -15,14 +15,51 @@
 #ifndef BLE_SCANNER_H
 #define BLE_SCANNER_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdbool.h>
 #include <stdint.h>
+
 #include "bluetooth_service.h"
 
+/**
+ * @brief Save scan results to internal flash storage.
+ *
+ * @return true on success, false on failure.
+ */
 bool ble_scanner_save_results_to_internal_flash(void);
+
+/**
+ * @brief Save scan results to SD card.
+ *
+ * @return true on success, false on failure.
+ */
 bool ble_scanner_save_results_to_sd_card(void);
+
+/**
+ * @brief Start a BLE scan task.
+ *
+ * @return true if scan started, false on failure.
+ */
 bool ble_scanner_start(void);
-ble_scan_result_t* ble_scanner_get_results(uint16_t *count);
+
+/**
+ * @brief Get the scan results.
+ *
+ * @param[out] out_count Pointer to store the number of results.
+ * @return Pointer to the scan results array, or NULL if scanning or empty.
+ */
+bluetooth_service_scan_result_t *ble_scanner_get_results(uint16_t *out_count);
+
+/**
+ * @brief Free the scan results and release associated memory.
+ */
 void ble_scanner_free_results(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // BLE_SCANNER_H

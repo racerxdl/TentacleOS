@@ -12,20 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include "espnow_chat.h"
-#include "service_esp_now.h"
-#include "esp_log.h"
-#include <string.h>
-#include <stdio.h>
 
-static const char *TAG = "App_EspNowChat";
+#include <stdio.h>
+#include <string.h>
+
+#include "esp_log.h"
+
+#include "service_esp_now.h"
+
+static const char *TAG = "ESPNOW_CHAT";
 
 static espnow_chat_on_msg_cb_t s_ui_msg_cb = NULL;
 static espnow_chat_on_device_list_cb_t s_ui_refresh_cb = NULL;
 
-
-static void service_on_recv(const uint8_t *mac_addr, const service_esp_now_packet_t *data, int8_t rssi) {
+static void
+service_on_recv(const uint8_t *mac_addr, const service_esp_now_packet_t *data, int8_t rssi) {
   if (data->type == ESP_NOW_MSG_TYPE_HELLO) {
     ESP_LOGI(TAG, "Discovery: %s is online", data->nick);
     if (s_ui_refresh_cb) {
@@ -58,12 +60,12 @@ static void service_on_send(const uint8_t *mac_addr, esp_now_send_status_t statu
   }
 }
 
-
 esp_err_t espnow_chat_init(void) {
   ESP_LOGI(TAG, "Initializing Chat Application");
 
   esp_err_t ret = service_esp_now_init();
-  if (ret != ESP_OK) return ret;
+  if (ret != ESP_OK)
+    return ret;
 
   service_esp_now_register_recv_cb(service_on_recv);
   service_esp_now_register_send_cb(service_on_send);
@@ -79,7 +81,7 @@ void espnow_chat_set_nick(const char *nick) {
   service_esp_now_set_nick(nick);
 }
 
-const char* espnow_chat_get_nick(void) {
+const char *espnow_chat_get_nick(void) {
   return service_esp_now_get_nick();
 }
 

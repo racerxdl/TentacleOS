@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/**
+ * @file vfs_littlefs.h
+ * @brief LittleFS backend interface.
+ */
 #ifndef VFS_LITTLEFS_H
 #define VFS_LITTLEFS_H
 

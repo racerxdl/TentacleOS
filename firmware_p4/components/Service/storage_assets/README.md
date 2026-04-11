@@ -4,7 +4,7 @@ This component provides read-only access to a dedicated LittleFS partition for s
 
 ## Overview
 
-- **Location:** `components/storage/storage_assets/`
+- **Location:** `components/Service/storage_assets/`
 - **Main Header:** `include/storage_assets.h`
 - **Implementation:** `storage_assets.c`
 - **Dependencies:** `esp_littlefs`, `esp_vfs`

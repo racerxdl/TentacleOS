@@ -12,13 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #ifndef SWIFT_PAIR_SPAM_H
 #define SWIFT_PAIR_SPAM_H
 
-#include <stdint.h>
-#include <stddef.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+#include <stddef.h>
+#include <stdint.h>
+
+/**
+ * @brief Generate a Microsoft Swift Pair BLE advertising spam payload.
+ *
+ * @param buffer  Output buffer for the payload. Must not be NULL.
+ * @param max_len Maximum size of the output buffer.
+ * @return Number of bytes written, or 0 on failure.
+ */
 int generate_swift_pair_payload(uint8_t *buffer, size_t max_len);
 
+#ifdef __cplusplus
+}
 #endif
+
+#endif // SWIFT_PAIR_SPAM_H

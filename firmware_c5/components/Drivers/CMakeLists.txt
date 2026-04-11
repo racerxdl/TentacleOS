@@ -15,7 +15,6 @@
 
 idf_component_register(SRCS 
   "bq25896/bq25896.c"
-  "buzzer/buzzer.c"
   "led/led_control.c"
   "spi/spi.c"
   "spi_slave/spi_slave_driver.c"
@@ -24,7 +23,6 @@ idf_component_register(SRCS
 
   INCLUDE_DIRS 
   "bq25896/include"
-  "buzzer/include"
   "led/include"
   "pins/include"
   "spi/include"

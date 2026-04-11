@@ -15,31 +15,48 @@
 #ifndef BLE_HID_KEYBOARD_H
 #define BLE_HID_KEYBOARD_H
 
-#include <stdint.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdbool.h>
+#include <stdint.h>
+
 #include "esp_err.h"
 
 /**
- * @brief Inicializa o serviço HID over GATT (HOGP) e começa a anunciar como Teclado.
+ * @brief Initialize the HID over GATT (HOGP) service and start advertising as a keyboard.
+ *
+ * @return
+ *   - ESP_OK on success
  */
 esp_err_t ble_hid_init(void);
 
 /**
- * @brief Para o serviço HID e desconecta.
+ * @brief Stop the HID service and disconnect.
+ *
+ * @return
+ *   - ESP_OK on success
  */
 esp_err_t ble_hid_deinit(void);
 
 /**
- * @brief Verifica se há um host conectado e pronto para receber teclas.
+ * @brief Check if a host is connected and ready to receive keystrokes.
+ *
+ * @return true if connected, false otherwise.
  */
 bool ble_hid_is_connected(void);
 
 /**
- * @brief Envia uma tecla pressionada via Bluetooth.
- * 
- * @param keycode Código HID da tecla (ex: 0x04 para 'A')
- * @param modifier Modificador (Shift, Ctrl, Alt, GUI)
+ * @brief Send a key press via Bluetooth HID.
+ *
+ * @param keycode  HID keycode (e.g., 0x04 for 'A').
+ * @param modifier Modifier flags (Shift, Ctrl, Alt, GUI).
  */
 void ble_hid_send_key(uint8_t keycode, uint8_t modifier);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // BLE_HID_KEYBOARD_H

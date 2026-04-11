@@ -14,10 +14,10 @@ NC='\033[0m'
 # Source ESP-IDF environment (supports local install and Docker container)
 if [ -n "$IDF_PATH" ] && [ -f "$IDF_PATH/export.sh" ]; then
     source "$IDF_PATH/export.sh"
-elif [ -f "$HOME/esp/v5.5.1/esp-idf/export.sh" ]; then
-    source "$HOME/esp/v5.5.1/esp-idf/export.sh"
+elif [ -f "$HOME/esp/v5.5.3/esp-idf/export.sh" ]; then
+    source "$HOME/esp/v5.5.3/esp-idf/export.sh"
 else
-    echo -e "${RED}Error: ESP-IDF not found. Set IDF_PATH or install at ~/esp/v5.5.1/esp-idf/${NC}"
+    echo -e "${RED}Error: ESP-IDF not found. Set IDF_PATH or install at ~/esp/v5.5.3/esp-idf/${NC}"
     exit 1
 fi
 

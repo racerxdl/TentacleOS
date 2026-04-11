@@ -1,185 +1,116 @@
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "wifi_scan_menu_ui.h"
-#include "header_ui.h"
-#include "footer_ui.h"
-#include "ui_theme.h"
-#include "core/lv_group.h"
-#include "ui_manager.h"
+
+#include "esp_log.h"
+
+#include "buttons_gpio.h"
 #include "lv_port_indev.h"
-#include "buzzer.h"
-#include "esp_timer.h"
+#include "menu_component_ui.h"
+#include "ui_manager.h"
+#include "ui_theme.h"
 
-static lv_obj_t * screen_wifi_scan_menu = NULL;
-static lv_style_t style_menu;
-static lv_style_t style_btn;
-static bool styles_initialized = false;
-static int64_t last_open_time = 0;
-static bool block_input_until_release = false;
-static lv_timer_t * release_timer = NULL;
+static const char *TAG = "UI_WIFI_SCAN_MENU";
 
-typedef struct {
-    const char * name;
-    const char * symbol;
-    screen_id_t target_screen;
-} wifi_scan_item_t;
+#define NAV_TIMER_MS 50
 
-static const wifi_scan_item_t wifi_scan_list[] = {
-    {"SCAN APS",      LV_SYMBOL_WIFI, SCREEN_WIFI_SCAN_AP},
-    {"SCAN STATIONS", LV_SYMBOL_WIFI, SCREEN_WIFI_SCAN_STATIONS},
-    {"SCAN TARGETED", LV_SYMBOL_WIFI, SCREEN_WIFI_SCAN_TARGET},
-    {"PROBE SNIFFER", LV_SYMBOL_WIFI, SCREEN_WIFI_SCAN_PROBE},
-    {"PKT MONITOR",LV_SYMBOL_WIFI, SCREEN_WIFI_SCAN_MONITOR}
+static lv_obj_t *s_screen = NULL;
+static menu_component_t s_menu;
+static lv_timer_t *s_nav_timer = NULL;
+
+static bool s_btn_up_last = false;
+static bool s_btn_down_last = false;
+static bool s_btn_left_last = false;
+static bool s_btn_right_last = false;
+static bool s_btn_ok_last = false;
+static bool s_btn_back_last = false;
+
+static const struct {
+  const char *name;
+  const char *icon;
+  int target;
+} MENU_ITEMS[] = {
+    {"SCAN APS", NULL, SCREEN_WIFI_SCAN_AP},
+    {"SCAN STATIONS", NULL, SCREEN_WIFI_SCAN_STATIONS},
+    {"SCAN TARGETED", NULL, SCREEN_WIFI_SCAN_TARGET},
+    {"PROBE SNIFFER", NULL, SCREEN_WIFI_SCAN_PROBE},
+    {"PKT MONITOR", NULL, SCREEN_WIFI_SCAN_MONITOR},
 };
 
-#define WIFI_SCAN_COUNT (sizeof(wifi_scan_list) / sizeof(wifi_scan_list[0]))
+#define MENU_ITEMS_COUNT (sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]))
 
-static void init_styles(void) {
-    if(styles_initialized) {
-        lv_style_reset(&style_menu);
-        lv_style_reset(&style_btn);
+static void nav_timer_cb(lv_timer_t *t) {
+  if (lv_screen_active() != s_screen) {
+    lv_timer_delete(t);
+    s_nav_timer = NULL;
+    return;
+  }
+  if (ui_input_is_locked())
+    return;
+
+  bool is_up = up_button_is_down();
+  bool is_down = down_button_is_down();
+  bool is_left = left_button_is_down();
+  bool is_right = right_button_is_down();
+  bool is_ok = ok_button_is_down();
+  bool is_back = back_button_is_down();
+
+  if (is_down && !s_btn_down_last) {
+    menu_component_next(&s_menu);
+  }
+  if (is_up && !s_btn_up_last) {
+    menu_component_prev(&s_menu);
+  }
+  if ((is_back && !s_btn_back_last) || (is_left && !s_btn_left_last)) {
+    ui_switch_screen(SCREEN_WIFI_MENU);
+  }
+  if ((is_ok && !s_btn_ok_last) || (is_right && !s_btn_right_last)) {
+    int sel = menu_component_get_selected(&s_menu);
+    if (sel >= 0 && sel < (int)MENU_ITEMS_COUNT) {
+      ui_switch_screen(MENU_ITEMS[sel].target);
     }
+  }
 
-    lv_style_init(&style_menu);
-    lv_style_set_bg_opa(&style_menu, LV_OPA_TRANSP);
-    lv_style_set_border_width(&style_menu, 2);
-    lv_style_set_border_color(&style_menu, current_theme.border_accent);
-    lv_style_set_radius(&style_menu, 0);
-    lv_style_set_pad_all(&style_menu, 8);
-    lv_style_set_pad_row(&style_menu, 8);
-
-    lv_style_init(&style_btn);
-    lv_style_set_bg_color(&style_btn, current_theme.bg_item_bot);
-    lv_style_set_bg_grad_color(&style_btn, current_theme.bg_item_top);
-    lv_style_set_bg_grad_dir(&style_btn, LV_GRAD_DIR_VER);
-    lv_style_set_border_width(&style_btn, 1);
-    lv_style_set_border_color(&style_btn, current_theme.border_inactive);
-    lv_style_set_radius(&style_btn, 0);
-
-    styles_initialized = true;
-}
-
-static void wifi_scan_item_event_cb(lv_event_t * e) {
-    lv_obj_t * btn = lv_event_get_target(e);
-    lv_obj_t * label_sel = lv_event_get_user_data(e);
-    lv_event_code_t code = lv_event_get_code(e);
-    int index = (int)(uintptr_t)lv_obj_get_user_data(btn);
-
-    bool input_locked = (esp_timer_get_time() - last_open_time) < 400000;
-
-    if(code == LV_EVENT_FOCUSED) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
-        lv_obj_remove_flag(label_sel, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_style_border_color(btn, current_theme.border_accent, 0);
-        lv_obj_set_style_border_width(btn, 2, 0);
-        lv_obj_scroll_to_view(btn, LV_ANIM_ON);
-    }
-    else if(code == LV_EVENT_DEFOCUSED) {
-        lv_obj_add_flag(label_sel, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_style_border_color(btn, current_theme.border_inactive, 0);
-        lv_obj_set_style_border_width(btn, 1, 0);
-    }
-    else if(code == LV_EVENT_RELEASED) {
-        block_input_until_release = false;
-    }
-    else if(code == LV_EVENT_KEY) {
-        uint32_t key = lv_event_get_key(e);
-
-        if(key == LV_KEY_ESC || key == LV_KEY_LEFT) {
-            if(input_locked) return;
-            buzzer_play_sound_file("buzzer_scroll_tick");
-            ui_switch_screen(SCREEN_WIFI_MENU);
-        }
-        else if(key == LV_KEY_ENTER) {
-            if(input_locked) return;
-            if(block_input_until_release) return;
-            if(wifi_scan_list[index].target_screen == SCREEN_NONE) return;
-            buzzer_play_sound_file("buzzer_hacker_confirm");
-            ui_switch_screen(wifi_scan_list[index].target_screen);
-        }
-    }
-    else if(code == LV_EVENT_CLICKED) {
-        if(input_locked) return;
-        if(block_input_until_release) return;
-        if(wifi_scan_list[index].target_screen == SCREEN_NONE) return;
-        buzzer_play_sound_file("buzzer_hacker_confirm");
-        ui_switch_screen(wifi_scan_list[index].target_screen);
-    }
-}
-
-static void wait_release_timer_cb(lv_timer_t * t) {
-    (void)t;
-    if (!indev_keypad) {
-        block_input_until_release = false;
-        if (release_timer) {
-            lv_timer_del(release_timer);
-            release_timer = NULL;
-        }
-        return;
-    }
-
-    if (lv_indev_get_state(indev_keypad) == LV_INDEV_STATE_RELEASED) {
-        block_input_until_release = false;
-        if (release_timer) {
-            lv_timer_del(release_timer);
-            release_timer = NULL;
-        }
-    }
+  s_btn_up_last = is_up;
+  s_btn_down_last = is_down;
+  s_btn_left_last = is_left;
+  s_btn_right_last = is_right;
+  s_btn_ok_last = is_ok;
+  s_btn_back_last = is_back;
 }
 
 void ui_wifi_scan_menu_open(void) {
-    last_open_time = esp_timer_get_time();
-    block_input_until_release = true;
-    if (release_timer) {
-        lv_timer_del(release_timer);
-        release_timer = NULL;
-    }
-    release_timer = lv_timer_create(wait_release_timer_cb, 30, NULL);
+  if (s_screen != NULL) {
+    lv_obj_del(s_screen);
+    s_screen = NULL;
+  }
 
-    init_styles();
-    if(screen_wifi_scan_menu) lv_obj_del(screen_wifi_scan_menu);
+  s_screen = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(s_screen, current_theme.screen_base, 0);
+  lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
+  lv_obj_remove_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
 
-    screen_wifi_scan_menu = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_wifi_scan_menu, current_theme.screen_base, 0);
+  s_menu = menu_component_create(s_screen, "SCAN", "/assets/icons/wifi_menu_icon.bin");
 
-    header_ui_create(screen_wifi_scan_menu);
-    footer_ui_create(screen_wifi_scan_menu);
+  for (int i = 0; i < (int)MENU_ITEMS_COUNT; i++) {
+    menu_component_add_item(&s_menu, "/assets/icons/wifi_menu_icon.bin", MENU_ITEMS[i].name);
+  }
 
-    lv_obj_t * menu = lv_obj_create(screen_wifi_scan_menu);
-    lv_obj_set_size(menu, 220, 160);
-    lv_obj_align(menu, LV_ALIGN_CENTER, 0, 5);
-    lv_obj_add_style(menu, &style_menu, 0);
-    lv_obj_set_flex_flow(menu, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_scrollbar_mode(menu, LV_SCROLLBAR_MODE_OFF);
+  if (s_nav_timer == NULL) {
+    s_nav_timer = lv_timer_create(nav_timer_cb, NAV_TIMER_MS, NULL);
+  }
 
-    for(int i = 0; i < WIFI_SCAN_COUNT; i++) {
-        lv_obj_t * btn = lv_btn_create(menu);
-        lv_obj_set_size(btn, lv_pct(100), 35);
-        lv_obj_add_style(btn, &style_btn, 0);
-        lv_obj_set_user_data(btn, (void*)(uintptr_t)i);
-
-        lv_obj_t * icon = lv_label_create(btn);
-        lv_label_set_text(icon, wifi_scan_list[i].symbol);
-        lv_obj_set_style_text_color(icon, current_theme.text_main, 0);
-        lv_obj_align(icon, LV_ALIGN_LEFT_MID, 5, 0);
-
-        lv_obj_t * lbl = lv_label_create(btn);
-        lv_label_set_text_static(lbl, wifi_scan_list[i].name);
-        lv_obj_set_width(lbl, 140);
-        lv_label_set_long_mode(lbl, LV_LABEL_LONG_SCROLL_CIRCULAR);
-        lv_obj_set_style_text_color(lbl, current_theme.text_main, 0);
-        lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 30, 0);
-
-        lv_obj_t * label_sel = lv_label_create(btn);
-        lv_label_set_text(label_sel, LV_SYMBOL_RIGHT);
-        lv_obj_set_style_text_color(label_sel, current_theme.text_main, 0);
-        lv_obj_align(label_sel, LV_ALIGN_RIGHT_MID, -5, 0);
-        lv_obj_add_flag(label_sel, LV_OBJ_FLAG_HIDDEN);
-
-        lv_obj_add_event_cb(btn, wifi_scan_item_event_cb, LV_EVENT_ALL, label_sel);
-
-        if(main_group) {
-            lv_group_add_obj(main_group, btn);
-        }
-    }
-
-    lv_screen_load(screen_wifi_scan_menu);
+  lv_screen_load(s_screen);
 }

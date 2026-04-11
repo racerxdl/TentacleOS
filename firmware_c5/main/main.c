@@ -3,7 +3,6 @@
 #include "freertos/task.h"
 #include "kernel.h"
 
-
 void app_main(void) {
   kernel_init();
 }

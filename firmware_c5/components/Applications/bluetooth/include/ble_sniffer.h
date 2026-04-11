@@ -12,13 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #ifndef BLE_SNIFFER_H
 #define BLE_SNIFFER_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "esp_err.h"
 
+/**
+ * @brief Start the BLE packet sniffer.
+ *
+ * @return
+ *   - ESP_OK on success
+ *   - ESP_ERR_NO_MEM if allocation fails
+ */
 esp_err_t ble_sniffer_start(void);
+
+/**
+ * @brief Stop the BLE packet sniffer and free resources.
+ */
 void ble_sniffer_stop(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // BLE_SNIFFER_H

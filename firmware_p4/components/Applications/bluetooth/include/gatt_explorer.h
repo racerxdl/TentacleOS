@@ -12,14 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #ifndef GATT_EXPLORER_H
 #define GATT_EXPLORER_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdbool.h>
 #include <stdint.h>
 
+/**
+ * @brief Start GATT service and characteristic discovery on a target device.
+ *
+ * @param addr      Target device BLE address (6 bytes).
+ * @param addr_type Target device address type.
+ * @return true if exploration started, false on failure.
+ */
 bool gatt_explorer_start(const uint8_t *addr, uint8_t addr_type);
+
+/**
+ * @brief Check if a GATT exploration is currently in progress.
+ *
+ * @return true if busy, false otherwise.
+ */
 bool gatt_explorer_is_busy(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // GATT_EXPLORER_H

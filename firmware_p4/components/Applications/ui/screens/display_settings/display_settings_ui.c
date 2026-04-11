@@ -1,188 +1,160 @@
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "display_settings_ui.h"
-#include "header_ui.h"
-#include "footer_ui.h"
-#include "ui_theme.h"
-#include "core/lv_group.h"
-#include "ui_manager.h"
-#include "lv_port_indev.h"
-#include "buzzer.h"
+
+#include <stdio.h>
+
 #include "esp_log.h"
 #include "st7789.h"
 
-static lv_obj_t * screen_display = NULL;
-static lv_style_t style_menu;
-static lv_style_t style_item;
-static bool styles_initialized = false;
+#include "buttons_gpio.h"
+#include "menu_component_ui.h"
+#include "ui_manager.h"
+#include "ui_theme.h"
 
-static int brightness_val = 3;
-static int rotation_val = 1;
+static const char *TAG = "DISPLAY_UI";
 
-static void init_styles(void) {
-    if(styles_initialized) return;
+#define NAV_TIMER_INTERVAL_MS 50
+#define BRIGHTNESS_STEP       20
+#define BRIGHTNESS_MIN        1
+#define ROTATION_BUF_SIZE     8
+#define ROTATION_MIN          1
+#define ROTATION_MAX          4
 
-    lv_style_init(&style_menu);
-    lv_style_set_bg_opa(&style_menu, LV_OPA_TRANSP);
-    lv_style_set_border_width(&style_menu, 2);
-    lv_style_set_border_color(&style_menu, current_theme.border_accent);
-    lv_style_set_radius(&style_menu, 6);
-    lv_style_set_pad_all(&style_menu, 8);
-    lv_style_set_pad_row(&style_menu, 8);
+typedef enum {
+  DISPLAY_ITEM_BRIGHTNESS = 0,
+  DISPLAY_ITEM_ROTATION = 1,
+} display_item_t;
 
-    lv_style_init(&style_item);
-    lv_style_set_bg_color(&style_item, current_theme.bg_item_bot);
-    lv_style_set_bg_grad_color(&style_item, current_theme.bg_item_top);
-    lv_style_set_bg_grad_dir(&style_item, LV_GRAD_DIR_VER);
-    lv_style_set_border_width(&style_item, 1);
-    lv_style_set_border_color(&style_item, current_theme.border_inactive);
-    lv_style_set_radius(&style_item, 4);
+static lv_obj_t *s_screen_display = NULL;
+static menu_component_t s_menu;
+static lv_timer_t *s_nav_timer = NULL;
 
-    styles_initialized = true;
-}
+static int s_brightness_val = 3;
+static int s_rotation_val = 1;
 
-static void update_brightness_bars(lv_obj_t * cont) {
-    for(uint32_t i = 0; i < lv_obj_get_child_count(cont); i++) {
-        lv_obj_t * bar = lv_obj_get_child(cont, i);
-        lv_obj_set_style_bg_color(bar, current_theme.text_main, 0);
-        lv_obj_set_style_bg_opa(bar, (i < brightness_val) ? LV_OPA_COVER : LV_OPA_20, 0);
-    }
-}
+static bool s_btn_up_last = false;
+static bool s_btn_down_last = false;
+static bool s_btn_left_last = false;
+static bool s_btn_right_last = false;
+static bool s_btn_ok_last = false;
+static bool s_btn_back_last = false;
+
+static void update_rotation_value(void);
+static void nav_timer_cb(lv_timer_t *timer);
 
 void update_lvgl_display_rotation(uint8_t rotation) {
-    lv_obj_invalidate(lv_scr_act());
-}
-
-static void display_item_event_cb(lv_event_t * e) {
-    lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t * item = lv_event_get_target(e);
-    int type = (int)(uintptr_t)lv_event_get_user_data(e);
-
-    if(code == LV_EVENT_FOCUSED) {
-        buzzer_play_sound_file("buzzer_scroll_tick");
-        lv_obj_set_style_border_color(item, current_theme.border_accent, 0);
-        lv_obj_set_style_border_width(item, 2, 0);
-        lv_obj_scroll_to_view(item, LV_ANIM_ON);
-    } 
-    else if(code == LV_EVENT_DEFOCUSED) {
-        lv_obj_set_style_border_color(item, current_theme.border_inactive, 0);
-        lv_obj_set_style_border_width(item, 1, 0);
-    }
-    else if(code == LV_EVENT_KEY) {
-        uint32_t key = lv_event_get_key(e);
-        lv_obj_t * input_obj = lv_obj_get_child(item, 2);
-
-        if(key == LV_KEY_ESC) {
-            buzzer_play_sound_file("buzzer_click");
-            ui_switch_screen(SCREEN_SETTINGS);
-            return;
-        }
-
-        if(type == 0) { 
-            bool changed = false;
-            if(key == LV_KEY_RIGHT && brightness_val < 5) { brightness_val++; changed = true; }
-            if(key == LV_KEY_LEFT && brightness_val > 1) { brightness_val--; changed = true; }
-            if(changed) {
-                update_brightness_bars(input_obj);
-                lcd_set_brightness(brightness_val * 20);
-                buzzer_play_sound_file("buzzer_scroll_tick");
-            }
-        }
-        else if(type == 1) {
-            bool changed = false;
-            if(key == LV_KEY_RIGHT) {
-                rotation_val = (rotation_val % 4) + 1;
-                changed = true;
-            }
-            if(key == LV_KEY_LEFT) {
-                rotation_val = (rotation_val == 1) ? 4 : rotation_val - 1;
-                changed = true;
-            }
-            if(changed) {
-                lv_label_set_text_fmt(input_obj, "< %d >", rotation_val);
-                lv_obj_set_style_text_color(input_obj, current_theme.text_main, 0);
-                lcd_set_rotation(rotation_val);
-                update_lvgl_display_rotation(rotation_val);
-                buzzer_play_sound_file("buzzer_scroll_tick");
-            }
-        }
-    }
-}
-
-static lv_obj_t * create_menu_item(lv_obj_t * parent, const char * symbol, const char * name) {
-    lv_obj_t * item = lv_obj_create(parent);
-    lv_obj_set_size(item, lv_pct(100), 48);
-    lv_obj_add_style(item, &style_item, 0);
-    lv_obj_set_flex_flow(item, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(item, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_scrollbar_mode(item, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(item, LV_OBJ_FLAG_SCROLLABLE);
-
-    lv_obj_t * icon = lv_label_create(item);
-    lv_label_set_text(icon, symbol);
-    lv_obj_set_style_text_color(icon, current_theme.text_main, 0);
-
-    lv_obj_t * label = lv_label_create(item);
-    lv_label_set_text(label, name);
-    lv_obj_set_style_text_color(label, current_theme.text_main, 0);
-    lv_obj_set_flex_grow(label, 1);
-    lv_obj_set_style_margin_left(label, 10, 0);
-
-    return item;
+  (void)rotation;
+  lv_obj_invalidate(lv_scr_act());
 }
 
 void ui_display_settings_open(void) {
-    init_styles();
-    if(screen_display) lv_obj_del(screen_display);
+  if (s_screen_display != NULL) {
+    lv_obj_del(s_screen_display);
+    s_screen_display = NULL;
+  }
 
-    brightness_val = lcd_get_brightness() / 20;
-    if(brightness_val < 1) brightness_val = 1;
-    rotation_val = lcd_get_rotation();
+  s_brightness_val = lcd_get_brightness() / BRIGHTNESS_STEP;
+  if (s_brightness_val < BRIGHTNESS_MIN)
+    s_brightness_val = BRIGHTNESS_MIN;
 
-    screen_display = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_display, current_theme.screen_base, 0);
-    lv_obj_clear_flag(screen_display, LV_OBJ_FLAG_SCROLLABLE);
+  s_rotation_val = lcd_get_rotation();
 
-    header_ui_create(screen_display);
-    footer_ui_create(screen_display);
+  s_screen_display = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(s_screen_display, current_theme.screen_base, 0);
+  lv_obj_set_style_bg_opa(s_screen_display, LV_OPA_COVER, 0);
+  lv_obj_remove_flag(s_screen_display, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t * menu = lv_obj_create(screen_display);
-    lv_obj_set_size(menu, 230, 180);
-    lv_obj_align(menu, LV_ALIGN_CENTER, 0, 5);
-    lv_obj_add_style(menu, &style_menu, 0);
-    lv_obj_set_flex_flow(menu, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_scrollbar_mode(menu, LV_SCROLLBAR_MODE_OFF);
+  s_menu = menu_component_create(s_screen_display, "DISPLAY", NULL);
+  menu_component_add_intensity(
+      &s_menu, "/assets/icons/bright_menu_icon.bin", "BRIGHTNESS", s_brightness_val);
 
-    lv_obj_t * item_br = create_menu_item(menu, LV_SYMBOL_SETTINGS, "BRIGHT");
-    lv_obj_t * b_cont = lv_obj_create(item_br);
-    lv_obj_set_size(b_cont, 85, 30);
-    lv_obj_set_style_bg_opa(b_cont, 0, 0);
-    lv_obj_set_style_border_width(b_cont, 0, 0);
-    lv_obj_set_style_pad_all(b_cont, 0, 0);
-    lv_obj_set_flex_flow(b_cont, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(b_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_gap(b_cont, 4, 0);
-    lv_obj_clear_flag(b_cont, LV_OBJ_FLAG_SCROLLABLE);
+  char buf[ROTATION_BUF_SIZE];
+  snprintf(buf, sizeof(buf), "%d", s_rotation_val);
+  menu_component_add_selector(&s_menu, "/assets/icons/rotate_menu_icon.bin", "ROTATION", buf);
 
-    for(int i = 0; i < 5; i++) {
-        lv_obj_t * b = lv_obj_create(b_cont);
-        lv_obj_set_size(b, 12, 26);
-        lv_obj_set_style_radius(b, 1, 0);
-        lv_obj_set_style_border_width(b, 0, 0);
-        lv_obj_clear_flag(b, LV_OBJ_FLAG_SCROLLABLE);
+  if (s_nav_timer == NULL)
+    s_nav_timer = lv_timer_create(nav_timer_cb, NAV_TIMER_INTERVAL_MS, NULL);
+
+  lv_screen_load(s_screen_display);
+}
+
+static void update_rotation_value(void) {
+  char buf[ROTATION_BUF_SIZE];
+  snprintf(buf, sizeof(buf), "%d", s_rotation_val);
+  menu_component_set_selector_value(&s_menu, DISPLAY_ITEM_ROTATION, buf);
+}
+
+static void nav_timer_cb(lv_timer_t *timer) {
+  if (lv_screen_active() != s_screen_display) {
+    lv_timer_delete(timer);
+    s_nav_timer = NULL;
+    return;
+  }
+
+  if (ui_input_is_locked())
+    return;
+
+  bool is_up = up_button_is_down();
+  bool is_down = down_button_is_down();
+  bool is_left = left_button_is_down();
+  bool is_right = right_button_is_down();
+  bool is_ok = ok_button_is_down();
+  bool is_back = back_button_is_down();
+
+  if (is_down && !s_btn_down_last)
+    menu_component_next(&s_menu);
+
+  if (is_up && !s_btn_up_last)
+    menu_component_prev(&s_menu);
+
+  if (is_back && !s_btn_back_last)
+    ui_switch_screen(SCREEN_SETTINGS);
+
+  int sel = menu_component_get_selected(&s_menu);
+
+  if (is_left && !s_btn_left_last) {
+    if (sel == DISPLAY_ITEM_BRIGHTNESS) {
+      menu_component_intensity_dec(&s_menu, DISPLAY_ITEM_BRIGHTNESS);
+      s_brightness_val = menu_component_get_intensity(&s_menu, DISPLAY_ITEM_BRIGHTNESS);
+      lcd_set_brightness(s_brightness_val * BRIGHTNESS_STEP);
+    } else if (sel == DISPLAY_ITEM_ROTATION) {
+      s_rotation_val = (s_rotation_val == ROTATION_MIN) ? ROTATION_MAX : s_rotation_val - 1;
+      lcd_set_rotation(s_rotation_val);
+      update_lvgl_display_rotation(s_rotation_val);
+      update_rotation_value();
     }
-    update_brightness_bars(b_cont);
-    lv_obj_add_event_cb(item_br, display_item_event_cb, LV_EVENT_ALL, (void*)0);
+  }
 
-    lv_obj_t * item_rot = create_menu_item(menu, LV_SYMBOL_REFRESH, "ROTATE");
-    lv_obj_t * rot_label = lv_label_create(item_rot);
-    lv_label_set_text_fmt(rot_label, "< %d >", rotation_val);
-    lv_obj_set_style_text_color(rot_label, current_theme.text_main, 0);
-    lv_obj_add_event_cb(item_rot, display_item_event_cb, LV_EVENT_ALL, (void*)1);
-
-    if(main_group) {
-        lv_group_add_obj(main_group, item_br);
-        lv_group_add_obj(main_group, item_rot);
-        lv_group_focus_obj(item_br);
+  if (is_right && !s_btn_right_last) {
+    if (sel == DISPLAY_ITEM_BRIGHTNESS) {
+      menu_component_intensity_inc(&s_menu, DISPLAY_ITEM_BRIGHTNESS);
+      s_brightness_val = menu_component_get_intensity(&s_menu, DISPLAY_ITEM_BRIGHTNESS);
+      lcd_set_brightness(s_brightness_val * BRIGHTNESS_STEP);
+    } else if (sel == DISPLAY_ITEM_ROTATION) {
+      s_rotation_val = (s_rotation_val % ROTATION_MAX) + 1;
+      lcd_set_rotation(s_rotation_val);
+      update_lvgl_display_rotation(s_rotation_val);
+      update_rotation_value();
     }
+  }
 
-    lv_screen_load(screen_display);
+  s_btn_up_last = is_up;
+  s_btn_down_last = is_down;
+  s_btn_left_last = is_left;
+  s_btn_right_last = is_right;
+  s_btn_ok_last = is_ok;
+  s_btn_back_last = is_back;
 }

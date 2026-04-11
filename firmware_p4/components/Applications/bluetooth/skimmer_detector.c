@@ -13,69 +13,102 @@
 // limitations under the License.
 
 #include "skimmer_detector.h"
-#include "spi_bridge.h"
-#include "esp_log.h"
-#include <stdlib.h>
 
-static skimmer_record_t *cached_results = NULL;
-static uint16_t cached_count = 0;
-static uint16_t cached_capacity = 0;
-static skimmer_record_t empty_record;
+#include <stdlib.h>
+#include <string.h>
+
+#include "esp_log.h"
+
+#include "spi_bridge.h"
+
+static const char *TAG = "SKIMMER_DETECTOR";
+
+#define SPI_TIMEOUT_MS      2000
+#define SPI_DATA_TIMEOUT_MS 1000
+
+static skimmer_detector_record_t *s_cached_results = NULL;
+static uint16_t s_cached_count = 0;
+static uint16_t s_cached_capacity = 0;
+static skimmer_detector_record_t s_empty_record;
 
 bool skimmer_detector_start(void) {
-    skimmer_detector_clear_results();
-    return (spi_bridge_send_command(SPI_ID_BT_APP_SKIMMER, NULL, 0, NULL, NULL, 2000) == ESP_OK);
+  ESP_LOGI(TAG, "Skimmer detector started");
+  skimmer_detector_clear_results();
+  return (spi_bridge_send_command(SPI_ID_BT_APP_SKIMMER, NULL, 0, NULL, NULL, SPI_TIMEOUT_MS) ==
+          ESP_OK);
 }
 
 void skimmer_detector_stop(void) {
-    spi_bridge_send_command(SPI_ID_BT_APP_STOP, NULL, 0, NULL, NULL, 2000);
-    skimmer_detector_clear_results();
+  ESP_LOGI(TAG, "Skimmer detector stopped");
+  spi_bridge_send_command(SPI_ID_BT_APP_STOP, NULL, 0, NULL, NULL, SPI_TIMEOUT_MS);
+  skimmer_detector_clear_results();
 }
 
-skimmer_record_t* skimmer_detector_get_results(uint16_t *count) {
-    spi_header_t resp;
-    uint8_t payload[2];
-    uint16_t magic_count = SPI_DATA_INDEX_COUNT;
+skimmer_detector_record_t *skimmer_detector_get_results(uint16_t *out_count) {
+  spi_header_t resp;
+  uint8_t payload[2];
+  uint16_t magic_count = SPI_DATA_INDEX_COUNT;
 
-    if (spi_bridge_send_command(SPI_ID_SYSTEM_DATA, (uint8_t*)&magic_count, 2, &resp, payload, 1000) != ESP_OK) {
-        if (count) *count = cached_count;
-        return cached_results ? cached_results : &empty_record;
+  if (spi_bridge_send_command(SPI_ID_SYSTEM_DATA,
+                              (uint8_t *)&magic_count,
+                              sizeof(magic_count),
+                              &resp,
+                              payload,
+                              SPI_DATA_TIMEOUT_MS) != ESP_OK) {
+    if (out_count != NULL) {
+      *out_count = s_cached_count;
     }
+    return s_cached_results != NULL ? s_cached_results : &s_empty_record;
+  }
 
-    uint16_t remote_count = 0;
-    memcpy(&remote_count, payload, 2);
-    if (remote_count > MAX_SKIMMERS_FOUND) remote_count = MAX_SKIMMERS_FOUND;
+  uint16_t remote_count = 0;
+  memcpy(&remote_count, payload, sizeof(remote_count));
+  if (remote_count > SKIMMER_DETECTOR_MAX_RESULTS) {
+    remote_count = SKIMMER_DETECTOR_MAX_RESULTS;
+  }
 
-    if (remote_count < cached_count) cached_count = 0;
+  if (remote_count < s_cached_count) {
+    s_cached_count = 0;
+  }
 
-    if (remote_count > cached_capacity) {
-        skimmer_record_t *new_buf = (skimmer_record_t *)realloc(cached_results, remote_count * sizeof(skimmer_record_t));
-        if (!new_buf) {
-            if (count) *count = cached_count;
-            return cached_results ? cached_results : &empty_record;
-        }
-        cached_results = new_buf;
-        cached_capacity = remote_count;
+  if (remote_count > s_cached_capacity) {
+    skimmer_detector_record_t *new_buf = (skimmer_detector_record_t *)realloc(
+        s_cached_results, remote_count * sizeof(skimmer_detector_record_t));
+    if (new_buf == NULL) {
+      if (out_count != NULL) {
+        *out_count = s_cached_count;
+      }
+      return s_cached_results != NULL ? s_cached_results : &s_empty_record;
     }
+    s_cached_results = new_buf;
+    s_cached_capacity = remote_count;
+  }
 
-    uint16_t fetched = cached_count;
-    for (uint16_t i = cached_count; i < remote_count; i++) {
-        if (spi_bridge_send_command(SPI_ID_SYSTEM_DATA, (uint8_t*)&i, 2, &resp, (uint8_t*)&cached_results[i], 1000) != ESP_OK) {
-            break;
-        }
-        fetched = i + 1;
+  uint16_t fetched = s_cached_count;
+  for (uint16_t i = s_cached_count; i < remote_count; i++) {
+    if (spi_bridge_send_command(SPI_ID_SYSTEM_DATA,
+                                (uint8_t *)&i,
+                                sizeof(i),
+                                &resp,
+                                (uint8_t *)&s_cached_results[i],
+                                SPI_DATA_TIMEOUT_MS) != ESP_OK) {
+      break;
     }
+    fetched = i + 1;
+  }
 
-    cached_count = fetched;
-    if (count) *count = cached_count;
-    return cached_results ? cached_results : &empty_record;
+  s_cached_count = fetched;
+  if (out_count != NULL) {
+    *out_count = s_cached_count;
+  }
+  return s_cached_results != NULL ? s_cached_results : &s_empty_record;
 }
 
 void skimmer_detector_clear_results(void) {
-    if (cached_results) {
-        free(cached_results);
-        cached_results = NULL;
-    }
-    cached_count = 0;
-    cached_capacity = 0;
+  if (s_cached_results != NULL) {
+    free(s_cached_results);
+    s_cached_results = NULL;
+  }
+  s_cached_count = 0;
+  s_cached_capacity = 0;
 }

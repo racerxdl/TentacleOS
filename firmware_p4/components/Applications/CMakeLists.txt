@@ -36,12 +36,16 @@ file(GLOB_RECURSE BLE_UI_SRCS "ui/screens/bluetooth/*.c")
 file(GLOB_RECURSE SUBGHZ_UI_SRCS "ui/screens/SubGhz/*.c")
 file(GLOB_RECURSE SUB_EXAMPLE_UI_SRCS "ui/screens/sub_example/*.c")
 file(GLOB_RECURSE BADUSB_UI_SRCS "ui/screens/badusb/*.c")
+file(GLOB_RECURSE IR_UI_SRCS "ui/screens/infrared/*.c")
 
 #COMPONENTS
 file(GLOB_RECURSE HEADER_UI_SRCS "ui/components/header/*.c")
 file(GLOB_RECURSE FOOTER_UI_SRCS "ui/components/footer/*.c")
 file(GLOB_RECURSE KEYBOARD_UI_SRCS "ui/components/keyboard/*.c")
 file(GLOB_RECURSE MSGBOX_UI_SRCS "ui/components/message_box/*.c")
+file(GLOB_RECURSE DROPDOWN_UI_SRCS "ui/components/dropdown/*.c")
+file(GLOB_RECURSE TOGGLE_UI_SRCS "ui/components/toggle/*.c")
+file(GLOB_RECURSE SPINNER_UI_SRCS "ui/components/spinner/*.c")
 
 #SETINGS SCREENS
 file(GLOB_RECURSE SETTINGS_UI_SRCS "ui/screens/settings/*.c")
@@ -51,6 +55,7 @@ file(GLOB_RECURSE INTERFACE_SETTINGS_UI_SRCS "ui/screens/interface_settings/*.c"
 file(GLOB_RECURSE BATTERY_SETTINGS_UI_SRCS "ui/screens/battery_settings/*.c")
 file(GLOB_RECURSE CONNECTION_SETTINGS_UI_SRCS "ui/screens/connection_settings/*.c")
 file(GLOB_RECURSE ABOUT_SETTINGS_UI_SRCS "ui/screens/about_settings/*.c")
+file(GLOB_RECURSE THEME_SELECTOR_UI_SRCS "ui/screens/theme_selector/*.c")
 
 file(GLOB_RECURSE CONNECT_WIFI_UI_SRCS "ui/screens/connect_wifi/*.c")
 file(GLOB_RECURSE CONNECT_BLUETOOTH_UI_SRCS "ui/screens/connect_bluetooth/*.c")
@@ -64,7 +69,6 @@ file(GLOB_RECURSE WIFI_APP_SRCS "wifi/*.c")
 file(GLOB_RECURSE NFC_APP_SRCS "nfc/*.c")
 
 idf_component_register(SRCS 
-  "play/play.c"
   ${UI_SRCS}
   ${WIFI_APP_SRCS}
   ${NFC_APP_SRCS}
@@ -81,6 +85,7 @@ idf_component_register(SRCS
   ${WIFI_UI_SRCS}
   ${SUB_EXAMPLE_UI_SRCS}
   ${BADUSB_UI_SRCS}
+  ${IR_UI_SRCS}
   ${HEADER_UI_SRCS}
   ${FOOTER_UI_SRCS}
   ${KEYBOARD_UI_SRCS}
@@ -93,10 +98,13 @@ idf_component_register(SRCS
   ${CONNECT_BLUETOOTH_UI_SRCS}
   ${CONNECT_WIFI_UI_SRCS}
   ${ABOUT_SETTINGS_UI_SRCS}
+  ${THEME_SELECTOR_UI_SRCS}
   ${MSGBOX_UI_SRCS}
+  ${DROPDOWN_UI_SRCS}
+  ${TOGGLE_UI_SRCS}
+  ${SPINNER_UI_SRCS}
 
-  INCLUDE_DIRS 
-  "play/include"
+  INCLUDE_DIRS
   "wifi/include"   
   "nfc/include"
   "nfc/protocols/common/include"
@@ -121,7 +129,9 @@ idf_component_register(SRCS
   "ui/screens/connect_wifi/include"
   "ui/screens/connect_bluetooth/include"
   "ui/screens/about_settings/include"
+  "ui/screens/theme_selector/include"
   "ui/screens/badusb/include"
+  "ui/screens/infrared/include"
   "bad_usb/include"
   "bluetooth/include"
   "SubGhz/include"
@@ -131,14 +141,23 @@ idf_component_register(SRCS
   "ui/screens/boot/include"
   "ui/screens/menu/include"
   "ui/screens/wifi/include"
+  "ui/screens/nfc/include"
+  "ui/screens/files/include"
   "ui/screens/sub_example/include"
   "ui/components/header/include"
   "ui/components/footer/include"
   "ui/components/keyboard/include"
   "ui/components/message_box/include"
+  "ui/components/dropdown/include"
+  "ui/components/toggle/include"
   "ui/components/menu_component/include"
   "ui/components/button/include"
   "ui/components/terminal/include"
+  "ui/components/page_dots/include"
+  "ui/components/intensity_bar/include"
+  "ui/components/chart/include"
+  "ui/components/text_viewer/include"
+  "ui/components/spinner/include"
   
 
 

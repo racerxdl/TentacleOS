@@ -12,64 +12,108 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include "ui_badusb_menu.h"
-#include "ui_manager.h"
-#include "font/lv_symbol_def.h"
-#include "header_ui.h"
-#include "footer_ui.h"
-#include "lv_port_indev.h"
+
 #include "esp_log.h"
+
+#include "buttons_gpio.h"
+#include "lv_port_indev.h"
+#include "menu_component_ui.h"
+#include "ui_manager.h"
+#include "ui_theme.h"
 
 static const char *TAG = "UI_BADUSB_MENU";
 
-static lv_obj_t * screen_badusb_menu = NULL;
+#define NAV_TIMER_INTERVAL_MS 50
 
-static void menu_event_handler(lv_event_t * e) {
-  lv_event_code_t code = lv_event_get_code(e);
-  lv_obj_t * obj = lv_event_get_target(e);
-  uint32_t * user_data = lv_event_get_user_data(e);
+typedef struct {
+  const char *name;
+  const char *icon;
+  int target;
+} ui_badusb_menu_item_t;
 
-  if (code == LV_EVENT_KEY) {
-    uint32_t key = lv_event_get_key(e);
-    if (key == LV_KEY_ENTER) {
-      // TODO: Pass user_data to browser to know which storage to open
-      ui_switch_screen(SCREEN_BADUSB_BROWSER);
-    } else if (key == LV_KEY_ESC) {
-      ui_switch_screen(SCREEN_MENU);
-    }
-  }
-}
+static const ui_badusb_menu_item_t MENU_ITEMS[] = {
+    {"Internal Memory", NULL, SCREEN_BADUSB_BROWSER},
+    {"Micro-SD", NULL, SCREEN_BADUSB_BROWSER},
+};
+#define MENU_ITEMS_COUNT (sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]))
+
+static lv_obj_t *s_screen = NULL;
+static menu_component_t s_menu;
+static lv_timer_t *s_nav_timer = NULL;
+static bool s_btn_up_last = false;
+static bool s_btn_down_last = false;
+static bool s_btn_left_last = false;
+static bool s_btn_right_last = false;
+static bool s_btn_ok_last = false;
+static bool s_btn_back_last = false;
+
+static void nav_timer_cb(lv_timer_t *t);
 
 void ui_badusb_menu_open(void) {
-  if (screen_badusb_menu) lv_obj_del(screen_badusb_menu);
-
-  screen_badusb_menu = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(screen_badusb_menu, lv_color_black(), 0);
-  lv_obj_remove_flag(screen_badusb_menu, LV_OBJ_FLAG_SCROLLABLE);
-
-  header_ui_create(screen_badusb_menu);
-
-  lv_obj_t * list = lv_list_create(screen_badusb_menu);
-  lv_obj_set_size(list, 220, 180);
-  lv_obj_center(list);
-
-  lv_obj_t * btn;
-
-  btn = lv_list_add_button(list, LV_SYMBOL_USB, "Internal Memory");
-  lv_obj_add_event_cb(btn, menu_event_handler, LV_EVENT_KEY, (void*)0);
-
-  btn = lv_list_add_button(list, LV_SYMBOL_SD_CARD, "Micro-SD");
-  lv_obj_add_event_cb(btn, menu_event_handler, LV_EVENT_KEY, (void*)1);
-
-  footer_ui_create(screen_badusb_menu);
-
-  lv_obj_add_event_cb(screen_badusb_menu, menu_event_handler, LV_EVENT_KEY, NULL);
-
-  if (main_group) {
-    lv_group_add_obj(main_group, list);
-    lv_group_focus_obj(list);
+  if (s_screen != NULL) {
+    lv_obj_del(s_screen);
+    s_screen = NULL;
   }
 
-  lv_screen_load(screen_badusb_menu);
+  s_screen = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(s_screen, current_theme.screen_base, 0);
+  lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
+  lv_obj_remove_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
+
+  s_menu = menu_component_create(s_screen, "BAD USB", NULL);
+  for (int i = 0; i < (int)MENU_ITEMS_COUNT; i++) {
+    menu_component_add_item(&s_menu, MENU_ITEMS[i].icon, MENU_ITEMS[i].name);
+  }
+
+  if (s_nav_timer == NULL) {
+    s_nav_timer = lv_timer_create(nav_timer_cb, NAV_TIMER_INTERVAL_MS, NULL);
+  }
+
+  lv_screen_load(s_screen);
+}
+
+static void nav_timer_cb(lv_timer_t *t) {
+  if (lv_screen_active() != s_screen) {
+    lv_timer_delete(t);
+    s_nav_timer = NULL;
+    return;
+  }
+
+  if (ui_input_is_locked()) {
+    return;
+  }
+
+  bool up = up_button_is_down();
+  bool down = down_button_is_down();
+  bool left = left_button_is_down();
+  bool right = right_button_is_down();
+  bool ok = ok_button_is_down();
+  bool back = back_button_is_down();
+
+  if (down && !s_btn_down_last) {
+    menu_component_next(&s_menu);
+  }
+
+  if (up && !s_btn_up_last) {
+    menu_component_prev(&s_menu);
+  }
+
+  if ((back && !s_btn_back_last) || (left && !s_btn_left_last)) {
+    ui_switch_screen(SCREEN_MENU);
+  }
+
+  if ((ok && !s_btn_ok_last) || (right && !s_btn_right_last)) {
+    int sel = menu_component_get_selected(&s_menu);
+    if (sel >= 0 && sel < (int)MENU_ITEMS_COUNT) {
+      ui_switch_screen(MENU_ITEMS[sel].target);
+    }
+  }
+
+  s_btn_up_last = up;
+  s_btn_down_last = down;
+  s_btn_left_last = left;
+  s_btn_right_last = right;
+  s_btn_ok_last = ok;
+  s_btn_back_last = back;
 }

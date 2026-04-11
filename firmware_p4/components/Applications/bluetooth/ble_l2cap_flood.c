@@ -13,18 +13,25 @@
 // limitations under the License.
 
 #include "ble_l2cap_flood.h"
+
+#include <string.h>
+
+#include "esp_log.h"
+
 #include "bluetooth_service.h"
 #include "spi_bridge.h"
 #include "spi_protocol.h"
-#include "esp_log.h"
-#include <string.h>
 
-static const char *TAG = "L2CAP_FLOOD";
+static const char *TAG = "BLE_L2CAP_FLOOD";
 
-static bool is_running = false;
+#define L2CAP_ADDR_PAYLOAD_SIZE 7
+#define L2CAP_SPI_START_TIMEOUT 5000
+#define L2CAP_SPI_STOP_TIMEOUT  2000
+
+static bool s_is_running = false;
 
 esp_err_t ble_l2cap_flood_start(const uint8_t *addr, uint8_t addr_type) {
-  if (is_running) {
+  if (s_is_running) {
     return ESP_ERR_INVALID_STATE;
   }
 
@@ -33,47 +40,45 @@ esp_err_t ble_l2cap_flood_start(const uint8_t *addr, uint8_t addr_type) {
     return ESP_FAIL;
   }
 
-  // Payload: addr[6] + addr_type[1]
-  uint8_t payload[7];
+  uint8_t payload[L2CAP_ADDR_PAYLOAD_SIZE];
   memcpy(payload, addr, 6);
   payload[6] = addr_type;
 
   spi_header_t resp_hdr;
   uint8_t resp_buf[SPI_MAX_PAYLOAD];
 
-  esp_err_t ret = spi_bridge_send_command(SPI_ID_BT_APP_FLOOD,
-      payload, sizeof(payload),
-      &resp_hdr, resp_buf, 5000);
+  esp_err_t ret = spi_bridge_send_command(
+      SPI_ID_BT_APP_FLOOD, payload, sizeof(payload), &resp_hdr, resp_buf, L2CAP_SPI_START_TIMEOUT);
 
   if (ret != ESP_OK || resp_buf[0] != SPI_STATUS_OK) {
     ESP_LOGE(TAG, "Failed to start L2CAP flood on C5");
     return ESP_FAIL;
   }
 
-  is_running = true;
+  s_is_running = true;
   ESP_LOGI(TAG, "L2CAP Flood started");
   return ESP_OK;
 }
 
 esp_err_t ble_l2cap_flood_stop(void) {
-  if (!is_running) return ESP_OK;
+  if (!s_is_running)
+    return ESP_OK;
 
   spi_header_t resp_hdr;
   uint8_t resp_buf[SPI_MAX_PAYLOAD];
 
-  esp_err_t ret = spi_bridge_send_command(SPI_ID_BT_APP_STOP,
-      NULL, 0,
-      &resp_hdr, resp_buf, 2000);
+  esp_err_t ret = spi_bridge_send_command(
+      SPI_ID_BT_APP_STOP, NULL, 0, &resp_hdr, resp_buf, L2CAP_SPI_STOP_TIMEOUT);
 
   if (ret != ESP_OK || resp_buf[0] != SPI_STATUS_OK) {
     ESP_LOGW(TAG, "Failed to stop L2CAP flood on C5");
   }
 
-  is_running = false;
+  s_is_running = false;
   ESP_LOGI(TAG, "L2CAP Flood stopped");
   return ESP_OK;
 }
 
 bool ble_l2cap_flood_is_running(void) {
-  return is_running;
+  return s_is_running;
 }

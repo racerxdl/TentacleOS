@@ -1,6 +1,6 @@
 /**
  * @file sd_card_read.h
- * @brief Funções para leitura de dados do SD
+ * @brief SD card read operations.
  */
 #ifndef SD_CARD_READ_H
 #define SD_CARD_READ_H
@@ -14,134 +14,135 @@ extern "C" {
 #endif
 
 /**
- * @brief Callback para processar linhas
+ * @brief Callback invoked for each line.
  */
 typedef void (*sd_line_callback_t)(const char *line, void *user_data);
 
 /**
- * @brief Lê arquivo como string
- * @param path Caminho do arquivo
- * @param buffer Buffer para receber dados
- * @param buffer_size Tamanho do buffer
- * @return ESP_OK em sucesso
+ * @brief Read file as null-terminated string.
+ * @param path File path.
+ * @param buffer Buffer to receive data.
+ * @param buffer_size Buffer size.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_read_string(const char *path, char *buffer, size_t buffer_size);
 
 /**
- * @brief Lê dados binários
- * @param path Caminho do arquivo
- * @param buffer Buffer para receber dados
- * @param size Tamanho a ler
- * @param bytes_read Ponteiro para receber bytes lidos
- * @return ESP_OK em sucesso
+ * @brief Read binary data.
+ * @param path File path.
+ * @param buffer Buffer to receive data.
+ * @param size Maximum bytes to read.
+ * @param bytes_read Pointer to receive bytes read.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_read_binary(const char *path, void *buffer, size_t size, size_t *bytes_read);
 
 /**
- * @brief Lê uma linha específica
- * @param path Caminho do arquivo
- * @param buffer Buffer para receber linha
- * @param buffer_size Tamanho do buffer
- * @param line_number Número da linha (1-based)
- * @return ESP_OK em sucesso
+ * @brief Read a specific line by number.
+ * @param path File path.
+ * @param buffer Buffer to receive line.
+ * @param buffer_size Buffer size.
+ * @param line_number Line number (1-based).
+ * @return ESP_OK on success.
  */
 esp_err_t sd_read_line(const char *path, char *buffer, size_t buffer_size, uint32_t line_number);
 
 /**
- * @brief Lê todas as linhas via callback
- * @param path Caminho do arquivo
- * @param callback Função callback
- * @param user_data Dados do usuário
- * @return ESP_OK em sucesso
+ * @brief Read all lines via callback.
+ * @param path File path.
+ * @param callback Callback function.
+ * @param user_data User context data.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_read_lines(const char *path, sd_line_callback_t callback, void *user_data);
 
 /**
- * @brief Conta número de linhas
- * @param path Caminho do arquivo
- * @param line_count Ponteiro para receber contagem
- * @return ESP_OK em sucesso
+ * @brief Count number of lines.
+ * @param path File path.
+ * @param line_count Pointer to receive count.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_count_lines(const char *path, uint32_t *line_count);
 
 /**
- * @brief Lê chunk de dados
- * @param path Caminho do arquivo
- * @param offset Offset inicial
- * @param buffer Buffer para receber dados
- * @param size Tamanho a ler
- * @param bytes_read Ponteiro para receber bytes lidos
- * @return ESP_OK em sucesso
+ * @brief Read a chunk of data at offset.
+ * @param path File path.
+ * @param offset Starting offset.
+ * @param buffer Buffer to receive data.
+ * @param size Maximum bytes to read.
+ * @param bytes_read Pointer to receive bytes read.
+ * @return ESP_OK on success.
  */
-esp_err_t sd_read_chunk(const char *path, size_t offset, void *buffer, size_t size, size_t *bytes_read);
+esp_err_t
+sd_read_chunk(const char *path, size_t offset, void *buffer, size_t size, size_t *bytes_read);
 
 /**
- * @brief Lê primeira linha
- * @param path Caminho do arquivo
- * @param buffer Buffer para receber linha
- * @param buffer_size Tamanho do buffer
- * @return ESP_OK em sucesso
+ * @brief Read the first line.
+ * @param path File path.
+ * @param buffer Buffer to receive line.
+ * @param buffer_size Buffer size.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_read_first_line(const char *path, char *buffer, size_t buffer_size);
 
 /**
- * @brief Lê última linha
- * @param path Caminho do arquivo
- * @param buffer Buffer para receber linha
- * @param buffer_size Tamanho do buffer
- * @return ESP_OK em sucesso
+ * @brief Read the last line.
+ * @param path File path.
+ * @param buffer Buffer to receive line.
+ * @param buffer_size Buffer size.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_read_last_line(const char *path, char *buffer, size_t buffer_size);
 
 /**
- * @brief Lê inteiro
- * @param path Caminho do arquivo
- * @param value Ponteiro para receber valor
- * @return ESP_OK em sucesso
+ * @brief Read an integer value.
+ * @param path File path.
+ * @param value Pointer to receive value.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_read_int(const char *path, int32_t *value);
 
 /**
- * @brief Lê float
- * @param path Caminho do arquivo
- * @param value Ponteiro para receber valor
- * @return ESP_OK em sucesso
+ * @brief Read a float value.
+ * @param path File path.
+ * @param value Pointer to receive value.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_read_float(const char *path, float *value);
 
 /**
- * @brief Lê bytes
- * @param path Caminho do arquivo
- * @param bytes Buffer para bytes
- * @param max_count Máximo de bytes
- * @param count Ponteiro para receber contagem
- * @return ESP_OK em sucesso
+ * @brief Read bytes.
+ * @param path File path.
+ * @param bytes Buffer to receive bytes.
+ * @param max_count Maximum bytes.
+ * @param count Pointer to receive count.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_read_bytes(const char *path, uint8_t *bytes, size_t max_count, size_t *count);
 
 /**
- * @brief Lê um byte
- * @param path Caminho do arquivo
- * @param byte Ponteiro para receber byte
- * @return ESP_OK em sucesso
+ * @brief Read a single byte.
+ * @param path File path.
+ * @param byte Pointer to receive byte.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_read_byte(const char *path, uint8_t *byte);
 
 /**
- * @brief Verifica se arquivo contém string
- * @param path Caminho do arquivo
- * @param search String de busca
- * @param found Ponteiro para resultado
- * @return ESP_OK em sucesso
+ * @brief Check if file contains a string.
+ * @param path File path.
+ * @param search Search string.
+ * @param found Pointer to receive result.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_file_contains(const char *path, const char *search, bool *found);
 
 /**
- * @brief Conta ocorrências de string
- * @param path Caminho do arquivo
- * @param search String de busca
- * @param count Ponteiro para receber contagem
- * @return ESP_OK em sucesso
+ * @brief Count occurrences of a string.
+ * @param path File path.
+ * @param search Search string.
+ * @param count Pointer to receive count.
+ * @return ESP_OK on success.
  */
 esp_err_t sd_count_occurrences(const char *path, const char *search, uint32_t *count);
 

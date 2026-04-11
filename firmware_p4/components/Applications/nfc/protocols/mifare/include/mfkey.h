@@ -21,8 +21,34 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/** Recover key from two nonces (nested attack). */
-bool mfkey32(uint32_t uid, uint32_t nt0, uint32_t nr0, uint32_t ar0,
-             uint32_t nt1, uint32_t nr1, uint32_t ar1, uint64_t* key);
-
+#ifdef __cplusplus
+extern "C" {
 #endif
+
+/**
+ * @brief Recover key from two nonces (nested attack).
+ *
+ * @param uid  Card UID.
+ * @param nt0  First nonce from card.
+ * @param nr0  First reader nonce.
+ * @param ar0  First reader response.
+ * @param nt1  Second nonce from card.
+ * @param nr1  Second reader nonce.
+ * @param ar1  Second reader response.
+ * @param[out] key  Recovered 48-bit key.
+ * @return true if key was recovered successfully.
+ */
+bool mfkey32(uint32_t uid,
+             uint32_t nt0,
+             uint32_t nr0,
+             uint32_t ar0,
+             uint32_t nt1,
+             uint32_t nr1,
+             uint32_t ar1,
+             uint64_t *key);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* MFKEY_H */

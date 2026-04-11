@@ -11,27 +11,68 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/**
- * @file st25r3916_core.h
- * @brief ST25R3916 Core init, reset, field, mode.
- */
+
 #ifndef ST25R3916_CORE_H
 #define ST25R3916_CORE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <stdbool.h>
+
+#include "esp_err.h"
+
 #include "highboy_nfc.h"
 
-hb_nfc_err_t st25r_init(const highboy_nfc_config_t* cfg);
-void         st25r_deinit(void);
-hb_nfc_err_t st25r_check_id(uint8_t* id, uint8_t* type, uint8_t* rev);
-hb_nfc_err_t st25r_field_on(void);
-void         st25r_field_off(void);
-bool         st25r_field_is_on(void);
-hb_nfc_err_t st25r_field_cycle(void);
-hb_nfc_err_t st25r_set_mode_nfca(void);
+/**
+ * @brief Initialize the ST25R3916 core.
+ */
+esp_err_t st25r3916_core_init(const highboy_nfc_config_t *config);
 
-/** Dump all 64 registers to log. */
-void st25r_dump_regs(void);
+/**
+ * @brief Deinitialize the driver.
+ */
+void st25r3916_core_deinit(void);
 
+/**
+ * @brief Read and validate the chip IC identity.
+ */
+esp_err_t st25r3916_core_check_id(uint8_t *out_id, uint8_t *out_type, uint8_t *out_rev);
+
+/**
+ * @brief Enable the RF field.
+ */
+esp_err_t st25r3916_core_field_on(void);
+
+/**
+ * @brief Disable the RF field.
+ */
+esp_err_t st25r3916_core_field_off(void);
+
+/**
+ * @brief Check if the RF field is active.
+ */
+bool st25r3916_core_field_is_on(void);
+
+/**
+ * @brief Power-cycle the RF field.
+ */
+esp_err_t st25r3916_core_field_cycle(void);
+
+/**
+ * @brief Configure the chip for ISO 14443-A.
+ */
+esp_err_t st25r3916_core_set_mode_nfca(void);
+
+/**
+ * @brief Dump all registers for diagnostics.
+ */
+void st25r3916_core_dump_regs(void);
+
+#ifdef __cplusplus
+}
 #endif
+
+#endif // ST25R3916_CORE_H

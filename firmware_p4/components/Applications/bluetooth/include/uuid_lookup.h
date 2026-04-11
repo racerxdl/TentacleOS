@@ -12,12 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #ifndef UUID_LOOKUP_H
 #define UUID_LOOKUP_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 
-const char* uuid_get_name_by_u16(uint16_t uuid16);
+/**
+ * @brief Look up a human-readable name for a BLE UUID16 value.
+ *
+ * @param uuid16 The 16-bit UUID to look up.
+ * @return Name string, or "Unknown Service/Char" if not found.
+ */
+const char *uuid_get_name_by_u16(uint16_t uuid16);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // UUID_LOOKUP_H
