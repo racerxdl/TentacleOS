@@ -1,3 +1,88 @@
+## [1.2.0](https://github.com/HighCodeh/TentacleOS/compare/v1.1.0...v1.2.0) (2026-04-11)
+
+### Features
+
+* **assets:** add infrared menu icons (e07a3e618c9061a98c1252932842a72ea16bc727) — @
+* **assets:** add inter font (9860659ae175183b16b3fff0f3dd72e3061c7d56) — @
+* **assets:** add new frames for coverflow menu (5064762356d7528d9a52b246d2d8814ad3d3d2f6) — @
+* **assets:** add new menu icons for redesigned UI (8786bc3aea9201d03030ac75280092b065c809f3) — @
+* **assets:** add octobit profile portrait (168ba34dd47d9f851c2a0dc8841420eee333af7f) — @
+* **build:** register new UI components and screen include paths (a9625a015f356c226ba097631410e7a73f3aa08b) — @
+* **core:** plug first boot and config loading into boot sequence (dcde322dc1b60c88a76dff8dd9cd95421abbd234) — @
+* **evil-twin:** add template upload P4->C5 via SPI and password save to SD (49e474f0adf6f34c96712f4bef9c3078d1f6e7f5) — @
+* **ir:** new multi-protocol ir library (02d835aed8363a9ce5afa2ece963881868d060ea) — @
+* **kernel:** integrate tos_theme and tos_log into boot sequence (8b9825465fa231a5cf505efcf2e460eceb414932) — @
+* **log:** add tos_log system with SD persistence and 2MB rotation (6f761670c840bc19e87fa311c9243f05b53cd6e4) — @
+* **sdkconfig:** enable FAT32 LFN, increase LVGL heap to 128KB, set PSRAM (67699985f3ebfe998268072c5b51da1782199d78) — @
+* **storage:** add centralized flash path headers for P4 and C5 (ec35d8bff2184bbb0c6515ea1320626efc76b99b) — @
+* **storage:** add centralized loot filename generator with date prefix (c9562363071cc13c1115a90d71864a90ab0398b6) — @
+* **storage:** add first boot setup with folder structure and default configs (8d8c637dc6624a83ca795f9a67b6121789979789) — @
+* **storage:** add modular config system with SD/flash fallback (a500554e89bfdfeb6f675fa605288b56c22283c5) — @
+* **storage:** add stream I/O API for high-thoughput continuous writes (27d8ad91c82819c8888542315aa2231fbeff3467) — @
+* **storage:** add tos_theme (4364cc900c9c284f65f32ded1c9ef31aadbf8025) — @
+* **storage:** add unified path registry tos_storage_paths.h (cc7f062f9590d14a45c6923d7924fee6800b2073) — @
+* **storage:** add unified path registry tos_storage_paths.h (727d554e7c2f91f5f2fe86174fa938653942654d) — @
+* **storage:** cross-filesystem copy, smart theme migration, sd folder structure setup (a0330e7e3f50b51e85fd5d16a5d59265ecb52011) — @
+* **tools:** add automatic 3D frame rotation script (c21cc57efc1c739c80f606fc79d1e281ba394d23) — @
+* **tools:** integrate frame rotation into ps1 script (2d93ac12b5d8c211173b2ff131fabc5e8477c9d6) — @
+* **tools:** integrate frame rotation into sh script (6a885bad06c61ff042daee017f5e0328f9e1a8ec) — @
+* **ui:** add infrared menu to coverflow (21735cc6e28e5eeb1789a0ecacc3fb679f5feb3e) — @
+* **ui:** add infrared screens to ui_manager (d86d16648f16478d8d658f9d9d771d6c9aeb23b4) — @
+* **ui:** add msgbox_is_open() to check visibility state (3960ac4dd36266251c8ace0a2832f2c6222a309a) — @
+* **ui:** add new ir screens to ui_manager.h (89c084eb09a3e093666d1355f6ad07d13c4d99a9) — @
+* **ui:** add protocol colors, .conf section parser and sd lazyload support (1306c91209f3da891cfbb499cd63e8112cbdb832) — @
+* **ui:** add SCREEN_NFC_MENU and SCREEN_FILES to screen_id_t (040c14cd690a826a4ea28e75c280ee5906f825ce) — @
+* **ui:** add SD lazyload with flash override and unload support (53b3d7de123e9b166ca8608b44ca9db464e9a3bf) — @
+* **ui:** added nfc and files screen and increase ui task stack (fdad7bafac1cd90a0c4a0a38137a27beedc410c1) — @
+* **ui:** added theme colors and input lock to interface settings screen (9f0037ee289445c570cad96bed13a612389f48cd) — @
+* **ui:** files screen (683c43def38683908f9a9c363c0bbbf77debf8a8) — @
+* **ui:** include theme selector screen & input lock function (33381a106952356efbdffb5486f346a18825137b) — @
+* **ui:** include theme selector screen in ui_manager (c5f2e0a31054f15007c91cc568b0cfdad18a386d) — @
+* **ui:** new area chart component (079074eb34c551f42479bf6a1f5226837426b18e) — @
+* **ui:** new chart component (018d8744b7acab267dd9b0e348149e05981b132a) — @
+* **ui:** new dropdown component (c634eec0e7c24d373ef09d83fc5222f4024c8c8d) — @
+* **ui:** new infrared burst screen (6aa4f567e963b989f9bbc29647a3ad5caa03bc1e) — @
+* **ui:** new infrared controller screen (6b311e3fca8d8d1c4b214be044775e2e2bddeb99) — @
+* **ui:** new infrared menu screen (31ea0273ed53c21a997e25d0d5f9755fee194d50) — @
+* **ui:** new infrared receive screen (9d3a7f36e1c84fc011c91e1fe8040ce39f6a419c) — @
+* **ui:** new intensity bar component (da6a7e8fa2d682b4aefc8fe42d61d431bcb3c215) — @
+* **ui:** new nfc menu screen (1e44ea4ee4cc465ba56e3586f9bf9407d5a95608) — @
+* **ui:** new page dots component (817a3facbac8606af35df37eccf992828c2e4199) — @
+* **ui:** new saved infrared signals screen (33a3fbd19e0a58e9e65e22ca02456191f1e1d4ff) — @
+* **ui:** new send infrared screen (70e10828fd1305705c87dfa0f2432638f2dd25ee) — @
+* **ui:** new spinner component (b85ec85699b364643b718eac7ebf2594f8557a29) — @
+* **ui:** new text viewer component (eb717d877fd43f6409be15a2c7ac2b8c074d482d) — @
+* **ui:** new theme selector screen (495bfd5a845216e0213e10d455b7ff84a9f0d4b6) — @
+* **ui:** new toggle button component (8ebf8c3ceb8007816ab58e78f4198ba537241332) — @
+* **ui:** redesign button component (b856851d1eed87873916743cecd81928c833840a) — @
+* **ui:** redesign coverflow (ca4f59161a2b142749e71a5921f278b8536bef61) — @
+* **ui:** redesign header component (953168a46aac2530d1aa590d29b853e4ab5b1fe2) — @
+* **ui:** redesign keyboard component (ac4455e21ce01183e5a88e7527194be6c438cc49) — @
+* **ui:** redesign menu component (7eb58f05645ebca00f93c3cc4d246b9b40e690de) — @
+* **ui:** redesign messagebox component (cad146531974895a219c821a885c0e84bdd4f9ef) — @
+* **ui:** update battery settings screen appearance (29397b41bb11b7909bae8ad15cd8bd34b3363dc7) — @
+* **ui:** update connection settings screen appearance (297f616da1eace48d5774032968f0e361e46d4f6) — @
+* **ui:** update display settings screen appearance (bbb10cb96a86557459784264a9d78fad1592fa1c) — @
+* **ui:** update home screen appearance (db31162864445f2bfc774523123982c495e3d38c) — @
+* **ui:** update interface settings screen appearance (2d7707ae5cad2d78dddacd84ebe5ffb00ad5d154) — @
+* **ui:** update settings screen appearance (a0b7f0b9c80607f7d8f2d839464c9bee648b59a6) — @
+* **ui:** update sound settings screen appearance (7b2713a5ba5df8d795855ece014d9cd29df4c761) — @
+* **ui:** update wifi screen appearance (f4b397251c3667bb7dba13e3bfa2b559fcb8b18e) — @
+
+### Bug Fixes
+
+* **build:** insert storage_api, _vsf and _assets into CMAKE GLOB_RECURSIVE (1c45ee31ae6304ec9b02689b32e28412c159cab0) — @
+* **cc1101:** the GDO0 and GDO2 was inverted, fixed (be0e1a1eeab9744974bfcf44016e24c3269ad67a) — @
+* **p4/nfc:** add missing includes (601cf5c52fd6a9c6ff717548e2691f99c98b01c3) — @
+* **ui:** load saved theme on boot (1991343bec3bb8f0b61806912d970c61ba064e2b) — @
+* **ui:** missing stdio.h include (ee9ffde4e47b9b40d87f273af67cca6b19663abb) — @
+* **ui:** missing stdio.h include in wifi_probe_ui (111df6f1382f0b25745755e02db582fa0dadf490) — @
+* **ui:** prevent scroll animation when switching themes (6b782ac3f56f240cfdb17a7bd4f442a5b8219a7b) — @
+
+### Reverts
+
+* Revert "chore(clang-format): format ALL source files, firmware p4 & c5" (6ac12ea9f41a95e14c9b4a2164f5c2a05c5b2189) — @
+
 # [1.1.0](https://github.com/HighCodeh/TentacleOS/compare/v1.0.1...v1.1.0) (2026-03-19)
 
 
