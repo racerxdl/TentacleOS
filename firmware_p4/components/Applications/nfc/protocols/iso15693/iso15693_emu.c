@@ -11,7 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+/**
+ * @file iso15693_emu.c
+ * @brief ISO 15693 (NFC-V) tag emulation over ST25R3916 passive target mode.
+ */
 #include "iso15693_emu.h"
 
 #include <string.h>
@@ -54,12 +57,32 @@ static const char *TAG = "ISO15693_EMU";
 #define ISO15693_DELAY_SHORT_MS      2
 #define ISO15693_DELAY_MEDIUM_MS     5
 #define ISO15693_DELAY_LONG_MS       10
+#define ISO15693_DELAY_1MS           1
 
 typedef enum {
   ISO15693_STATE_SLEEP,
   ISO15693_STATE_SENSE,
   ISO15693_STATE_ACTIVE,
 } iso15693_emu_state_t;
+
+static bool wait_oscillator(int timeout_ms);
+static void tx_response(const uint8_t *data, int len);
+static void tx_error(uint8_t err_code);
+static int fifo_rx(uint8_t *buf, size_t max);
+static bool uid_matches(const uint8_t *frame, int len, int uid_offset);
+static bool is_for_us(const uint8_t *frame, int len);
+static void handle_inventory(const uint8_t *frame, int len);
+static void handle_get_system_info(const uint8_t *frame, int len);
+static void handle_read_single_block(const uint8_t *frame, int len);
+static void handle_write_single_block(const uint8_t *frame, int len);
+static void handle_read_multiple_blocks(const uint8_t *frame, int len);
+static void handle_lock_block(const uint8_t *frame, int len);
+static void handle_write_afi(const uint8_t *frame, int len);
+static void handle_lock_afi(const uint8_t *frame, int len);
+static void handle_write_dsfid(const uint8_t *frame, int len);
+static void handle_lock_dsfid(const uint8_t *frame, int len);
+static void handle_get_multi_block_sec(const uint8_t *frame, int len);
+static void handle_stay_quiet(const uint8_t *frame, int len);
 
 static iso15693_emu_card_t s_card;
 static iso15693_emu_state_t s_state = ISO15693_STATE_SLEEP;
@@ -80,7 +103,7 @@ static bool wait_oscillator(int timeout_ms) {
       ESP_LOGI(TAG, "Osc OK in %dms", i);
       return true;
     }
-    vTaskDelay(pdMS_TO_TICKS(1));
+    vTaskDelay(pdMS_TO_TICKS(ISO15693_DELAY_1MS));
   }
   ESP_LOGW(TAG, "Osc timeout - continuing");
   return false;
@@ -378,7 +401,7 @@ void iso15693_emu_card_from_tag(iso15693_emu_card_t *card,
   card->ic_ref = tag->ic_ref;
   card->block_count = tag->block_count;
   card->block_size = tag->block_size;
-  if (raw_mem) {
+  if (raw_mem != NULL) {
     size_t mem_bytes = (size_t)tag->block_count * tag->block_size;
     if (mem_bytes > ISO15693_EMU_MEM_SIZE)
       mem_bytes = ISO15693_EMU_MEM_SIZE;

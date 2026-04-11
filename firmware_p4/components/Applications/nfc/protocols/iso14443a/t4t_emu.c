@@ -11,7 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+/**
+ * @file t4t_emu.c
+ * @brief ISO14443A Type 4 Tag emulation over ST25R3916 passive target mode.
+ */
 #include "t4t_emu.h"
 
 #include <string.h>
@@ -99,6 +102,16 @@ static const char *TAG = "NFC_T4T_EMU";
 #define T4T_CMD_PPS_MASK           0xF0U
 #define T4T_CMD_PPS_BASE           0xD0U
 #define T4T_FIFO_STATUS_BITS       7
+#define T4T_DELAY_1MS              1
+#define T4T_PT_MEM_CT_OFFSET       12
+#define T4T_PT_MEM_CT_BYTE         0x04U
+#define T4T_OP_CTRL_OFF            0x00U
+#define T4T_OP_CTRL_ON             0x80U
+#define T4T_APDU_SW_WRONG_P1P2     0x6A86U
+#define T4T_PTA_STATE_MASK         0x0FU
+#define T4T_PTA_STATE_WUPA         0x02U
+#define T4T_PTA_STATE_SELECTED     0x03U
+#define T4T_PTA_STATE_HALTED       0x0DU
 
 static const uint8_t k_uid7[7] = {0x04, 0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6};
 static const uint8_t k_atqa[2] = {0x44, 0x00};
@@ -125,6 +138,19 @@ typedef enum {
   T4T_FILE_CC,
   T4T_FILE_NDEF,
 } t4t_file_t;
+
+static bool wait_oscillator(int timeout_ms);
+static hb_nfc_err_t load_pt_memory(void);
+static void build_cc(void);
+static void build_ndef_text(const char *text);
+static void tx_with_crc(const uint8_t *data, int len);
+static void send_i_block_resp(const uint8_t *inf, int inf_len, uint8_t pcb_in);
+static void send_r_ack(uint8_t pcb_in);
+static void
+apdu_resp(uint8_t *out_buffer, int *out_len, const uint8_t *data, int data_len, uint16_t sw);
+static uint16_t file_len(t4t_file_t f);
+static uint8_t *file_ptr(t4t_file_t f);
+static void handle_apdu(const uint8_t *apdu, int apdu_len, uint8_t pcb_in);
 
 static t4t_state_t s_state = T4T_STATE_SLEEP;
 static bool s_init_done = false;
@@ -156,7 +182,7 @@ static bool wait_oscillator(int timeout_ms) {
       ESP_LOGI(TAG, "Osc OK in %dms: AUX=0x%02X MAIN=0x%02X TGT=0x%02X", i, aux, mi, ti);
       return true;
     }
-    vTaskDelay(pdMS_TO_TICKS(1));
+    vTaskDelay(pdMS_TO_TICKS(T4T_DELAY_1MS));
   }
   ESP_LOGW(TAG, "Osc timeout - continuing");
   return false;
@@ -176,7 +202,7 @@ static hb_nfc_err_t load_pt_memory(void) {
   ptm[9] = 0x00;
   ptm[T4T_PT_MEM_ATQA_OFFSET] = k_atqa[0];
   ptm[T4T_PT_MEM_ATQA_OFFSET + 1] = k_atqa[1];
-  ptm[12] = 0x04;
+  ptm[T4T_PT_MEM_CT_OFFSET] = T4T_PT_MEM_CT_BYTE;
   ptm[T4T_PT_MEM_SAK_OFFSET] = k_sak;
   ptm[14] = 0x00;
 
@@ -274,7 +300,7 @@ hb_nfc_err_t t4t_emu_configure_target(void) {
   if (!s_init_done)
     return HB_NFC_ERR_INTERNAL;
 
-  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, 0x00);
+  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, T4T_OP_CTRL_OFF);
   vTaskDelay(pdMS_TO_TICKS(T4T_DELAY_5MS));
   hb_nfc_spi_direct_cmd(ST25R3916_CMD_SET_DEFAULT);
   vTaskDelay(pdMS_TO_TICKS(T4T_DELAY_10MS));
@@ -287,7 +313,7 @@ hb_nfc_err_t t4t_emu_configure_target(void) {
   hb_nfc_spi_reg_write(ST25R3916_REG_IO_CONF2, T4T_REG_IO_CONF2);
   vTaskDelay(pdMS_TO_TICKS(T4T_DELAY_2MS));
 
-  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, 0x80);
+  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, T4T_OP_CTRL_ON);
   wait_oscillator(T4T_OSC_TIMEOUT);
 
   hb_nfc_spi_direct_cmd(ST25R3916_CMD_ADJUST_REGULATORS);
@@ -341,7 +367,7 @@ hb_nfc_err_t t4t_emu_start(void) {
 }
 
 void t4t_emu_stop(void) {
-  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, 0x00);
+  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, T4T_OP_CTRL_OFF);
   s_state = T4T_STATE_SLEEP;
   s_init_done = false;
   ESP_LOGI(TAG, "T4T emulation stopped");
@@ -387,7 +413,7 @@ static void send_r_ack(uint8_t pcb_in) {
 static void
 apdu_resp(uint8_t *out_buffer, int *out_len, const uint8_t *data, int data_len, uint16_t sw) {
   int pos = 0;
-  if (data && data_len > 0) {
+  if (data != NULL && data_len > 0) {
     memcpy(&out_buffer[pos], data, (size_t)data_len);
     pos += data_len;
   }
@@ -519,7 +545,7 @@ static void handle_apdu(const uint8_t *apdu, int apdu_len, uint8_t pcb_in) {
     return;
   }
 
-  apdu_resp(resp, &resp_len, NULL, 0, 0x6A86);
+  apdu_resp(resp, &resp_len, NULL, 0, T4T_APDU_SW_WRONG_P1P2);
   send_i_block_resp(resp, resp_len, pcb_in);
 }
 
@@ -534,11 +560,11 @@ void t4t_emu_run_step(void) {
 
   uint8_t pts = 0;
   hb_nfc_spi_reg_read(ST25R3916_REG_PASSIVE_TARGET_STS, &pts);
-  uint8_t pta_state = pts & 0x0FU;
+  uint8_t pta_state = pts & T4T_PTA_STATE_MASK;
 
   if (s_state == T4T_STATE_SLEEP) {
-    if (pta_state == 0x01U || pta_state == 0x02U || pta_state == 0x03U ||
-        (tgt_irq & ST25R3916_IRQ_TGT_WU_A)) {
+    if (pta_state == T4T_PTA_STATE_IDLE || pta_state == T4T_PTA_STATE_WUPA ||
+        pta_state == T4T_PTA_STATE_SELECTED || (tgt_irq & ST25R3916_IRQ_TGT_WU_A)) {
       ESP_LOGI(TAG, "SLEEP -> SENSE (pta=%u tgt=0x%02X)", pta_state, tgt_irq);
       s_sense_tick = xTaskGetTickCount();
       s_active_tick = s_sense_tick;
@@ -553,7 +579,8 @@ void t4t_emu_run_step(void) {
   }
 
   if (s_state == T4T_STATE_SENSE) {
-    if (pta_state == 0x05U || pta_state == 0x0DU || (tgt_irq & ST25R3916_IRQ_TGT_SDD_C)) {
+    if (pta_state == T4T_PTA_STATE_ACTIVE || pta_state == T4T_PTA_STATE_HALTED ||
+        (tgt_irq & ST25R3916_IRQ_TGT_SDD_C)) {
       ESP_LOGI(TAG, "SENSE -> ACTIVE (pta=%u tgt=0x%02X)", pta_state, tgt_irq);
       s_state = T4T_STATE_ACTIVE;
       s_active_tick = xTaskGetTickCount();

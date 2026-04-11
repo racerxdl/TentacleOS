@@ -24,18 +24,28 @@
 
 static const char *TAG = "NFC_RF";
 
-#define NFC_RF_RATE_UNSUPPORTED 0xFF
+#define NFC_RF_RATE_UNSUPPORTED    0xFF
+#define NFC_RF_BITRATE_CODE_106    0x00U /**< Bitrate code for 106 kbps */
+#define NFC_RF_BITRATE_CODE_212    0x01U /**< Bitrate code for 212 kbps */
+#define NFC_RF_BITRATE_CODE_424    0x02U /**< Bitrate code for 424 kbps */
+#define NFC_RF_BITRATE_CODE_848    0x03U /**< Bitrate code for 848 kbps */
+#define NFC_RF_TX_BITRATE_SHIFT    4U    /**< Shift for TX bitrate in register */
+#define NFC_RF_RX_BITRATE_MASK     0x03U /**< Mask for RX bitrate codes */
+#define NFC_RF_AM_MOD_TABLE_SIZE   16U   /**< Number of AM modulation percentages */
+#define NFC_RF_AM_MOD_INITIAL_DIFF 0xFF  /**< Initial difference for best match */
+#define NFC_RF_TX_DRIVER_ADDR_MASK 0x0FU /**< Lower 4 bits = address */
+#define NFC_RF_TX_DRIVER_MOD_MASK  0x0FU /**< Upper 4 bits = modulation */
 
 static uint8_t bitrate_code(nfc_rf_bitrate_t br) {
   switch (br) {
     case NFC_RF_BR_106:
-      return 0x00;
+      return NFC_RF_BITRATE_CODE_106;
     case NFC_RF_BR_212:
-      return 0x01;
+      return NFC_RF_BITRATE_CODE_212;
     case NFC_RF_BR_424:
-      return 0x02;
+      return NFC_RF_BITRATE_CODE_424;
     case NFC_RF_BR_848:
-      return 0x03;
+      return NFC_RF_BITRATE_CODE_848;
     default:
       return NFC_RF_RATE_UNSUPPORTED;
   }
@@ -47,7 +57,7 @@ hb_nfc_err_t nfc_rf_set_bitrate(nfc_rf_bitrate_t tx, nfc_rf_bitrate_t rx) {
   if (txc == NFC_RF_RATE_UNSUPPORTED || rxc == NFC_RF_RATE_UNSUPPORTED)
     return HB_NFC_ERR_PARAM;
 
-  uint8_t reg = (uint8_t)((txc << 4) | (rxc & 0x03U));
+  uint8_t reg = (uint8_t)((txc << NFC_RF_TX_BITRATE_SHIFT) | (rxc & NFC_RF_RX_BITRATE_MASK));
   return hb_nfc_spi_reg_write(ST25R3916_REG_BIT_RATE, reg);
 }
 
@@ -56,12 +66,12 @@ hb_nfc_err_t nfc_rf_set_bitrate_raw(uint8_t value) {
 }
 
 static uint8_t am_mod_code_from_percent(uint8_t percent) {
-  static const uint8_t tbl_percent[16] = {
+  static const uint8_t tbl_percent[NFC_RF_AM_MOD_TABLE_SIZE] = {
       5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 19, 22, 26, 40};
 
   uint8_t best = 0;
-  uint8_t best_diff = 0xFF;
-  for (uint8_t i = 0; i < 16; i++) {
+  uint8_t best_diff = NFC_RF_AM_MOD_INITIAL_DIFF;
+  for (uint8_t i = 0; i < NFC_RF_AM_MOD_TABLE_SIZE; i++) {
     uint8_t p = tbl_percent[i];
     uint8_t diff = (p > percent) ? (p - percent) : (percent - p);
     if (diff < best_diff) {
@@ -81,7 +91,8 @@ hb_nfc_err_t nfc_rf_set_am_modulation(uint8_t percent) {
   if (hb_nfc_spi_reg_read(ST25R3916_REG_TX_DRIVER, &reg) != HB_NFC_OK)
     return HB_NFC_ERR_INTERNAL;
 
-  reg = (uint8_t)((reg & 0x0FU) | ((mod & 0x0FU) << 4));
+  reg = (uint8_t)((reg & NFC_RF_TX_DRIVER_ADDR_MASK) |
+                  ((mod & NFC_RF_TX_DRIVER_MOD_MASK) << NFC_RF_TX_BITRATE_SHIFT));
   return hb_nfc_spi_reg_write(ST25R3916_REG_TX_DRIVER, reg);
 }
 

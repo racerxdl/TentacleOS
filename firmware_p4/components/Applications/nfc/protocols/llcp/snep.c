@@ -11,7 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+/**
+ * @file snep.c
+ * @brief SNEP client: PUT and GET over LLCP/I-PDU.
+ * Reference: NFC Forum SNEP 1.0.
+ */
 #include "snep.h"
 
 #include <string.h>
@@ -26,6 +30,18 @@ static const char *TAG = "NFC_SNEP";
 #define SNEP_LOCAL_SSAP   0x20U
 #define SNEP_MSG_HDR_SIZE 6U
 #define LLCP_PDU_HDR_SIZE 3U
+#define LLCP_HDR_MIN_LEN  2U
+#define SNEP_HDR_CODE_OFF 1U
+
+static hb_nfc_err_t snep_llcp_connect(llcp_link_t *link, int timeout_ms);
+static void snep_llcp_disconnect(llcp_link_t *link, int timeout_ms);
+static hb_nfc_err_t snep_send_req(llcp_link_t *link,
+                                  const uint8_t *snep,
+                                  size_t snep_len,
+                                  uint8_t *out,
+                                  size_t out_max,
+                                  size_t *out_len,
+                                  int timeout_ms);
 
 const char *snep_resp_str(uint8_t code) {
   switch (code) {
@@ -51,7 +67,7 @@ const char *snep_resp_str(uint8_t code) {
 }
 
 static hb_nfc_err_t snep_llcp_connect(llcp_link_t *link, int timeout_ms) {
-  if (link == NULL || link->llcp_active == NULL)
+  if (link == NULL || !link->llcp_active)
     return HB_NFC_ERR_PARAM;
   uint8_t tx[96];
   size_t tx_len =
@@ -61,7 +77,7 @@ static hb_nfc_err_t snep_llcp_connect(llcp_link_t *link, int timeout_ms) {
 
   uint8_t rx[96];
   int rlen = llcp_exchange_pdu(link, tx, tx_len, rx, sizeof(rx), timeout_ms);
-  if (rlen < 2)
+  if (rlen < (int)LLCP_HDR_MIN_LEN)
     return HB_NFC_ERR_PROTOCOL;
 
   uint8_t dsap = 0, ptype = 0, ssap = 0;
@@ -95,7 +111,7 @@ static hb_nfc_err_t snep_send_req(llcp_link_t *link,
                                   int timeout_ms) {
   if (link == NULL || !link->llcp_active || snep == NULL || snep_len == 0)
     return HB_NFC_ERR_PARAM;
-  if (link->negotiated.miu && snep_len > link->negotiated.miu) {
+  if (link->negotiated.miu != 0 && snep_len > link->negotiated.miu) {
     return HB_NFC_ERR_PARAM;
   }
 
@@ -132,12 +148,12 @@ static hb_nfc_err_t snep_send_req(llcp_link_t *link,
     return HB_NFC_ERR_PROTOCOL;
 
   size_t info_len = (size_t)rlen - LLCP_PDU_HDR_SIZE;
-  if (out && out_max > 0) {
+  if (out != NULL && out_max > 0) {
     size_t copy = (info_len > out_max) ? out_max : info_len;
     memcpy(out, &rx[LLCP_PDU_HDR_SIZE], copy);
-    if (out_len)
+    if (out_len != NULL)
       *out_len = copy;
-  } else if (out_len) {
+  } else if (out_len != NULL) {
     *out_len = info_len;
   }
   return HB_NFC_OK;
@@ -145,7 +161,7 @@ static hb_nfc_err_t snep_send_req(llcp_link_t *link,
 
 hb_nfc_err_t snep_client_put(
     llcp_link_t *link, const uint8_t *ndef, size_t ndef_len, uint8_t *resp_code, int timeout_ms) {
-  if (link == NULL || !ndef || ndef_len == 0)
+  if (link == NULL || ndef == NULL || ndef_len == 0)
     return HB_NFC_ERR_PARAM;
 
   hb_nfc_err_t err = snep_llcp_connect(link, timeout_ms);
@@ -186,8 +202,8 @@ hb_nfc_err_t snep_client_put(
     return HB_NFC_ERR_PROTOCOL;
   }
 
-  uint8_t code = resp[1];
-  if (resp_code)
+  uint8_t code = resp[SNEP_HDR_CODE_OFF];
+  if (resp_code != NULL)
     *resp_code = code;
   snep_llcp_disconnect(link, timeout_ms);
   return (code == SNEP_RES_SUCCESS) ? HB_NFC_OK : HB_NFC_ERR_PROTOCOL;
@@ -201,7 +217,7 @@ hb_nfc_err_t snep_client_get(llcp_link_t *link,
                              size_t *out_len,
                              uint8_t *resp_code,
                              int timeout_ms) {
-  if (link == NULL || !req_ndef || req_len == 0)
+  if (link == NULL || req_ndef == NULL || req_len == 0)
     return HB_NFC_ERR_PARAM;
 
   hb_nfc_err_t err = snep_llcp_connect(link, timeout_ms);
@@ -242,8 +258,8 @@ hb_nfc_err_t snep_client_get(llcp_link_t *link,
     return HB_NFC_ERR_PROTOCOL;
   }
 
-  uint8_t code = resp[1];
-  if (resp_code)
+  uint8_t code = resp[SNEP_HDR_CODE_OFF];
+  if (resp_code != NULL)
     *resp_code = code;
   if (code != SNEP_RES_SUCCESS) {
     snep_llcp_disconnect(link, timeout_ms);
@@ -257,11 +273,11 @@ hb_nfc_err_t snep_client_get(llcp_link_t *link,
     return HB_NFC_ERR_PROTOCOL;
   }
 
-  if (out && out_max >= ndef_len) {
+  if (out != NULL && out_max >= ndef_len) {
     memcpy(out, &resp[SNEP_MSG_HDR_SIZE], ndef_len);
-    if (out_len)
+    if (out_len != NULL)
       *out_len = ndef_len;
-  } else if (out_len) {
+  } else if (out_len != NULL) {
     *out_len = ndef_len;
     snep_llcp_disconnect(link, timeout_ms);
     return HB_NFC_ERR_PARAM;

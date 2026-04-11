@@ -22,7 +22,6 @@
 
 static const char *TAG = "EMV";
 
-/* ---- BER-TLV encoding constants ---- */
 #define TLV_TAG_MULTI_BYTE_MASK  0x1FU /**< Low 5 bits set = multi-byte tag */
 #define TLV_TAG_CONTINUATION_BIT 0x80U /**< Bit 8 set = more tag bytes follow */
 #define TLV_LEN_LONG_FORM_BIT    0x80U /**< Bit 8 set = long-form length */
@@ -30,7 +29,6 @@ static const char *TAG = "EMV";
 #define TLV_CONSTRUCTED_BIT      0x20U /**< Bit 6 set = constructed (contains TLVs) */
 #define TLV_TAG_MULTI_BYTE_MAX   3     /**< Max extra tag bytes before error */
 
-/* ---- EMV tag values ---- */
 #define EMV_TAG_AID          0x4FU /**< Application Identifier (AID) */
 #define EMV_TAG_APP_LABEL    0x50U /**< Application Label */
 #define EMV_TAG_RESP_FMT1    0x80U /**< Response Message Template Format 1 */
@@ -38,7 +36,6 @@ static const char *TAG = "EMV";
 #define EMV_TAG_CMD_TEMPLATE 0x83U /**< Command Template */
 #define EMV_TAG_AFL          0x94U /**< Application File Locator */
 
-/* ---- APDU command bytes ---- */
 #define EMV_CLA_PROPRIETARY   0x80U /**< CLA byte for EMV proprietary commands */
 #define EMV_INS_GPO           0xA8U /**< INS byte for GET PROCESSING OPTIONS */
 #define EMV_CLA_STANDARD      0x00U /**< CLA byte for standard ISO commands */
@@ -47,40 +44,55 @@ static const char *TAG = "EMV";
 #define EMV_LE_ZERO           0x00U /**< Le = 0 (return max available) */
 #define EMV_READ_REC_SFI_FLAG 0x04U /**< P2 flag: SFI-based record addressing */
 
-/* ---- GPO APDU sizing ---- */
 #define EMV_GPO_APDU_MIN_LEN  6U    /**< Minimum GPO APDU buffer size */
 #define EMV_GPO_APDU_OVERHEAD 8U    /**< GPO APDU fixed bytes (header+Lc+tag+len+Le) */
 #define EMV_GPO_PDOL_MAX_LEN  0xFDU /**< Max PDOL data length */
 
-/* ---- AFL parsing ---- */
 #define EMV_AFL_ENTRY_SIZE 4U    /**< Bytes per AFL entry */
 #define EMV_AFL_SFI_SHIFT  3     /**< Bits to shift for SFI extraction */
 #define EMV_AFL_SFI_MASK   0x1FU /**< Mask for SFI after shift */
 #define EMV_AIP_LEN        2U    /**< Application Interchange Profile length */
 
-/* ---- Misc ---- */
 #define EMV_RECORD_MAX         0xFFU /**< Maximum record number */
 #define EMV_RUN_BASIC_MAX_APPS 8U    /**< Max apps in emv_run_basic */
 #define EMV_RUN_BASIC_MAX_AFL  12U   /**< Max AFL entries in emv_run_basic */
 
 #define EMV_PPSE_AID_LEN 14U
 
-/* ---- APDU buffer sizes ---- */
 #define EMV_APDU_SELECT_PPSE_SIZE 32U /**< Buffer size for PPSE select APDU */
 #define EMV_APDU_SELECT_AID_SIZE  48U /**< Buffer size for AID select APDU */
 #define EMV_APDU_GPO_SIZE         64U /**< Buffer size for GPO APDU */
 
-/* ---- Response buffer sizes ---- */
 #define EMV_RECORD_BUFFER_SIZE 256U /**< Buffer size for record read responses */
 #define EMV_FCI_BUFFER_SIZE    256U /**< Buffer size for FCI responses */
 
-/* ---- Response message format indices ---- */
 #define EMV_RESP_TAG_INDEX  0U /**< Response message tag at index 0 */
 #define EMV_RESP_LEN_INDEX  1U /**< Response message format 1 length at index 1 */
 #define EMV_RESP_AIP_OFFSET 2U /**< Response message format 1 AIP data at offset 2 */
 
-/* ---- Multi-byte value operations ---- */
 #define EMV_BYTE_SHIFT 8U /**< Bits to shift for multi-byte value construction */
+
+#define EMV_TLV_LEN_1BYTE       1U /**< Single-byte length field */
+#define EMV_TLV_LEN_2BYTE       2U /**< Double-byte length field */
+#define EMV_TLV_LEN_2BYTE_CHECK 1U /**< Check for second byte in multi-byte length */
+
+#define EMV_READ_REC_APDU_SIZE 5U /**< READ RECORD command APDU size */
+#define EMV_READ_REC_CLA_INDEX 0U /**< CLA byte index */
+#define EMV_READ_REC_INS_INDEX 1U /**< INS byte index */
+#define EMV_READ_REC_P2_INDEX  3U /**< P2 byte index */
+#define EMV_READ_REC_LE_INDEX  4U /**< Le byte index */
+
+#define EMV_GPO_MIN_FMT1_LEN     2U /**< Minimum GPO response length for both formats */
+#define EMV_GPO_TAG_LEN_OVERHEAD 2U /**< Tag and length bytes in GPO response */
+
+#define EMV_AFL_MIN_BYTES        4U /**< Minimum bytes needed for AFL entry */
+#define EMV_AFL_FIRST_REC_OFFSET 1U /**< First record offset within AFL entry */
+#define EMV_AFL_LAST_REC_OFFSET  2U /**< Last record offset within AFL entry */
+#define EMV_AFL_AUTH_REC_OFFSET  3U /**< Offline auth records offset within AFL entry */
+#define EMV_AFL_ENTRY_BYTES_CHECK \
+  (EMV_AFL_ENTRY_SIZE - 1U) /**< Max offset before reading next entry */
+
+#define EMV_APP_FIRST_INDEX 0U /**< Index of first application in apps array */
 
 static const uint8_t k_ppse_aid[EMV_PPSE_AID_LEN] = {
     '2', 'P', 'A', 'Y', '.', 'S', 'Y', 'S', '.', 'D', 'D', 'F', '0', '1'};
@@ -125,15 +137,15 @@ static bool emv_tlv_next(const uint8_t *data, size_t len, size_t *pos, emv_tlv_t
     vlen = l;
   } else {
     uint8_t n = (uint8_t)(l & TLV_LEN_NUM_BYTES_MASK);
-    if (n == 1U) {
+    if (n == EMV_TLV_LEN_1BYTE) {
       if (p >= len)
         return false;
       vlen = data[p++];
-    } else if (n == 2U) {
-      if (p + 1U >= len)
+    } else if (n == EMV_TLV_LEN_2BYTE) {
+      if (p + EMV_TLV_LEN_2BYTE_CHECK >= len)
         return false;
       vlen = ((size_t)data[p] << EMV_BYTE_SHIFT) | data[p + 1];
-      p += 2U;
+      p += EMV_TLV_LEN_2BYTE;
     } else {
       return false;
     }

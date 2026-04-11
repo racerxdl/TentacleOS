@@ -11,7 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+/**
+ * @file llcp.c
+ * @brief NFC-DEP / LLCP initiator: ATR exchange, DEP transceive, and PDU builders.
+ * Reference: NFC Forum LLCP 1.3, ISO/IEC 18092 (NFC-DEP).
+ */
 #include "llcp.h"
 
 #include <string.h>
@@ -53,6 +57,8 @@ static const char *TAG = "NFC_LLCP";
 #define LLCP_LR_192            192U
 #define LLCP_LR_254            254U
 #define LLCP_NFCID3_LEN        10
+#define LLCP_CRC_LEN           2U
+#define LLCP_MAGIC_BYTES       3U
 #define LLCP_ATR_RES_MIN_LEN   17
 #define LLCP_LTO_UNIT_MS       10U
 #define LLCP_DEP_DEFAULT_TMO   50U
@@ -72,9 +78,21 @@ static const char *TAG = "NFC_LLCP";
 #define NFCDEP_HDR_SIZE    3
 #define NFCDEP_MAX_PAYLOAD 256
 
+static int llcp_strip_crc(uint8_t *buf, int len);
+static uint16_t llcp_rwt_ms(uint8_t to);
+static uint16_t llcp_lr_from_pp(uint8_t pp);
+static uint8_t llcp_pp_from_miu(uint16_t miu);
+static void llcp_compute_negotiated(llcp_link_t *link);
+static int nfc_dep_transceive(llcp_link_t *link,
+                              const uint8_t *tx,
+                              size_t tx_len,
+                              uint8_t *rx,
+                              size_t rx_max,
+                              int timeout_ms);
+
 static int llcp_strip_crc(uint8_t *buf, int len) {
-  if (len >= 3 && iso14443a_check_crc(buf, (size_t)len))
-    return len - 2;
+  if (len >= (int)(LLCP_CRC_LEN + 1U) && iso14443a_check_crc(buf, (size_t)len))
+    return len - (int)LLCP_CRC_LEN;
   return len;
 }
 
@@ -120,7 +138,7 @@ void llcp_params_default(llcp_params_t *params) {
   params->version_major = 1;
   params->version_minor = 1;
   params->miu = LLCP_DEFAULT_PARAM_MIU;
-  params->wks = LLCP_WKS_DEFAULT; /* Link Mgmt + SDP + SNEP */
+  params->wks = LLCP_WKS_DEFAULT;
   params->lto_ms = LLCP_DEFAULT_LTO_MS;
   params->rw = LLCP_DEFAULT_RW;
 }
@@ -133,7 +151,7 @@ void llcp_link_init(llcp_link_t *link) {
   llcp_params_default(&link->remote);
   llcp_params_default(&link->negotiated);
 
-  for (int i = 0; i < LLCP_NFCID3_LEN; i++) {
+  for (uint8_t i = 0; i < LLCP_NFCID3_LEN; i++) {
     uint32_t r = esp_random();
     link->nfcid3[i] = (uint8_t)(r & LLCP_BYTE_MASK);
   }
@@ -187,7 +205,7 @@ size_t llcp_tlv_lto(uint8_t *out, size_t max, uint8_t lto) {
 }
 
 size_t llcp_tlv_rw(uint8_t *out, size_t max, uint8_t rw) {
-  if (!out || max < 3U)
+  if (out == NULL || max < 3U)
     return 0;
   out[0] = LLCP_TLV_RW;
   out[1] = 1U;
@@ -257,7 +275,7 @@ bool llcp_parse_gt(const uint8_t *gt, size_t gt_len, llcp_params_t *out) {
   if (gt[0] != LLCP_MAGIC_0 || gt[1] != LLCP_MAGIC_1 || gt[2] != LLCP_MAGIC_2)
     return false;
 
-  size_t pos = 3;
+  size_t pos = LLCP_MAGIC_BYTES;
   while (pos + 2U <= gt_len) {
     uint8_t type = gt[pos++];
     uint8_t len = gt[pos++];
@@ -470,7 +488,7 @@ int llcp_exchange_pdu(llcp_link_t *link,
                       uint8_t *rx_pdu,
                       size_t rx_max,
                       int timeout_ms) {
-  if (link == NULL || link->llcp_active == NULL)
+  if (link == NULL || !link->llcp_active)
     return 0;
   return nfc_dep_transceive(link, tx_pdu, tx_len, rx_pdu, rx_max, timeout_ms);
 }
@@ -496,17 +514,17 @@ bool llcp_parse_header(const uint8_t *pdu,
   uint8_t p = (uint8_t)(((pdu[0] & LLCP_PTYPE_LO_MASK) << 2) | (pdu[1] >> 6));
   uint8_t s = (uint8_t)(pdu[1] & LLCP_SAP_MASK);
 
-  if (dsap)
+  if (dsap != NULL)
     *dsap = d;
-  if (ptype)
+  if (ptype != NULL)
     *ptype = p;
-  if (ssap)
+  if (ssap != NULL)
     *ssap = s;
 
   if ((p == LLCP_PTYPE_I || p == LLCP_PTYPE_RR || p == LLCP_PTYPE_RNR) && len >= 3U) {
-    if (ns)
+    if (ns != NULL)
       *ns = (uint8_t)(pdu[2] >> 4);
-    if (nr)
+    if (nr != NULL)
       *nr = (uint8_t)(pdu[2] & LLCP_NIBBLE_MASK);
   }
   return true;
@@ -540,7 +558,7 @@ size_t llcp_build_connect(uint8_t dsap,
     return 0;
 
   llcp_params_t p;
-  if (params)
+  if (params != NULL)
     p = *params;
   else
     llcp_params_default(&p);
@@ -556,7 +574,7 @@ size_t llcp_build_connect(uint8_t dsap,
     return 0;
   pos += n;
 
-  if (service_name) {
+  if (service_name != NULL) {
     n = llcp_tlv_sn(&out[pos], max - pos, service_name);
     if (n == 0)
       return 0;
@@ -573,7 +591,7 @@ llcp_build_cc(uint8_t dsap, uint8_t ssap, const llcp_params_t *params, uint8_t *
     return 0;
 
   llcp_params_t p;
-  if (params)
+  if (params != NULL)
     p = *params;
   else
     llcp_params_default(&p);
@@ -616,7 +634,7 @@ size_t llcp_build_i(uint8_t dsap,
   if (pos == 0 || max < pos + 1U)
     return 0;
   out[pos++] = (uint8_t)(((ns & LLCP_NIBBLE_MASK) << 4) | (nr & LLCP_NIBBLE_MASK));
-  if (info && info_len > 0) {
+  if (info != NULL && info_len > 0) {
     if (pos + info_len > max)
       return 0;
     memcpy(&out[pos], info, info_len);

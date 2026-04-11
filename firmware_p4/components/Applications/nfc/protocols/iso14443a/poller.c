@@ -33,7 +33,6 @@
 
 static const char *TAG = "iso14443a_poller";
 
-/* ISO14443A Anti-Collision and Select protocol constants */
 #define ANTICOLL_BVR          0x20U /* Bit code for anti-collision */
 #define SELECT_CMD            0x70U /* SELECT command code */
 #define UID_CASCADE_TAG       0x88U /* UID cascade indicator */
@@ -52,6 +51,15 @@ static const char *TAG = "iso14443a_poller";
 #define ANTICOLL_DELAY_MS     5
 #define REQA_SUCCESS_LEN      2
 #define ANTICOLL_DELAY_LONG   10
+#define HALT_CMD_BYTE0        0x50U
+#define HALT_TIMEOUT_MS       10
+#define HALT_SETTLE_MS        5
+#define FIFO_ATQA_EXPECTED    2
+
+static void set_antcl(bool enable);
+static int req_cmd(uint8_t cmd, uint8_t atqa[FIFO_ATQA_LEN]);
+static hb_nfc_err_t iso14443a_select_from_atqa(const uint8_t atqa[FIFO_ATQA_LEN],
+                                               nfc_iso14443a_data_t *card);
 
 /**
  * Enable or disable anti-collision.
@@ -94,9 +102,6 @@ int iso14443a_poller_wupa(uint8_t atqa[2]) {
   return req_cmd(ST25R3916_CMD_TX_WUPA, atqa);
 }
 
-/**
- * Activate a card with REQA/WUPA.
- */
 hb_nfc_err_t iso14443a_poller_activate(uint8_t atqa[FIFO_ATQA_LEN]) {
   if (req_cmd(ST25R3916_CMD_TX_REQA, atqa) == REQA_SUCCESS_LEN)
     return HB_NFC_OK;
@@ -106,9 +111,6 @@ hb_nfc_err_t iso14443a_poller_activate(uint8_t atqa[FIFO_ATQA_LEN]) {
   return HB_NFC_ERR_NO_CARD;
 }
 
-/**
- * Run anti-collision for one cascade level.
- */
 int iso14443a_poller_anticoll(uint8_t sel, uint8_t uid_cl[ANTICOLL_RESPONSE_LEN]) {
   uint8_t cmd[ANTICOLL_CMD_LEN] = {sel, ANTICOLL_BVR};
 
@@ -130,9 +132,6 @@ int iso14443a_poller_anticoll(uint8_t sel, uint8_t uid_cl[ANTICOLL_RESPONSE_LEN]
   return 0;
 }
 
-/**
- * Run SELECT for one cascade level.
- */
 int iso14443a_poller_sel(uint8_t sel, const uint8_t uid_cl[ANTICOLL_RESPONSE_LEN], uint8_t *sak) {
   uint8_t cmd[SELECT_CMD_LEN] = {
       sel, SELECT_CMD, uid_cl[0], uid_cl[1], uid_cl[2], uid_cl[3], uid_cl[4]};
@@ -147,7 +146,7 @@ int iso14443a_poller_sel(uint8_t sel, const uint8_t uid_cl[ANTICOLL_RESPONSE_LEN
 
 static hb_nfc_err_t iso14443a_select_from_atqa(const uint8_t atqa[FIFO_ATQA_LEN],
                                                nfc_iso14443a_data_t *card) {
-  if (!card || !atqa)
+  if (card == NULL || atqa == NULL)
     return HB_NFC_ERR_PARAM;
 
   card->atqa[0] = atqa[0];
@@ -188,11 +187,8 @@ static hb_nfc_err_t iso14443a_select_from_atqa(const uint8_t atqa[FIFO_ATQA_LEN]
   return HB_NFC_OK;
 }
 
-/**
- * Perform full card selection across cascade levels.
- */
 hb_nfc_err_t iso14443a_poller_select(nfc_iso14443a_data_t *card) {
-  if (!card)
+  if (card == NULL)
     return HB_NFC_ERR_PARAM;
 
   uint8_t atqa[FIFO_ATQA_LEN];
@@ -208,15 +204,6 @@ hb_nfc_err_t iso14443a_poller_select(nfc_iso14443a_data_t *card) {
   return HB_NFC_OK;
 }
 
-/**
- * Re-select a card after Crypto1 session.
- *
- * After Crypto1 authentication the card is in AUTHENTICATED state
- * and will NOT respond to WUPA/REQA. We must power-cycle the RF field
- * to force the card back to IDLE state, then do full activation.
- *
- * Flow: field OFF field ON REQA/WUPA anticoll select (all CLs)
- */
 hb_nfc_err_t iso14443a_poller_reselect(nfc_iso14443a_data_t *card) {
   st25r3916_core_field_cycle();
 
@@ -227,11 +214,11 @@ hb_nfc_err_t iso14443a_poller_reselect(nfc_iso14443a_data_t *card) {
 
   static const uint8_t sel_cmds[] = {SEL_CL1, SEL_CL2, SEL_CL3};
 
-  for (int cl = 0; cl < 3; cl++) {
-    uint8_t uid_cl[5] = {0};
+  for (int cl = 0; cl < CASCADE_LEVELS; cl++) {
+    uint8_t uid_cl[ANTICOLL_RESPONSE_LEN] = {0};
     uint8_t sak = 0;
 
-    if (iso14443a_poller_anticoll(sel_cmds[cl], uid_cl) != 5) {
+    if (iso14443a_poller_anticoll(sel_cmds[cl], uid_cl) != ANTICOLL_RESPONSE_LEN) {
       return HB_NFC_ERR_COLLISION;
     }
     if (!iso14443a_poller_sel(sel_cmds[cl], uid_cl, &sak)) {
@@ -240,7 +227,7 @@ hb_nfc_err_t iso14443a_poller_reselect(nfc_iso14443a_data_t *card) {
 
     card->sak = sak;
 
-    if (!(sak & 0x04))
+    if (!(sak & SAK_MORE_CL_MASK))
       break;
   }
 
@@ -248,14 +235,14 @@ hb_nfc_err_t iso14443a_poller_reselect(nfc_iso14443a_data_t *card) {
 }
 
 hb_nfc_err_t iso14443a_poller_halt(void) {
-  uint8_t cmd[2] = {0x50, 0x00};
+  uint8_t cmd[2] = {HALT_CMD_BYTE0, 0x00};
   uint8_t rx[4] = {0};
-  (void)nfc_poller_transceive(cmd, sizeof(cmd), true, rx, sizeof(rx), 0, 10);
+  (void)nfc_poller_transceive(cmd, sizeof(cmd), true, rx, sizeof(rx), 0, HALT_TIMEOUT_MS);
   return HB_NFC_OK;
 }
 
 int iso14443a_poller_select_all(nfc_iso14443a_data_t *out, size_t max_cards) {
-  if (!out || max_cards == 0)
+  if (out == NULL || max_cards == 0)
     return 0;
 
   size_t count = 0;
@@ -264,7 +251,7 @@ int iso14443a_poller_select_all(nfc_iso14443a_data_t *out, size_t max_cards) {
       break;
 
     uint8_t atqa[2] = {0};
-    if (iso14443a_poller_reqa(atqa) != 2)
+    if (iso14443a_poller_reqa(atqa) != FIFO_ATQA_LEN)
       break;
 
     nfc_iso14443a_data_t card = {0};
@@ -273,7 +260,7 @@ int iso14443a_poller_select_all(nfc_iso14443a_data_t *out, size_t max_cards) {
 
     out[count++] = card;
     (void)iso14443a_poller_halt();
-    hb_nfc_timer_delay_ms(5);
+    hb_nfc_timer_delay_ms(HALT_SETTLE_MS);
   }
 
   return (int)count;

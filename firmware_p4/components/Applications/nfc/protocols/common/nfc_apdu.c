@@ -22,7 +22,20 @@
 
 static const char *TAG = "NFC_APDU";
 
-#define APDU_MAX_BUF 300U
+#define APDU_MAX_BUF                  300U
+#define APDU_STATUS_WORD_SIZE         2U    /**< Status word is always 2 bytes */
+#define APDU_MIN_RESPONSE_SIZE        2U    /**< Minimum response is just SW */
+#define APDU_SELECT_AID_P2            0x04U /**< P2: select by name (AID) */
+#define APDU_SELECT_FILE_P1           0x00U /**< P1: select by file ID */
+#define APDU_SELECT_FILE_P2           0x0CU /**< P2: select by file ID */
+#define APDU_SELECT_FILE_LC           0x02U /**< Lc for FILE ID (2 bytes) */
+#define APDU_SELECT_FILE_MIN_SIZE     7U    /**< Minimum APDU size for SELECT FILE */
+#define APDU_SELECT_FILE_SIZE_WITH_LE 8U    /**< SELECT FILE APDU size with Le */
+#define APDU_BYTE_HIGH_SHIFT          8U    /**< Shift for high byte in 16-bit value */
+#define APDU_BYTE_MASK                0xFFU /**< Mask for single byte */
+#define APDU_STATUS_WORD_HIGH_INDEX   (APDU_STATUS_WORD_SIZE - 2) /**< High byte index of SW */
+#define APDU_STATUS_WORD_LOW_INDEX    (APDU_STATUS_WORD_SIZE - 1) /**< Low byte index of SW */
+#define APDU_LE_UNSPECIFIED           0x00U /**< Le = 0 means return all available */
 
 const char *nfc_apdu_sw_str(uint16_t sw) {
   switch (sw) {
@@ -64,7 +77,8 @@ static int apdu_transceive_raw(const nfc_apdu_channel_t *ch,
 }
 
 static int apdu_get_response(const nfc_apdu_channel_t *ch, uint8_t le, uint8_t *rx, size_t rx_max) {
-  uint8_t apdu[APDU_HEADER_SIZE] = {APDU_CLA_ISO7816, APDU_INS_GET_RESPONSE, 0x00, 0x00, le};
+  uint8_t apdu[APDU_HEADER_SIZE] = {
+      APDU_CLA_ISO7816, APDU_INS_GET_RESPONSE, APDU_SELECT_FILE_P1, APDU_SELECT_FILE_P1, le};
   return apdu_transceive_raw(ch, apdu, sizeof(apdu), rx, rx_max);
 }
 
@@ -72,7 +86,8 @@ hb_nfc_err_t nfc_apdu_transceive(const nfc_apdu_channel_t *ch,
                                  const uint8_t *apdu,
                                  size_t apdu_len,
                                  nfc_apdu_resp_t *resp) {
-  if (!ch || !ch->ctx || !apdu || apdu_len == 0 || !resp || !resp->buf || resp->max < 2U)
+  if (!ch || !ch->ctx || !apdu || apdu_len == 0 || !resp || !resp->buf ||
+      resp->max < APDU_STATUS_WORD_SIZE)
     return HB_NFC_ERR_PARAM;
 
   uint8_t cmd[APDU_MAX_BUF];
@@ -83,33 +98,37 @@ hb_nfc_err_t nfc_apdu_transceive(const nfc_apdu_channel_t *ch,
   bool sw_in_buf = true;
 
   int len = apdu_transceive_raw(ch, cmd, apdu_len, resp->buf, resp->max);
-  if (len < 2)
+  if (len < APDU_STATUS_WORD_SIZE)
     return HB_NFC_ERR_PROTOCOL;
 
-  uint16_t status = (uint16_t)((resp->buf[len - 2] << 8) | resp->buf[len - 1]);
+  uint16_t status =
+      (uint16_t)((resp->buf[len - APDU_STATUS_WORD_HIGH_INDEX] << APDU_BYTE_HIGH_SHIFT) |
+                 resp->buf[len - APDU_STATUS_WORD_LOW_INDEX]);
 
   if (((status & APDU_SW_CLASS_MASK) == APDU_SW_WRONG_LE) && apdu_len >= APDU_HEADER_SIZE) {
     cmd[apdu_len - 1] = (uint8_t)(status & APDU_SW_DATA_MASK);
     len = apdu_transceive_raw(ch, cmd, apdu_len, resp->buf, resp->max);
-    if (len < 2)
+    if (len < APDU_STATUS_WORD_SIZE)
       return HB_NFC_ERR_PROTOCOL;
-    status = (uint16_t)((resp->buf[len - 2] << 8) | resp->buf[len - 1]);
+    status = (uint16_t)((resp->buf[len - APDU_STATUS_WORD_HIGH_INDEX] << APDU_BYTE_HIGH_SHIFT) |
+                        resp->buf[len - APDU_STATUS_WORD_LOW_INDEX]);
   }
 
   if ((status & APDU_SW_CLASS_MASK) == APDU_SW_MORE_DATA) {
-    size_t out_pos = (size_t)(len - 2);
+    size_t out_pos = (size_t)(len - APDU_STATUS_WORD_SIZE);
     uint8_t le = (uint8_t)(status & APDU_SW_DATA_MASK);
     if (le == 0)
-      le = 0x00;
+      le = APDU_LE_UNSPECIFIED;
 
     for (int i = 0; i < APDU_MAX_GET_RESP; i++) {
       uint8_t tmp[APDU_MAX_BUF];
       int rlen = apdu_get_response(ch, le, tmp, sizeof(tmp));
-      if (rlen < 2)
+      if (rlen < APDU_STATUS_WORD_SIZE)
         break;
 
-      uint16_t swr = (uint16_t)((tmp[rlen - 2] << 8) | tmp[rlen - 1]);
-      int data_len = rlen - 2;
+      uint16_t swr = (uint16_t)((tmp[rlen - APDU_STATUS_WORD_HIGH_INDEX] << APDU_BYTE_HIGH_SHIFT) |
+                                tmp[rlen - APDU_STATUS_WORD_LOW_INDEX]);
+      int data_len = rlen - APDU_STATUS_WORD_SIZE;
       if (data_len > 0) {
         size_t copy = (out_pos + (size_t)data_len <= resp->max)
                           ? (size_t)data_len
@@ -125,11 +144,11 @@ hb_nfc_err_t nfc_apdu_transceive(const nfc_apdu_channel_t *ch,
         break;
       le = (uint8_t)(status & APDU_SW_DATA_MASK);
       if (le == 0)
-        le = 0x00;
+        le = APDU_LE_UNSPECIFIED;
     }
 
-    if (out_pos + 2 <= resp->max) {
-      resp->buf[out_pos++] = (uint8_t)(status >> 8);
+    if (out_pos + APDU_STATUS_WORD_SIZE <= resp->max) {
+      resp->buf[out_pos++] = (uint8_t)(status >> APDU_BYTE_HIGH_SHIFT);
       resp->buf[out_pos++] = (uint8_t)(status & APDU_SW_DATA_MASK);
       sw_in_buf = true;
     } else {
@@ -139,7 +158,7 @@ hb_nfc_err_t nfc_apdu_transceive(const nfc_apdu_channel_t *ch,
   }
 
   resp->sw = status;
-  resp->len = sw_in_buf ? (size_t)(len - 2) : (size_t)len;
+  resp->len = sw_in_buf ? (size_t)(len - APDU_STATUS_WORD_SIZE) : (size_t)len;
   return nfc_apdu_sw_to_err(status);
 }
 
@@ -166,8 +185,8 @@ nfc_apdu_build_select_aid(nfc_apdu_buf_t dst, nfc_apdu_data_t aid, bool le_prese
   size_t pos = 0;
   dst.buf[pos++] = APDU_CLA_ISO7816;
   dst.buf[pos++] = APDU_INS_SELECT;
-  dst.buf[pos++] = 0x04;
-  dst.buf[pos++] = 0x00;
+  dst.buf[pos++] = APDU_SELECT_AID_P2;
+  dst.buf[pos++] = APDU_SELECT_FILE_P1;
   dst.buf[pos++] = (uint8_t)aid.len;
   memcpy(&dst.buf[pos], aid.ptr, aid.len);
   pos += aid.len;
@@ -177,16 +196,16 @@ nfc_apdu_build_select_aid(nfc_apdu_buf_t dst, nfc_apdu_data_t aid, bool le_prese
 }
 
 size_t nfc_apdu_build_select_file(nfc_apdu_buf_t dst, uint16_t fid, bool le_present, uint8_t le) {
-  if (!dst.buf || dst.max < (7U + (le_present ? 1U : 0U)))
+  if (!dst.buf || dst.max < (APDU_SELECT_FILE_MIN_SIZE + (le_present ? 1U : 0U)))
     return 0;
   size_t pos = 0;
   dst.buf[pos++] = APDU_CLA_ISO7816;
   dst.buf[pos++] = APDU_INS_SELECT;
-  dst.buf[pos++] = 0x00;
-  dst.buf[pos++] = 0x0C;
-  dst.buf[pos++] = 0x02;
-  dst.buf[pos++] = (uint8_t)((fid >> 8) & 0xFFU);
-  dst.buf[pos++] = (uint8_t)(fid & 0xFFU);
+  dst.buf[pos++] = APDU_SELECT_FILE_P1;
+  dst.buf[pos++] = APDU_SELECT_FILE_P2;
+  dst.buf[pos++] = APDU_SELECT_FILE_LC;
+  dst.buf[pos++] = (uint8_t)((fid >> APDU_BYTE_HIGH_SHIFT) & APDU_BYTE_MASK);
+  dst.buf[pos++] = (uint8_t)(fid & APDU_BYTE_MASK);
   if (le_present)
     dst.buf[pos++] = le;
   return pos;

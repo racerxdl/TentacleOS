@@ -122,21 +122,21 @@ hb_nfc_err_t mf_nested_collect_sample(uint8_t target_block,
   }
 
   const size_t rx_bits = 4U * 9U;
-  const size_t rx_bytes = (rx_bits + 7U) / 8U;
+  const size_t rjx_bytes = (rx_bits + 7U) / 8U;
 
   uint16_t count = 0;
-  (void)st25r3916_fifo_wait(rx_bytes, MF_NESTED_RX_TIMEOUT_MS, &count);
-  if (count < rx_bytes) {
+  (void)st25r3916_fifo_wait(rjx_bytes, MF_NESTED_RX_TIMEOUT_MS, &count);
+  if (count < rjx_bytes) {
     hb_nfc_spi_reg_write(ST25R3916_REG_ISO14443A, iso_reg);
     ESP_LOGW(TAG,
              "nested: RX timeout waiting for nt (got %u need %u)",
              (unsigned)count,
-             (unsigned)rx_bytes);
+             (unsigned)rjx_bytes);
     return HB_NFC_ERR_TIMEOUT;
   }
 
   uint8_t rx_buf[8] = {0};
-  st25r3916_fifo_read(rx_buf, rx_bytes);
+  st25r3916_fifo_read(rx_buf, rjx_bytes);
 
   uint8_t nt_bytes[4] = {0};
   bitpos = 0;

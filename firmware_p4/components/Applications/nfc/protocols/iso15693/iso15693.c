@@ -11,7 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+/**
+ * @file iso15693.c
+ * @brief ISO 15693 (NFC-V) poller implementation.
+ */
 #include "iso15693.h"
 
 #include <string.h>
@@ -46,6 +49,10 @@ static const char *TAG = "NFC_ISO15693";
 #define ISO15693_TIMEOUT_MS       30
 #define ISO15693_TIMEOUT_QUIET_MS 10
 #define ISO15693_TIMEOUT_MULTI_MS 50
+#define ISO15693_BITS_PER_BYTE    8
+
+static int strip_crc_len(const uint8_t *buf, int len);
+static hb_nfc_err_t iso15693_stay_quiet(const iso15693_tag_t *tag);
 
 static int strip_crc_len(const uint8_t *buf, int len) {
   if (len >= (int)(ISO15693_CRC_LEN + 1) && iso15693_check_crc(buf, (size_t)len))
@@ -226,7 +233,7 @@ hb_nfc_err_t iso15693_read_single_block(
     const iso15693_tag_t *tag, uint8_t block, uint8_t *data, size_t data_max, size_t *data_len) {
   if (tag == NULL || data == NULL)
     return HB_NFC_ERR_PARAM;
-  uint8_t blk_size = tag->block_size ? tag->block_size : ISO15693_DEFAULT_BLOCK_SIZE;
+  uint8_t blk_size = (tag->block_size != 0) ? tag->block_size : ISO15693_DEFAULT_BLOCK_SIZE;
   if (data_max < blk_size)
     return HB_NFC_ERR_PARAM;
 
@@ -263,7 +270,7 @@ hb_nfc_err_t iso15693_write_single_block(const iso15693_tag_t *tag,
                                          size_t data_len) {
   if (tag == NULL || data == NULL)
     return HB_NFC_ERR_PARAM;
-  uint8_t blk_size = tag->block_size ? tag->block_size : ISO15693_DEFAULT_BLOCK_SIZE;
+  uint8_t blk_size = (tag->block_size != 0) ? tag->block_size : ISO15693_DEFAULT_BLOCK_SIZE;
   if (data_len != blk_size)
     return HB_NFC_ERR_PARAM;
 
@@ -327,7 +334,7 @@ hb_nfc_err_t iso15693_read_multiple_blocks(const iso15693_tag_t *tag,
                                            size_t *out_len) {
   if (tag == NULL || out_buf == NULL || count == 0)
     return HB_NFC_ERR_PARAM;
-  if (!tag->block_size)
+  if (tag->block_size == 0)
     return HB_NFC_ERR_PARAM;
 
   size_t total = (size_t)count * tag->block_size;
@@ -567,7 +574,7 @@ uint16_t iso15693_crc16(const uint8_t *data, size_t len) {
   uint16_t crc = ISO15693_CRC_INIT;
   for (size_t i = 0; i < len; i++) {
     crc ^= data[i];
-    for (int b = 0; b < 8; b++) {
+    for (uint8_t b = 0; b < ISO15693_BITS_PER_BYTE; b++) {
       if (crc & 0x0001U)
         crc = (crc >> 1) ^ ISO15693_CRC_POLY;
       else

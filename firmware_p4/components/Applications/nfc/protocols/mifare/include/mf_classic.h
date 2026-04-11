@@ -30,6 +30,29 @@
 extern "C" {
 #endif
 
+/* MIFARE Classic block count constants */
+/** @brief Number of blocks in MINI cards (5 sectors × 4 blocks + 1 trailer) */
+#define MF_BLOCKS_MINI 20U
+
+/** @brief Number of blocks in 1K cards (16 sectors × 4 blocks) */
+#define MF_BLOCKS_1K 64U
+
+/** @brief Number of blocks in 4K cards (32 small + 8 large sectors) */
+#define MF_BLOCKS_4K 256U
+
+/* 4K card sector layout constants */
+/** @brief First large sector index in 4K cards (32 small sectors, then 8 large) */
+#define MF_4K_BIG_SECTOR_START 32U
+
+/** @brief Number of blocks per large sector (16-block sectors) */
+#define MF_4K_BIG_BLOCK_COUNT 16U
+
+/** @brief Number of blocks per small sector (4-block sectors) */
+#define MF_SMALL_BLOCK_COUNT 4U
+
+/** @brief First block of the large sector area (block 128 = 32 small sectors × 4 blocks) */
+#define MF_4K_BIG_BLOCK_BASE 128U
+
 /**
  * @brief Authenticate a sector with key A or B.
  *

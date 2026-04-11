@@ -43,7 +43,7 @@ hb_nfc_err_t nfc_poller_start(void) {
       .tech = NFC_RF_TECH_A,
       .tx_rate = NFC_RF_BR_106,
       .rx_rate = NFC_RF_BR_106,
-      .am_mod_percent = 0, /* OOK for ISO-A */
+      .am_mod_percent = 0,
       .tx_parity = true,
       .rx_raw_parity = false,
       .guard_time_us = 0,
@@ -60,9 +60,6 @@ void nfc_poller_stop(void) {
   st25r3916_core_field_off();
 }
 
-/**
- * Transmit a frame and wait for the response in FIFO.
- */
 int nfc_poller_transceive(const uint8_t *tx,
                           size_t tx_len,
                           bool with_crc,

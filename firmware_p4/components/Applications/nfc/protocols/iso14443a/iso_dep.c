@@ -85,6 +85,15 @@ static const char *TAG = "iso_dep";
 #define ISO_DEP_APDU_MIN_LEN         5
 #define ISO_DEP_INFO_FIELD_OFFSET    1
 
+static size_t iso_dep_fsc_from_fsci(uint8_t fsci);
+static int iso_dep_fwt_ms(uint8_t fwi);
+static void iso_dep_parse_ats(nfc_iso_dep_data_t *dep);
+static bool iso_dep_is_i_block(uint8_t pcb);
+static bool iso_dep_is_r_block(uint8_t pcb);
+static bool iso_dep_is_s_block(uint8_t pcb);
+static bool iso_dep_is_wtx(uint8_t pcb);
+static int iso_dep_strip_crc(uint8_t *buf, int len);
+
 static size_t iso_dep_fsc_from_fsci(uint8_t fsci) {
   static const uint16_t tbl[] = {16, 24, 32, 40, 48, 64, 96, 128, 256};
   if (fsci > ISO_DEP_FSC_FSCI_MAX)
@@ -93,7 +102,6 @@ static size_t iso_dep_fsc_from_fsci(uint8_t fsci) {
 }
 
 static int iso_dep_fwt_ms(uint8_t fwi) {
-  /* FWT = 302us * 2^FWI; clamp to sane minimum */
   uint32_t us = ISO_DEP_FWT_BASE_US * (1U << (fwi & ISO_DEP_FSC_FSCI_MASK));
   int ms = (int)((us + ISO_DEP_DIV_ROUNDING) / ISO_DEP_MS_DIVISOR);
   if (ms < ISO_DEP_FWT_MIN_MS)
@@ -102,21 +110,20 @@ static int iso_dep_fwt_ms(uint8_t fwi) {
 }
 
 static void iso_dep_parse_ats(nfc_iso_dep_data_t *dep) {
-  if (!dep || dep->ats_len < 2)
+  if (dep == NULL || dep->ats_len < ISO_DEP_SW_LEN)
     return;
 
   uint8_t t0 = dep->ats[1];
   uint8_t fsci = (uint8_t)(t0 & ISO_DEP_FSC_FSCI_MASK);
   size_t fsc = iso_dep_fsc_from_fsci(fsci);
-  if (fsc > 255)
-    fsc = 255;
+  if (fsc > (ISO_DEP_FSC_MAX_SIZE - 1U))
+    fsc = (ISO_DEP_FSC_MAX_SIZE - 1U);
   dep->fsc = (uint8_t)fsc;
 
   int pos = ISO_DEP_ATS_PARSE_START;
-  /* TA present */
+
   if (t0 & ISO_DEP_ATS_TA_MASK)
     pos++;
-  /* TB present: FWI in upper nibble */
   if (t0 & ISO_DEP_ATS_TB_MASK) {
     if ((size_t)pos < dep->ats_len) {
       uint8_t tb = dep->ats[pos];
@@ -173,7 +180,7 @@ hb_nfc_err_t iso_dep_rats(uint8_t fsdi, uint8_t cid, nfc_iso_dep_data_t *dep) {
   if (len >= ISO_DEP_MIN_ATS_LEN && iso14443a_check_crc(rx, (size_t)len)) {
     len -= ISO_DEP_CRC_LEN;
   }
-  if (dep) {
+  if (dep != NULL) {
     dep->ats_len = (size_t)len;
     for (int i = 0; i < len && i < NFC_ATS_MAX_LEN; i++) {
       dep->ats[i] = rx[i];
@@ -186,7 +193,6 @@ hb_nfc_err_t iso_dep_rats(uint8_t fsdi, uint8_t cid, nfc_iso_dep_data_t *dep) {
 }
 
 hb_nfc_err_t iso_dep_pps(uint8_t cid, uint8_t dsi, uint8_t dri) {
-  /* Best-effort PPS. If dsi/dri are 0, keep default 106 kbps. */
   if ((dsi == 0) && (dri == 0))
     return HB_NFC_OK;
   uint8_t cmd[ISO_DEP_PPS_LEN] = {
@@ -221,7 +227,6 @@ int iso_dep_transceive(const nfc_iso_dep_data_t *dep,
   int rlen = 0;
   uint8_t block_num = 0;
 
-  /* TX chaining (PCD -> PICC) */
   size_t off = 0;
   while (off < tx_len) {
     size_t chunk = tx_len - off;
@@ -260,7 +265,6 @@ int iso_dep_transceive(const nfc_iso_dep_data_t *dep,
     break;
   }
 
-  /* RX chaining + WTX handling (PICC -> PCD) */
   int out_len = 0;
   while (1) {
     uint8_t pcb = rbuf[0];
@@ -268,7 +272,7 @@ int iso_dep_transceive(const nfc_iso_dep_data_t *dep,
     if (iso_dep_is_wtx(pcb)) {
       uint8_t wtxm = (rlen >= 2) ? rbuf[1] : ISO_DEP_WTX_MIN_MULT;
       uint8_t wtx_resp[2] = {ISO_DEP_PCB_S_WTX, wtxm};
-      int tmo = base_timeout * (wtxm ? wtxm : ISO_DEP_WTX_MIN_MULT);
+      int tmo = base_timeout * (wtxm != 0U ? wtxm : ISO_DEP_WTX_MIN_MULT);
       rlen = nfc_poller_transceive(
           wtx_resp, sizeof(wtx_resp), true, rbuf, sizeof(rbuf), ISO_DEP_TRANSCEIVE_MIN_LEN, tmo);
       if (rlen <= 0)
@@ -328,21 +332,18 @@ int iso_dep_apdu_transceive(const nfc_iso_dep_data_t *dep,
   if (len < ISO_DEP_SW_LEN)
     return len;
 
-  /* SW1/SW2 are last bytes */
   uint8_t sw1 = rx[len - 2];
   uint8_t sw2 = rx[len - 1];
 
-  /* Handle wrong length (0x6C) by retrying with suggested Le */
   if (sw1 == ISO_DEP_SW1_WRONG_LEN && apdu_len >= ISO_DEP_APDU_MIN_LEN) {
-    cmd_buf[apdu_len - 1] = sw2; /* adjust Le */
+    cmd_buf[apdu_len - 1] = sw2;
     len = iso_dep_transceive(dep, cmd_buf, apdu_len, rx, rx_max, timeout_ms);
     return len;
   }
 
-  /* Handle GET RESPONSE (0x61) */
   if (sw1 == ISO_DEP_SW1_MORE_DATA) {
-    size_t out_pos = (size_t)(len - ISO_DEP_SW_LEN); /* keep data from first response */
-    uint8_t le = sw2 ? sw2 : 0x00;                   /* 0x00 means 256 */
+    size_t out_pos = (size_t)(len - ISO_DEP_SW_LEN);
+    uint8_t le = (sw2 != 0U) ? sw2 : 0x00U;
 
     for (int i = 0; i < ISO_DEP_GET_RESPONSE_RETRIES; i++) {
       uint8_t get_resp[ISO_DEP_GET_RESPONSE_CMD_LEN] = {
@@ -370,7 +371,7 @@ int iso_dep_apdu_transceive(const nfc_iso_dep_data_t *dep,
       if (sw1 != ISO_DEP_SW1_MORE_DATA) {
         break;
       }
-      le = sw2 ? sw2 : 0x00;
+      le = (sw2 != 0U) ? sw2 : 0x00U;
     }
 
     if (out_pos + ISO_DEP_SW_LEN <= rx_max) {

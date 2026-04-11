@@ -41,37 +41,41 @@ static const char *TAG = "NFC_FELICA_EMU";
 #define TIMER_I_EOF         0x08U
 
 // Register bit masks and thresholds
-#define AUX_DISP_OSC_MASK    0x14U
-#define MAIN_INT_OSC_MASK    0x80U
-#define TARGET_INT_OSC_MASK  0x08U
-#define PT_MEM_SIZE          19U
-#define BLK_FLAG_MASK        0x80U
-#define DESC_LEN_2BYTE       2
-#define DESC_LEN_3BYTE       3
-#define WRITE_RESP_SIZE      12U
-#define FELICA_SC_DEFAULT    0x0009U
-#define FELICA_BLK_DEFAULT   16
-#define OP_CTRL_INIT         0x00U
-#define OP_CTRL_ACTIVE       0x80U
-#define ISO14443A_CFG        0x10U
-#define IC_CHIP_INVALID_A    0x00U
-#define IC_CHIP_INVALID_B    0xFFU
-#define IO_CONF2_CFG         0x80U
-#define PT_MOD_CFG           0x60U
-#define FIFO_STATUS_LEN_MASK 0x7FU
-#define PTA_MASK             0x0FU
-#define DELAY_5MS            5
-#define DELAY_10MS           10
-#define DELAY_2MS            2
-#define DELAY_OSC_WAIT       200
-#define ALIVE_LOG_MOD        10000U
-#define IDLE_LOG_MOD         5000U
-#define STATUS_OK            0x00U
-#define STATUS_ERROR         0x01U
-#define STATUS1_ERROR        0x01U
-#define RSSI_IDX_SHIFT       6
-#define FIFO_RSP_POS         0
-#define FIFO_LEN_LIMIT       256
+#define AUX_DISP_OSC_MASK       0x14U
+#define MAIN_INT_OSC_MASK       0x80U
+#define TARGET_INT_OSC_MASK     0x08U
+#define PT_MEM_SIZE             19U
+#define BLK_FLAG_MASK           0x80U
+#define DESC_LEN_2BYTE          2
+#define DESC_LEN_3BYTE          3
+#define WRITE_RESP_SIZE         12U
+#define FELICA_SC_DEFAULT       0x0009U
+#define FELICA_BLK_DEFAULT      16
+#define OP_CTRL_INIT            0x00U
+#define OP_CTRL_ACTIVE          0x80U
+#define ISO14443A_CFG           0x10U
+#define IC_CHIP_INVALID_A       0x00U
+#define IC_CHIP_INVALID_B       0xFFU
+#define IO_CONF2_CFG            0x80U
+#define PT_MOD_CFG              0x60U
+#define FIFO_STATUS_LEN_MASK    0x7FU
+#define PTA_MASK                0x0FU
+#define DELAY_5MS               5
+#define DELAY_10MS              10
+#define DELAY_2MS               2
+#define DELAY_OSC_WAIT          200
+#define ALIVE_LOG_MOD           10000U
+#define IDLE_LOG_MOD            5000U
+#define STATUS_OK               0x00U
+#define STATUS_ERROR            0x01U
+#define STATUS1_ERROR           0x01U
+#define RSSI_IDX_SHIFT          6
+#define FIFO_RSP_POS            0
+#define FIFO_LEN_LIMIT          256
+#define OSC_POLLING_INTERVAL_MS 1
+#define FRAME_LEN_MIN_BYTES     2
+#define CMD_CODE_OFFSET         1
+#define DESC_POS_INCREMENT      1
 
 typedef enum {
   FELICA_STATE_SLEEP,
@@ -95,7 +99,7 @@ static bool wait_oscillator(int timeout_ms) {
       ESP_LOGI(TAG, "Osc OK in %dms: AUX=0x%02X MAIN=0x%02X TGT=0x%02X", i, aux, mi, ti);
       return true;
     }
-    vTaskDelay(pdMS_TO_TICKS(1));
+    vTaskDelay(pdMS_TO_TICKS(OSC_POLLING_INTERVAL_MS));
   }
   ESP_LOGW(TAG, "Osc timeout - continuing");
   return false;
@@ -165,7 +169,7 @@ static void handle_read(const uint8_t *frame, int len) {
     return;
   }
   uint8_t blk_count = frame[blk_pos];
-  int desc_pos = blk_pos + 1;
+  int desc_pos = blk_pos + DESC_POS_INCREMENT;
   if (blk_count == 0 || blk_count > FELICA_READ_MAX_BLOCKS) {
     ESP_LOGW(TAG, "Read: bad blk_count=%d", blk_count);
     return;
@@ -180,7 +184,7 @@ static void handle_read(const uint8_t *frame, int len) {
   resp[rp++] = STATUS_OK;
   resp[rp++] = blk_count;
   for (int i = 0; i < blk_count; i++) {
-    if (desc_pos + 1 >= len) {
+    if (desc_pos + DESC_POS_INCREMENT >= len) {
       ESP_LOGW(TAG, "Read: desc %d OOF", i);
       break;
     }
@@ -221,7 +225,7 @@ static void handle_write(const uint8_t *frame, int len) {
     return;
   }
   uint8_t blk_count = frame[blk_pos];
-  int pos = blk_pos + 1;
+  int pos = blk_pos + DESC_POS_INCREMENT;
   if (blk_count == 0)
     return;
   uint8_t status1 = STATUS_OK;
@@ -391,7 +395,7 @@ hb_nfc_err_t felica_emu_start(void) {
 }
 
 void felica_emu_stop(void) {
-  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, 0x00U);
+  hb_nfc_spi_reg_write(ST25R3916_REG_OP_CTRL, OP_CTRL_INIT);
   s_state = FELICA_STATE_SLEEP;
   s_idle = 0;
   s_init_done = false;
@@ -537,10 +541,10 @@ void felica_emu_run_step(void) {
   if (len > (int)sizeof(buf))
     len = (int)sizeof(buf);
   hb_nfc_spi_fifo_read(buf, (uint8_t)len);
-  if (len < 2)
+  if (len < FRAME_LEN_MIN_BYTES)
     return;
 
-  uint8_t cmd_code = buf[1];
+  uint8_t cmd_code = buf[CMD_CODE_OFFSET];
   ESP_LOGI(TAG, "CMD 0x%02X len=%d", cmd_code, len);
   switch (cmd_code) {
     case FELICA_CMD_READ_WO_ENC:

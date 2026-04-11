@@ -11,7 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+/**
+ * @file iso14443b_emu.c
+ * @brief ISO 14443-B passive target emulator: T4T-B NDEF and DESFire delegation.
+ * Reference: ISO/IEC 14443-3B, ISO/IEC 14443-4, NFC Forum T4T.
+ */
 #include "iso14443b_emu.h"
 
 #include <string.h>
@@ -86,6 +90,7 @@ static const char *TAG = "ISO14443B_EMU";
 #define ISO14443B_IO_CONF2_SUP_AAT  0x80U
 #define ISO14443B_PT_MOD_OOK        0x60U
 #define ISO14443B_OSC_TIMEOUT_MS    200
+#define ISO14443B_DELAY_OSC_POLL_MS 1
 #define ISO14443B_DELAY_SHORT_MS    2
 #define ISO14443B_DELAY_MEDIUM_MS   5
 #define ISO14443B_DELAY_LONG_MS     10
@@ -93,6 +98,8 @@ static const char *TAG = "ISO14443B_EMU";
 #define ISO14443B_ACTIVE_TIMEOUT_MS 2000
 #define ISO14443B_LOG_INTERVAL      200U
 #define ISO14443B_BUF_SIZE          300
+
+static uint32_t s_idle_log = 0;
 
 static const uint8_t NDEF_APP_AID[] = {0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01};
 #define NDEF_APP_AID_LEN 7
@@ -132,6 +139,19 @@ static uint8_t s_pcd_cid = 0;
 static TickType_t s_sense_tick = 0;
 static TickType_t s_active_tick = 0;
 
+static bool wait_oscillator(int timeout_ms);
+static void build_cc(void);
+static void build_ndef_text(const char *text);
+static void tx_with_crc(const uint8_t *data, int len);
+static void send_atqb(void);
+static void send_attrib_ok(void);
+static void send_i_block_resp(const uint8_t *inf, int inf_len, uint8_t pcb_in);
+static void send_r_ack(uint8_t pcb_in);
+static void apdu_resp(uint8_t *out, int *out_len, const uint8_t *data, int data_len, uint16_t sw);
+static uint16_t file_len(t4t_file_t f);
+static uint8_t *file_ptr(t4t_file_t f);
+static void handle_apdu(const uint8_t *apdu, int apdu_len, uint8_t pcb_in);
+
 static bool wait_oscillator(int timeout_ms) {
   for (int i = 0; i < timeout_ms; i++) {
     uint8_t aux = 0, mi = 0, ti = 0;
@@ -143,7 +163,7 @@ static bool wait_oscillator(int timeout_ms) {
       ESP_LOGI(TAG, "Osc OK in %dms: AUX=0x%02X MAIN=0x%02X TGT=0x%02X", i, aux, mi, ti);
       return true;
     }
-    vTaskDelay(pdMS_TO_TICKS(1));
+    vTaskDelay(pdMS_TO_TICKS(ISO14443B_DELAY_OSC_POLL_MS));
   }
   ESP_LOGW(TAG, "Osc timeout - continuing");
   return false;
@@ -348,7 +368,7 @@ static void send_r_ack(uint8_t pcb_in) {
 
 static void apdu_resp(uint8_t *out, int *out_len, const uint8_t *data, int data_len, uint16_t sw) {
   int pos = 0;
-  if (data && data_len > 0) {
+  if (data != NULL && data_len > 0) {
     memcpy(&out[pos], data, (size_t)data_len);
     pos += data_len;
   }
@@ -387,7 +407,7 @@ static void handle_apdu(const uint8_t *apdu, int apdu_len, uint8_t pcb_in) {
   }
 
   if (apdu_len < 4) {
-    apdu_resp(resp, &resp_len, NULL, 0, 0x6700);
+    apdu_resp(resp, &resp_len, NULL, 0, APDU_SW_WRONG_LEN);
     send_i_block_resp(resp, resp_len, pcb_in);
     return;
   }
@@ -511,7 +531,6 @@ void iso14443b_emu_run_step(void) {
   }
 
   if (s_state == ISO14443B_STATE_SENSE) {
-    static uint32_t s_idle_log = 0;
     if (!(main_irq & ST25R3916_IRQ_MAIN_FWL)) {
       TickType_t now = xTaskGetTickCount();
       if ((now - s_sense_tick) > pdMS_TO_TICKS(ISO14443B_SENSE_TIMEOUT_MS)) {

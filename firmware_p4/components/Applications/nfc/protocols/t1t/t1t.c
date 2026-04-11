@@ -69,6 +69,27 @@ static const char *TAG = "NFC_T1T";
 #define T1T_TIMEOUT_READ8_MS 30
 #define T1T_TIMEOUT_RALL_MS  50
 
+/* Number of bits in a byte. */
+#define T1T_BITS_PER_BYTE 8U
+
+/* Number of bits in the Topaz SOF symbol (7-bit start-of-frame). Reference: NFC Forum T1T spec §7.
+ */
+#define T1T_SOF_BITS 7U
+
+static void t1t_set_antcl(bool enable);
+static void t1t_fifo_read_all(uint8_t *out, size_t len);
+static int t1t_tx_bits(const uint8_t *tx,
+                       size_t tx_len,
+                       uint8_t last_bits,
+                       uint8_t *rx,
+                       size_t rx_max,
+                       size_t rx_min,
+                       int timeout_ms);
+static int t1t_send_sequence(
+    const uint8_t *seq, size_t seq_len, uint8_t *rx, size_t rx_max, size_t rx_min, int timeout_ms);
+static size_t t1t_append_crc(uint8_t *buf, size_t len, size_t max);
+static bool t1t_uid4_valid(const t1t_tag_t *tag);
+
 static void t1t_set_antcl(bool enable) {
   uint8_t v = 0;
   hb_nfc_spi_reg_read(ST25R3916_REG_ISO14443A, &v);
@@ -102,7 +123,7 @@ static int t1t_tx_bits(const uint8_t *tx,
 
   uint16_t nbytes = (uint16_t)tx_len;
   uint8_t nbtx_bits = 0;
-  if (last_bits > 0 && last_bits < 8) {
+  if (last_bits > 0 && last_bits < T1T_BITS_PER_BYTE) {
     nbtx_bits = last_bits;
     nbytes = (tx_len > 0) ? (uint16_t)(tx_len - 1U) : 0U;
   }
@@ -141,7 +162,7 @@ static int t1t_send_sequence(
   if (seq == NULL || seq_len == 0)
     return 0;
 
-  if (t1t_tx_bits(&seq[0], 1, 7, NULL, 0, 0, 0) <= 0)
+  if (t1t_tx_bits(&seq[0], 1, T1T_SOF_BITS, NULL, 0, 0, 0) <= 0)
     return 0;
 
   for (size_t i = 1; i < seq_len; i++) {
@@ -396,7 +417,7 @@ hb_nfc_err_t t1t_read8(const t1t_tag_t *tag, uint8_t block, uint8_t out[8]) {
   size_t pos = 0;
   cmd[pos++] = T1T_CMD_READ8;
   cmd[pos++] = block;
-  for (int i = 0; i < (int)T1T_BLOCK_SIZE; i++)
+  for (uint8_t i = 0; i < T1T_BLOCK_SIZE; i++)
     cmd[pos++] = 0x00U;
   memcpy(&cmd[pos], tag->uid, T1T_UID4_LEN);
   pos += T1T_UID4_LEN;

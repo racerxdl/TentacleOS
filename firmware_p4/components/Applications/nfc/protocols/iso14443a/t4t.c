@@ -11,7 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+/**
+ * @file t4t.c
+ * @brief ISO7816-4 Type 4 Tag (T4T) NDEF read/write over ISO-DEP.
+ */
 #include "t4t.h"
 
 #include <string.h>
@@ -47,6 +50,20 @@ static hb_nfc_err_t apdu_transceive(const nfc_iso_dep_data_t *dep,
                                     uint8_t *out,
                                     size_t out_max,
                                     size_t *out_len,
+                                    uint16_t *sw);
+static hb_nfc_err_t select_ndef_app(const nfc_iso_dep_data_t *dep);
+static hb_nfc_err_t select_file(const nfc_iso_dep_data_t *dep, uint16_t fid);
+static hb_nfc_err_t
+read_binary(const nfc_iso_dep_data_t *dep, uint16_t offset, uint8_t *out, size_t out_len);
+static hb_nfc_err_t
+update_binary(const nfc_iso_dep_data_t *dep, uint16_t offset, const uint8_t *data, size_t data_len);
+
+static hb_nfc_err_t apdu_transceive(const nfc_iso_dep_data_t *dep,
+                                    const uint8_t *apdu,
+                                    size_t apdu_len,
+                                    uint8_t *out,
+                                    size_t out_max,
+                                    size_t *out_len,
                                     uint16_t *sw) {
   if (dep == NULL || apdu == NULL || apdu_len == 0 || out == NULL)
     return HB_NFC_ERR_PARAM;
@@ -56,9 +73,9 @@ static hb_nfc_err_t apdu_transceive(const nfc_iso_dep_data_t *dep,
     return HB_NFC_ERR_PROTOCOL;
 
   uint16_t status = (uint16_t)((out[len - 2] << 8) | out[len - 1]);
-  if (sw)
+  if (sw != NULL)
     *sw = status;
-  if (out_len) {
+  if (out_len != NULL) {
     *out_len = (size_t)(len - 2);
   }
   return HB_NFC_OK;
@@ -82,7 +99,7 @@ static hb_nfc_err_t select_ndef_app(const nfc_iso_dep_data_t *dep) {
   hb_nfc_err_t err = apdu_transceive(dep, apdu, pos, rsp, sizeof(rsp), &rsp_len, &sw);
   if (err != HB_NFC_OK)
     return err;
-  if (sw != 0x9000 && (sw & 0xFF00U) != 0x6100U) {
+  if (sw != T4T_SW_OK && (sw & T4T_SW_MORE_MASK) != T4T_SW_MORE) {
     ESP_LOGW(TAG, "SELECT NDEF APP failed SW=0x%04X", sw);
     return HB_NFC_ERR_PROTOCOL;
   }
@@ -105,7 +122,7 @@ static hb_nfc_err_t select_file(const nfc_iso_dep_data_t *dep, uint16_t fid) {
   hb_nfc_err_t err = apdu_transceive(dep, apdu, sizeof(apdu), rsp, sizeof(rsp), &rsp_len, &sw);
   if (err != HB_NFC_OK)
     return err;
-  if (sw != 0x9000) {
+  if (sw != T4T_SW_OK) {
     ESP_LOGW(TAG, "SELECT FILE 0x%04X failed SW=0x%04X", fid, sw);
     return HB_NFC_ERR_PROTOCOL;
   }
@@ -130,7 +147,7 @@ read_binary(const nfc_iso_dep_data_t *dep, uint16_t offset, uint8_t *out, size_t
   hb_nfc_err_t err = apdu_transceive(dep, apdu, sizeof(apdu), rsp, sizeof(rsp), &rsp_len, &sw);
   if (err != HB_NFC_OK)
     return err;
-  if (sw != 0x9000) {
+  if (sw != T4T_SW_OK) {
     ESP_LOGW(TAG, "READ_BINARY failed SW=0x%04X", sw);
     return HB_NFC_ERR_PROTOCOL;
   }
@@ -161,7 +178,7 @@ static hb_nfc_err_t update_binary(const nfc_iso_dep_data_t *dep,
   hb_nfc_err_t err = apdu_transceive(dep, apdu, 5 + data_len, rsp, sizeof(rsp), &rsp_len, &sw);
   if (err != HB_NFC_OK)
     return err;
-  if (sw != 0x9000) {
+  if (sw != T4T_SW_OK) {
     ESP_LOGW(TAG, "UPDATE_BINARY failed SW=0x%04X", sw);
     return HB_NFC_ERR_PROTOCOL;
   }
@@ -241,7 +258,7 @@ hb_nfc_err_t t4t_read_ndef(const nfc_iso_dep_data_t *dep,
 
   uint16_t offset = 2;
   uint16_t remaining = ndef_len;
-  uint16_t mle = cc->mle ? cc->mle : 0xFFU;
+  uint16_t mle = (cc->mle != 0) ? cc->mle : 0xFFU;
   if (mle > 0xFFU)
     mle = 0xFFU;
 
@@ -258,7 +275,7 @@ hb_nfc_err_t t4t_read_ndef(const nfc_iso_dep_data_t *dep,
     remaining -= chunk;
   }
 
-  if (out_len)
+  if (out_len != NULL)
     *out_len = ndef_len;
   return HB_NFC_OK;
 }
@@ -293,7 +310,7 @@ hb_nfc_err_t t4t_write_ndef(const nfc_iso_dep_data_t *dep,
   if (err != HB_NFC_OK)
     return err;
 
-  uint16_t mlc = cc->mlc ? cc->mlc : 0xFFU;
+  uint16_t mlc = (cc->mlc != 0) ? cc->mlc : 0xFFU;
   if (mlc > 0xFFU)
     mlc = 0xFFU;
 
@@ -320,7 +337,7 @@ hb_nfc_err_t t4t_read_binary_ndef(const nfc_iso_dep_data_t *dep,
                                   uint16_t offset,
                                   uint8_t *out,
                                   size_t out_len) {
-  if (!dep || !cc || !out || out_len == 0)
+  if (dep == NULL || cc == NULL || out == NULL || out_len == 0)
     return HB_NFC_ERR_PARAM;
 
   hb_nfc_err_t err = select_ndef_app(dep);
@@ -345,7 +362,7 @@ hb_nfc_err_t t4t_update_binary_ndef(const nfc_iso_dep_data_t *dep,
                                     uint16_t offset,
                                     const uint8_t *data,
                                     size_t data_len) {
-  if (!dep || !cc || !data || data_len == 0)
+  if (dep == NULL || cc == NULL || data == NULL || data_len == 0)
     return HB_NFC_ERR_PARAM;
 
   hb_nfc_err_t err = select_ndef_app(dep);

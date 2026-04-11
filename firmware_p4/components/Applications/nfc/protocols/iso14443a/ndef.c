@@ -11,14 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+/**
+ * @file ndef.c
+ * @brief NDEF record parser, builder, and TLV helpers.
+ * Reference: NFC Forum NDEF 1.0, NFC Forum Type 2/4 Tag spec.
+ */
 #include "ndef.h"
 
 #include <string.h>
 
 #include "esp_log.h"
 
-/* NDEF record header flags (NFC Forum Type 2/4 Tag spec). */
 #define NDEF_HDR_MB       0x80U /**< Message Begin */
 #define NDEF_HDR_ME       0x40U /**< Message End */
 #define NDEF_HDR_CF       0x20U /**< Chunk Flag */
@@ -29,7 +32,6 @@
 #define NDEF_TEXT_UTF16_BIT 0x80U /**< UTF-16 indicator in status byte */
 #define NDEF_TEXT_LANG_MASK 0x3FU /**< Language code length mask */
 
-/* Byte-level constants. */
 #define NDEF_BYTE_MASK       0xFFU   /**< Single-byte mask / TLV 3-byte marker */
 #define NDEF_MAX_LANG_LEN    63U     /**< Maximum language code length */
 #define NDEF_TLV_LEN3_MARKER 0xFFU   /**< TLV three-byte length indicator */
@@ -45,6 +47,18 @@
 #define NDEF_URI_BUF_SIZE    128U /**< Buffer size for URI decode in ndef_print */
 
 static const char *TAG = "NFC_NDEF";
+
+static const char *uri_prefix(uint8_t code);
+static uint8_t uri_prefix_match(const char *uri, size_t uri_len, size_t *prefix_len);
+static void log_str(const char *label, const uint8_t *data, size_t len);
+static hb_nfc_err_t ndef_builder_begin_record(ndef_builder_t *b,
+                                              uint8_t tnf,
+                                              const uint8_t *type,
+                                              uint8_t type_len,
+                                              const uint8_t *id,
+                                              uint8_t id_len,
+                                              uint32_t payload_len,
+                                              uint8_t **payload_out);
 
 static const char *k_uri_prefixes[] = {"",
                                        "http://www.",
@@ -94,7 +108,7 @@ static uint8_t uri_prefix_match(const char *uri, size_t uri_len, size_t *prefix_
   uint8_t best = 0;
   size_t best_len = 0;
   if (uri == NULL) {
-    if (prefix_len)
+    if (prefix_len != NULL)
       *prefix_len = 0;
     return 0;
   }
@@ -102,7 +116,7 @@ static uint8_t uri_prefix_match(const char *uri, size_t uri_len, size_t *prefix_
   uint8_t count = (uint8_t)(sizeof(k_uri_prefixes) / sizeof(k_uri_prefixes[0]));
   for (uint8_t i = 1; i < count; i++) {
     const char *p = k_uri_prefixes[i];
-    if (p == NULL || p[0] == NULL)
+    if (p == NULL || p[0] == '\0')
       continue;
     size_t l = strlen(p);
     if (l == 0 || l > uri_len)
@@ -115,7 +129,7 @@ static uint8_t uri_prefix_match(const char *uri, size_t uri_len, size_t *prefix_
       break;
   }
 
-  if (prefix_len)
+  if (prefix_len != NULL)
     *prefix_len = best_len;
   return best;
 }
@@ -278,7 +292,7 @@ bool ndef_decode_uri(const ndef_record_t *rec, char *out, size_t out_max, size_t
   size_t prefix_len = strlen(prefix);
   size_t rest_len = (size_t)rec->payload_len - 1U;
   size_t total = prefix_len + rest_len;
-  if (out_len)
+  if (out_len != NULL)
     *out_len = total;
   if (out == NULL || out_max == 0)
     return true;
@@ -314,7 +328,7 @@ static hb_nfc_err_t ndef_builder_begin_record(ndef_builder_t *b,
                                               uint8_t id_len,
                                               uint32_t payload_len,
                                               uint8_t **payload_out) {
-  if (b == NULL || !b->buf)
+  if (b == NULL || b->buf == NULL)
     return HB_NFC_ERR_PARAM;
   if (payload_len > 0 && payload_out == NULL)
     return HB_NFC_ERR_PARAM;
@@ -324,7 +338,7 @@ static hb_nfc_err_t ndef_builder_begin_record(ndef_builder_t *b,
     return HB_NFC_ERR_PARAM;
 
   bool sr = payload_len <= NDEF_BYTE_MASK;
-  bool il = id && (id_len > 0);
+  bool il = (id != NULL) && (id_len > 0);
   size_t needed = 1U + 1U + (sr ? 1U : NDEF_LONG_PL_BYTES) + (il ? 1U : 0U) + type_len + id_len +
                   (size_t)payload_len;
   if (b->len + needed > b->max)
@@ -336,7 +350,7 @@ static hb_nfc_err_t ndef_builder_begin_record(ndef_builder_t *b,
 
   size_t hdr_off = b->len;
   uint8_t hdr = (uint8_t)(tnf & NDEF_HDR_TNF_MASK);
-  if (b->has_record == NULL)
+  if (!b->has_record)
     hdr |= NDEF_HDR_MB;
   hdr |= NDEF_HDR_ME;
   if (sr)
@@ -366,7 +380,7 @@ static hb_nfc_err_t ndef_builder_begin_record(ndef_builder_t *b,
     b->len += id_len;
   }
 
-  if (payload_out)
+  if (payload_out != NULL)
     *payload_out = &b->buf[b->len];
   b->len += payload_len;
   b->last_hdr_off = hdr_off;
@@ -384,7 +398,7 @@ hb_nfc_err_t ndef_builder_add_record(ndef_builder_t *b, const ndef_record_data_t
       b, rec->tnf, rec->type, rec->type_len, rec->id, rec->id_len, rec->payload_len, &dst);
   if (err != HB_NFC_OK)
     return err;
-  if (rec->payload_len > 0 && rec->payload)
+  if (rec->payload_len > 0 && rec->payload != NULL)
     memcpy(dst, rec->payload, rec->payload_len);
   return HB_NFC_OK;
 }
@@ -394,7 +408,7 @@ ndef_builder_add_text(ndef_builder_t *b, const char *text, const char *lang, boo
   if (b == NULL || text == NULL)
     return HB_NFC_ERR_PARAM;
   size_t text_len = strlen(text);
-  size_t lang_len = lang ? strlen(lang) : 0;
+  size_t lang_len = (lang != NULL) ? strlen(lang) : 0;
   if (lang_len > NDEF_MAX_LANG_LEN)
     return HB_NFC_ERR_PARAM;
 
@@ -534,11 +548,11 @@ ndef_tlv_status_t ndef_tlv_build(uint8_t *out, size_t max, const ndef_tlv_t *tlv
     out[pos++] = (uint8_t)((value_len >> NDEF_PAYLOAD_SHIFT8) & NDEF_BYTE_MASK);
     out[pos++] = (uint8_t)(value_len & NDEF_BYTE_MASK);
   }
-  if (value_len > 0 && tlv->value) {
+  if (value_len > 0 && tlv->value != NULL) {
     memcpy(&out[pos], tlv->value, value_len);
   }
   pos += value_len;
-  if (out_len)
+  if (out_len != NULL)
     *out_len = pos;
   return NDEF_TLV_STATUS_OK;
 }
@@ -554,7 +568,7 @@ ndef_tlv_build_ndef(uint8_t *out, size_t max, const ndef_tlv_t *tlv, size_t *out
   if (tlv_len + 1U > max)
     return NDEF_TLV_STATUS_INVALID;
   out[tlv_len++] = NDEF_TLV_TERMINATOR;
-  if (out_len)
+  if (out_len != NULL)
     *out_len = tlv_len;
   return NDEF_TLV_STATUS_OK;
 }
@@ -577,10 +591,10 @@ void ndef_print(const uint8_t *data, size_t len) {
       ndef_text_t text;
       if (ndef_decode_text(&rec, &text)) {
         ESP_LOGI(TAG, "NDEF Text (%s):", text.utf16 ? "UTF-16" : "UTF-8");
-        if (text.lang_len > 0 && text.lang) {
+        if (text.lang_len > 0 && text.lang != NULL) {
           log_str("Lang:", text.lang, text.lang_len);
         }
-        if (text.text_len > 0 && text.text) {
+        if (text.text_len > 0 && text.text != NULL) {
           log_str("Text:", text.text, text.text_len);
         }
       }
