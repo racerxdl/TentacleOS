@@ -26,6 +26,7 @@
 #include "bq25896.h"
 #include "led_control.h"
 #include "buttons_gpio.h"
+#include "ys_rfid2.h"
 #include "bridge_manager.h"
 #include "storage_init.h"
 #include "storage_assets.h"
@@ -83,6 +84,7 @@ void kernel_init(void) {
   cc1101_init();
   bridge_manager_init();
   buttons_init();
+  ys_rfid2_init(NULL);
 
   // 6. Display + LVGL + UI
   st7789_init();

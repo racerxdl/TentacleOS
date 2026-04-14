@@ -13,9 +13,10 @@
 # limitations under the License.
 
 file(GLOB_RECURSE ST25R3916_SRCS "st25r3916/*.c")
+file(GLOB_RECURSE YS_RFID2_SRCS "ys_rfid2/*.c")
 
 
-idf_component_register(SRCS 
+idf_component_register(SRCS
   "bq25896/bq25896.c"
   "cc1101/cc1101.c"
   "st7789/st7789.c"
@@ -26,8 +27,9 @@ idf_component_register(SRCS
   "buttons_gpio/buttons_gpio.c"
   "spi_bridge_phy/spi_bridge_phy.c"
   ${ST25R3916_SRCS}
+  ${YS_RFID2_SRCS}
 
-  INCLUDE_DIRS 
+  INCLUDE_DIRS
   "bq25896/include"
   "cc1101/include"
   "st7789/include"
@@ -40,8 +42,10 @@ idf_component_register(SRCS
   "spi_bridge_phy/include"
   "st25r3916/include"
   "st25r3916/hal/include"
+  "ys_rfid2/include"
+  "ys_rfid2/hal/include"
 
-  REQUIRES 
+  REQUIRES
   driver
   Service
   esp_lcd

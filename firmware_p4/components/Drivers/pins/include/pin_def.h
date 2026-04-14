@@ -80,6 +80,11 @@ extern "C" {
 #define GPIO_C5_RESET_PIN   48
 #define GPIO_C5_BOOT_PIN    33
 
+// YS-RFID2 125kHz RFID Reader (UART)
+// TODO: placeholder pins — definir com base no schematic do board
+#define GPIO_RFID_UART_TX_PIN 24
+#define GPIO_RFID_UART_RX_PIN 25
+
 #ifdef __cplusplus
 }
 #endif
