@@ -1050,3 +1050,6 @@ dependencies.lock
 
 !components/Applications/
 !components/Applications/**
+
+# Claude Code
+CLAUDE.md
