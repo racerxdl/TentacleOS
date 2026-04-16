@@ -20,10 +20,10 @@
 
 static const char *TAG = "RFID_PARSER";
 
-#define PARSER_LINE_LEN     64
-#define PARSER_PREFIX       "card number: "
-#define PARSER_PREFIX_LEN   13
-#define PARSER_DELIMITER    '@'
+#define PARSER_LINE_LEN   64
+#define PARSER_PREFIX     "card number: "
+#define PARSER_PREFIX_LEN 13
+#define PARSER_DELIMITER  '@'
 
 static char s_line_buf[PARSER_LINE_LEN];
 static int s_line_pos = 0;

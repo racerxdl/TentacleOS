@@ -23,7 +23,7 @@ extern "C" {
 #include <stdint.h>
 
 #define YS_RFID2_CARD_ID_LEN  10
-#define YS_RFID2_RAW_DATA_LEN  5
+#define YS_RFID2_RAW_DATA_LEN 5
 
 typedef enum {
   YS_RFID2_STATE_UNINITIALIZED = 0,

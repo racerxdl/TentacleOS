@@ -29,12 +29,12 @@
 
 static const char *TAG = "YS_RFID2";
 
-#define RFID_TASK_STACK_SIZE  4096
-#define RFID_TASK_PRIORITY    5
-#define RFID_READ_TIMEOUT_MS  100
-#define RFID_DEFAULT_BAUD     9600
-#define RFID_DEFAULT_DEBOUNCE_MS    1000
-#define RFID_DEFAULT_REMOVAL_MS     2000
+#define RFID_TASK_STACK_SIZE     4096
+#define RFID_TASK_PRIORITY       5
+#define RFID_READ_TIMEOUT_MS     100
+#define RFID_DEFAULT_BAUD        9600
+#define RFID_DEFAULT_DEBOUNCE_MS 1000
+#define RFID_DEFAULT_REMOVAL_MS  2000
 
 typedef struct {
   ys_rfid2_config_t config;
@@ -103,8 +103,8 @@ esp_err_t ys_rfid2_init(const ys_rfid2_config_t *config) {
   s_rfid.state = YS_RFID2_STATE_IDLE;
   s_rfid.has_last_card = false;
 
-  ESP_LOGI(TAG, "Initialized — port: %d, baud: %d",
-      s_rfid.config.uart_port, s_rfid.config.baud_rate);
+  ESP_LOGI(
+      TAG, "Initialized — port: %d, baud: %d", s_rfid.config.uart_port, s_rfid.config.baud_rate);
 
   return ESP_OK;
 }
@@ -149,8 +149,7 @@ esp_err_t ys_rfid2_start(ys_rfid2_event_cb_t cb, void *ctx) {
   ys_rfid2_hal_uart_flush();
 
   BaseType_t ret = xTaskCreate(
-      reader_task, "ys_rfid2", RFID_TASK_STACK_SIZE,
-      NULL, RFID_TASK_PRIORITY, &s_rfid.task);
+      reader_task, "ys_rfid2", RFID_TASK_STACK_SIZE, NULL, RFID_TASK_PRIORITY, &s_rfid.task);
 
   if (ret != pdPASS) {
     ESP_LOGE(TAG, "Failed to create reader task");
@@ -237,11 +236,10 @@ static void reader_task(void *pvParameters) {
 static void handle_card_detected(const ys_rfid2_raw_data_t *raw, int64_t now_ms) {
   xSemaphoreTake(s_rfid.mutex, portMAX_DELAY);
 
-  bool is_same = s_rfid.has_last_card &&
-      (strcmp(s_rfid.last_event.raw.id_str, raw->id_str) == 0);
+  bool is_same = s_rfid.has_last_card && (strcmp(s_rfid.last_event.raw.id_str, raw->id_str) == 0);
 
-  bool is_debounced = is_same &&
-      (now_ms - s_rfid.last_card_time_ms < (int64_t)s_rfid.config.debounce_ms);
+  bool is_debounced =
+      is_same && (now_ms - s_rfid.last_card_time_ms < (int64_t)s_rfid.config.debounce_ms);
 
   if (is_debounced) {
     s_rfid.last_card_time_ms = now_ms;
