@@ -27,8 +27,7 @@ static const char *TAG = "PROTO_NORALSY";
 #define NORALSY_BITS        40
 #define NORALSY_CUSTOMER_ID 0x0B
 
-static bool protocol_noralsy_decode(const ys_rfid2_raw_data_t *raw,
-                                    rfid_decoded_data_t *out_data) {
+static bool protocol_noralsy_decode(const ys_rfid2_raw_data_t *raw, rfid_decoded_data_t *out_data) {
   if (raw->bit_count != 40) {
     return false;
   }

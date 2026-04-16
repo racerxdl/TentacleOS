@@ -70,8 +70,7 @@ static bool protocol_gallagher_decode(const ys_rfid2_raw_data_t *raw,
   out_data->bit_count = GALLAGHER_BITS;
   out_data->raw_value = full_value;
 
-  ESP_LOGD(TAG, "Region: %u, Card: %u, Issue: %u",
-      region, card_number, issue_level);
+  ESP_LOGD(TAG, "Region: %u, Card: %u, Issue: %u", region, card_number, issue_level);
   return true;
 }
 

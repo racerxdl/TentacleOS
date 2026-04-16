@@ -32,8 +32,7 @@ static const char *TAG = "PROTO_PARADOX";
 #define PARADOX_CARD_SHIFT  8
 #define PARADOX_CARD_MASK   0xFFFF
 
-static bool protocol_paradox_decode(const ys_rfid2_raw_data_t *raw,
-                                    rfid_decoded_data_t *out_data) {
+static bool protocol_paradox_decode(const ys_rfid2_raw_data_t *raw, rfid_decoded_data_t *out_data) {
   if (raw->bit_count != 40) {
     return false;
   }
@@ -56,8 +55,7 @@ static bool protocol_paradox_decode(const ys_rfid2_raw_data_t *raw,
   out_data->bit_count = PARADOX_BITS;
   out_data->raw_value = full_value;
 
-  ESP_LOGD(TAG, "FC: %u, Card: %lu",
-      out_data->facility_code, (unsigned long)out_data->card_number);
+  ESP_LOGD(TAG, "FC: %u, Card: %lu", out_data->facility_code, (unsigned long)out_data->card_number);
   return true;
 }
 

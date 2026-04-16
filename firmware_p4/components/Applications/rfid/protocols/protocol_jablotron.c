@@ -72,8 +72,7 @@ static bool protocol_jablotron_decode(const ys_rfid2_raw_data_t *raw,
   out_data->bit_count = JABLOTRON_BITS;
   out_data->raw_value = wiegand;
 
-  ESP_LOGD(TAG, "FC: %u, Card: %lu",
-      out_data->facility_code, (unsigned long)out_data->card_number);
+  ESP_LOGD(TAG, "FC: %u, Card: %lu", out_data->facility_code, (unsigned long)out_data->card_number);
   return true;
 }
 

@@ -42,8 +42,7 @@ static int count_bits(uint32_t value, int from_bit, int to_bit) {
   return count;
 }
 
-static bool protocol_keri_decode(const ys_rfid2_raw_data_t *raw,
-                                 rfid_decoded_data_t *out_data) {
+static bool protocol_keri_decode(const ys_rfid2_raw_data_t *raw, rfid_decoded_data_t *out_data) {
   if (raw->bit_count != 40) {
     return false;
   }
@@ -72,8 +71,7 @@ static bool protocol_keri_decode(const ys_rfid2_raw_data_t *raw,
   out_data->bit_count = KERI_BITS;
   out_data->raw_value = wiegand;
 
-  ESP_LOGD(TAG, "FC: %u, Card: %lu",
-      out_data->facility_code, (unsigned long)out_data->card_number);
+  ESP_LOGD(TAG, "FC: %u, Card: %lu", out_data->facility_code, (unsigned long)out_data->card_number);
   return true;
 }
 

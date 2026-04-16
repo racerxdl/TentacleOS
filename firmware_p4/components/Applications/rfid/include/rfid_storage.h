@@ -28,7 +28,7 @@ extern "C" {
 #include "rfid_types.h"
 
 #define RFID_STORAGE_MAX_ENTRIES 32
-#define RFID_STORAGE_NAME_MAX   32
+#define RFID_STORAGE_NAME_MAX    32
 
 /**
  * @brief Full RFID card entry for save/load.

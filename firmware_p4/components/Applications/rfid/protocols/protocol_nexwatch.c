@@ -40,9 +40,8 @@ static bool protocol_nexwatch_decode(const ys_rfid2_raw_data_t *raw,
   }
 
   uint8_t facility_code = raw->data[1];
-  uint32_t card_number = ((uint32_t)raw->data[2] << 16) |
-                          ((uint32_t)raw->data[3] << 8) |
-                          raw->data[4];
+  uint32_t card_number =
+      ((uint32_t)raw->data[2] << 16) | ((uint32_t)raw->data[3] << 8) | raw->data[4];
 
   uint64_t full_value = 0;
   for (int i = 0; i < YS_RFID2_RAW_DATA_LEN; i++) {
@@ -55,8 +54,7 @@ static bool protocol_nexwatch_decode(const ys_rfid2_raw_data_t *raw,
   out_data->bit_count = NEXWATCH_BITS;
   out_data->raw_value = full_value;
 
-  ESP_LOGD(TAG, "FC: %u, Card: %lu",
-      facility_code, (unsigned long)card_number);
+  ESP_LOGD(TAG, "FC: %u, Card: %lu", facility_code, (unsigned long)card_number);
   return true;
 }
 

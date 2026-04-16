@@ -27,8 +27,7 @@ static const char *TAG = "PROTO_KANTECH";
 #define KANTECH_BITS        40
 #define KANTECH_CUSTOMER_ID 0x08
 
-static bool protocol_kantech_decode(const ys_rfid2_raw_data_t *raw,
-                                    rfid_decoded_data_t *out_data) {
+static bool protocol_kantech_decode(const ys_rfid2_raw_data_t *raw, rfid_decoded_data_t *out_data) {
   if (raw->bit_count != 40) {
     return false;
   }
