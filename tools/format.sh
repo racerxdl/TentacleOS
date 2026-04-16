@@ -14,24 +14,24 @@ EXCLUDE_DIRS=(
   "build"
 )
 
-EXCLUDE_ARGS=""
+EXCLUDE_ARGS=()
 for dir in "${EXCLUDE_DIRS[@]}"; do
-  EXCLUDE_ARGS="$EXCLUDE_ARGS -not -path */$dir/*"
+  EXCLUDE_ARGS+=(-not -path "*/$dir/*")
 done
 
-EXISTING_TARGETS=""
+EXISTING_TARGETS=()
 for target in "${TARGETS[@]}"; do
   if [ -d "$target" ]; then
-    EXISTING_TARGETS="$EXISTING_TARGETS $target"
+    EXISTING_TARGETS+=("$target")
   fi
 done
 
-if [ -z "$EXISTING_TARGETS" ]; then
+if [ ${#EXISTING_TARGETS[@]} -eq 0 ]; then
   echo "No target directories found."
   exit 0
 fi
 
-FILES=$(find $EXISTING_TARGETS \( -name "*.c" -o -name "*.h" \) $EXCLUDE_ARGS)
+FILES=$(find "${EXISTING_TARGETS[@]}" \( -name "*.c" -o -name "*.h" \) "${EXCLUDE_ARGS[@]}")
 
 if [ -z "$FILES" ]; then
   echo "No files to format."
