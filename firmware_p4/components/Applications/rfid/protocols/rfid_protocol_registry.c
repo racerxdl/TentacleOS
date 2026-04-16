@@ -27,6 +27,17 @@ extern rfid_protocol_t protocol_hid_corp;
 extern rfid_protocol_t protocol_indala;
 extern rfid_protocol_t protocol_awid;
 extern rfid_protocol_t protocol_fdxb;
+extern rfid_protocol_t protocol_viking;
+extern rfid_protocol_t protocol_pyramid;
+extern rfid_protocol_t protocol_keri;
+extern rfid_protocol_t protocol_pac_stanley;
+extern rfid_protocol_t protocol_paradox;
+extern rfid_protocol_t protocol_jablotron;
+extern rfid_protocol_t protocol_kantech;
+extern rfid_protocol_t protocol_gallagher;
+extern rfid_protocol_t protocol_nexwatch;
+extern rfid_protocol_t protocol_noralsy;
+extern rfid_protocol_t protocol_securakey;
 
 static const rfid_protocol_t *REGISTERED_PROTOCOLS[] = {
     &protocol_em4100,
@@ -35,6 +46,17 @@ static const rfid_protocol_t *REGISTERED_PROTOCOLS[] = {
     &protocol_indala,
     &protocol_awid,
     &protocol_fdxb,
+    &protocol_viking,
+    &protocol_pyramid,
+    &protocol_keri,
+    &protocol_pac_stanley,
+    &protocol_paradox,
+    &protocol_jablotron,
+    &protocol_kantech,
+    &protocol_gallagher,
+    &protocol_nexwatch,
+    &protocol_noralsy,
+    &protocol_securakey,
 };
 
 #define REGISTERED_PROTOCOLS_COUNT (sizeof(REGISTERED_PROTOCOLS) / sizeof(REGISTERED_PROTOCOLS[0]))
