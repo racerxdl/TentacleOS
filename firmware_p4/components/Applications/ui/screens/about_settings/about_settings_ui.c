@@ -73,7 +73,7 @@ void ui_about_settings_open(void) {
   lv_obj_set_style_text_color(version, current_theme.text_main, 0);
 
   lv_obj_t *hardware = lv_label_create(info_box);
-  lv_label_set_text(hardware, "HW: ESP32-S3");
+  lv_label_set_text(hardware, "HW: ESP32-P4");
   lv_obj_set_style_text_color(hardware, current_theme.text_main, 0);
 
   lv_obj_t *build = lv_label_create(info_box);
