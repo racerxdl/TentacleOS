@@ -46,7 +46,8 @@ void mt_mod_admin_init(uint32_t node_num);
  *   - set_fixed_position, remove_fixed_position
  *   - begin_edit_settings, commit_edit_settings
  */
-void mt_mod_admin_on_received(const mt_packet_meta_t *meta, const uint8_t *payload, uint16_t len);
+void mt_mod_admin_on_received(const mt_packet_meta_t *meta,
+                               const uint8_t *payload, uint16_t len);
 
 /**
  * @brief Periodic tick. Triggers deferred reboot if scheduled.
