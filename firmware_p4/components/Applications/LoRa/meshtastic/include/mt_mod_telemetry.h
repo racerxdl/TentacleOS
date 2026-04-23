@@ -34,8 +34,7 @@ void mt_mod_telemetry_init(uint32_t node_num);
  * Replies with our DeviceMetrics if want_response is set.
  */
 void mt_mod_telemetry_on_received(const mt_packet_meta_t *meta,
-                                  const uint8_t *payload,
-                                  uint16_t len);
+                                   const uint8_t *payload, uint16_t len);
 
 /**
  * @brief Periodic tick. Broadcasts DeviceMetrics every 30 min.

@@ -31,21 +31,21 @@ extern "C" {
  * Matches Channel.Role in the official protobuf.
  */
 typedef enum {
-  MT_CH_DISABLED = 0,
-  MT_CH_PRIMARY = 1,
-  MT_CH_SECONDARY = 2,
-  MT_CH_COUNT
+    MT_CH_DISABLED  = 0,
+    MT_CH_PRIMARY   = 1,
+    MT_CH_SECONDARY = 2,
+    MT_CH_COUNT
 } mt_channel_role_t;
 
 /**
  * @brief Persisted state of a single channel slot.
  */
 typedef struct {
-  bool is_used;
-  mt_channel_role_t role;
-  uint8_t psk[MT_PSK_SIZE];
-  uint8_t hash;
-  char name[32];
+    bool               is_used;
+    mt_channel_role_t  role;
+    uint8_t            psk[MT_PSK_SIZE];
+    uint8_t            hash;
+    char               name[32];
 } mt_channel_t;
 
 /**
@@ -72,7 +72,8 @@ const mt_channel_t *mt_channel_get(uint8_t idx);
  * @param psk   Optional 16-byte PSK. May be NULL to keep the existing PSK.
  * @param role  New role. MT_CH_DISABLED clears is_used.
  */
-void mt_channel_set(uint8_t idx, const char *name, const uint8_t *psk, mt_channel_role_t role);
+void mt_channel_set(uint8_t idx, const char *name, const uint8_t *psk,
+                     mt_channel_role_t role);
 
 /**
  * @brief Disable a channel slot and persist to NVS.
@@ -87,7 +88,8 @@ void mt_channel_disable(uint8_t idx);
  * @param[out] out_psk  PSK pointer on hit. May be NULL.
  * @return true if a matching enabled channel was found.
  */
-bool mt_channel_lookup_by_hash(uint8_t hash, uint8_t *out_idx, const uint8_t **out_psk);
+bool mt_channel_lookup_by_hash(uint8_t hash, uint8_t *out_idx,
+                                const uint8_t **out_psk);
 
 /**
  * @brief Return the hash of the primary channel.

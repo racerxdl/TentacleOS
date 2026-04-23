@@ -1,0 +1,131 @@
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+
+#ifndef MESHTASTIC_NODEDB_H
+#define MESHTASTIC_NODEDB_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <stdint.h>
+#include <stdbool.h>
+
+#include "esp_err.h"
+
+#define MT_NODEDB_MAX_NODES       64
+#define MT_NODEDB_LONG_NAME_LEN   32
+#define MT_NODEDB_SHORT_NAME_LEN  8
+#define MT_NODEDB_ID_LEN          16
+
+/**
+ * @brief In-memory entry for a known node (peer).
+ *
+ * Campos correspondem ao NodeInfo/User protos do Meshtastic. Somente
+ * num, long_name e short_name sao obrigatorios; o resto e populado
+ * conforme chegam updates.
+ */
+typedef struct {
+    uint32_t num;                                    /**< Node number (from field) */
+    uint32_t last_heard;                             /**< Unix seconds (approx) */
+    char     id[MT_NODEDB_ID_LEN];                   /**< "!xxxxxxxx" */
+    char     long_name[MT_NODEDB_LONG_NAME_LEN];
+    char     short_name[MT_NODEDB_SHORT_NAME_LEN];
+    uint8_t  hw_model;
+    uint8_t  role;
+    float    snr;
+    int16_t  rssi;
+    uint8_t  hops_away;
+    bool     is_favorite;
+    bool     is_ignored;
+    bool     is_muted;
+    bool     via_mqtt;
+    bool     in_use;
+} mt_node_entry_t;
+
+/**
+ * @brief Initialize the NodeDB. Loads persisted entries from NVS.
+ *
+ * Deve ser chamado uma vez no boot, depois do mt_nvs_init.
+ */
+esp_err_t mt_nodedb_init(void);
+
+/**
+ * @brief Insere ou atualiza um no a partir de um User proto.
+ *
+ * Se o node nao existe ainda, aloca slot. Se ja existe, faz merge
+ * (mantem flags sticky como is_favorite/is_ignored/is_muted).
+ *
+ * @param num         Node number.
+ * @param user_bytes  Proto User serializado.
+ * @param user_len    Bytes.
+ * @param snr         SNR do ultimo pacote.
+ * @param rssi        RSSI do ultimo pacote.
+ * @param hops_away   Hops ate este no (0 = vizinho direto).
+ * @return true se houve mudanca (novo no ou campos alterados).
+ */
+bool mt_nodedb_upsert_from_user(uint32_t num,
+                                 const uint8_t *user_bytes,
+                                 uint16_t user_len,
+                                 float snr,
+                                 int16_t rssi,
+                                 uint8_t hops_away);
+
+/**
+ * @brief Busca entrada por node number.
+ * @return Ponteiro pra entrada (read-only) ou NULL se nao existe.
+ */
+const mt_node_entry_t *mt_nodedb_get(uint32_t num);
+
+/**
+ * @brief Busca entrada por indice (0..count-1).
+ *
+ * Usado pelo PhoneAPI no STATE_SEND_OTHER_NODEINFOS.
+ * @return Ponteiro ou NULL se fora do range.
+ */
+const mt_node_entry_t *mt_nodedb_get_by_index(uint16_t idx);
+
+/**
+ * @brief Numero de entradas ativas.
+ */
+uint16_t mt_nodedb_count(void);
+
+/**
+ * @brief Marca/desmarca um no como favorito. Persiste em NVS.
+ * @return true se o no existe e foi atualizado.
+ */
+bool mt_nodedb_set_favorite(uint32_t num, bool fav);
+
+/**
+ * @brief Marca/desmarca como ignorado. Persiste em NVS.
+ */
+bool mt_nodedb_set_ignored(uint32_t num, bool ign);
+
+/**
+ * @brief Alterna estado muted. Persiste em NVS.
+ */
+bool mt_nodedb_toggle_muted(uint32_t num);
+
+/**
+ * @brief Remove um no por node number. Persiste em NVS.
+ */
+bool mt_nodedb_remove(uint32_t num);
+
+/**
+ * @brief Forca persistencia imediata em NVS.
+ *
+ * Em condicoes normais os mutadores acima ja persistem; usar apenas
+ * se precisar gravar pending state (ex: shutdown).
+ */
+esp_err_t mt_nodedb_save(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // MESHTASTIC_NODEDB_H
