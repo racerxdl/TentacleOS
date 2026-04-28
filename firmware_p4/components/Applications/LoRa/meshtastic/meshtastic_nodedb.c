@@ -125,6 +125,16 @@ static void parse_user_into(mt_node_entry_t *e, const uint8_t *buf, uint16_t len
                     memcpy(e->short_name, &buf[i], copy);
                     e->short_name[copy] = 0;
                     break;
+                case 8:
+                    if (length == MT_NODEDB_PUBKEY_LEN) {
+                        memcpy(e->public_key, &buf[i], MT_NODEDB_PUBKEY_LEN);
+                        bool all_zero = true;
+                        for (int k = 0; k < MT_NODEDB_PUBKEY_LEN; k++) {
+                            if (e->public_key[k] != 0) { all_zero = false; break; }
+                        }
+                        e->has_public_key = !all_zero;
+                    }
+                    break;
                 default:
                     break;
             }
@@ -152,13 +162,19 @@ esp_err_t mt_nodedb_init(void)
     s_count = 0;
 
     int n = mt_nvs_get_blob(MT_NODEDB_NVS_KEY, s_nodes, sizeof(s_nodes));
-    if (n > 0 && (size_t)n <= sizeof(s_nodes)) {
+    if (n == (int)sizeof(s_nodes)) {
         for (int i = 0; i < MT_NODEDB_MAX_NODES; i++) {
             if (s_nodes[i].in_use) s_count++;
         }
         ESP_LOGI(TAG, "Loaded %u entries from NVS", s_count);
     } else {
-        ESP_LOGI(TAG, "NVS empty - starting clean DB");
+        if (n > 0) {
+            ESP_LOGW(TAG, "NVS blob size mismatch (%d != %u), reinitializing",
+                     n, (unsigned)sizeof(s_nodes));
+            memset(s_nodes, 0, sizeof(s_nodes));
+        } else {
+            ESP_LOGI(TAG, "NVS empty - starting clean DB");
+        }
     }
     return ESP_OK;
 }
@@ -248,6 +264,40 @@ bool mt_nodedb_toggle_muted(uint32_t num)
              (unsigned long)num, s_nodes[idx].is_muted ? "yes" : "no");
     mt_nodedb_save();
     return true;
+}
+
+void mt_nodedb_learn_next_hop(uint32_t num, uint8_t relay_byte)
+{
+    if (relay_byte == 0) return;
+    int idx = find_slot(num);
+    if (idx < 0) return;
+    if (s_nodes[idx].next_hop != relay_byte) {
+        ESP_LOGI(TAG, "next_hop 0x%08lX -> 0x%02x (was 0x%02x)",
+                 (unsigned long)num, relay_byte, s_nodes[idx].next_hop);
+        s_nodes[idx].next_hop = relay_byte;
+    }
+    s_nodes[idx].next_hop_failures = 0;
+}
+
+uint8_t mt_nodedb_get_next_hop(uint32_t num)
+{
+    int idx = find_slot(num);
+    if (idx < 0) return 0;
+    return s_nodes[idx].next_hop;
+}
+
+void mt_nodedb_record_next_hop_failure(uint32_t num)
+{
+    int idx = find_slot(num);
+    if (idx < 0) return;
+    s_nodes[idx].next_hop_failures++;
+    if (s_nodes[idx].next_hop_failures >= MT_NODEDB_NEXTHOP_MAX_FAILURES) {
+        ESP_LOGW(TAG, "next_hop 0x%02x for 0x%08lX failed %u times - clearing (fallback to flood)",
+                 s_nodes[idx].next_hop, (unsigned long)num,
+                 s_nodes[idx].next_hop_failures);
+        s_nodes[idx].next_hop = 0;
+        s_nodes[idx].next_hop_failures = 0;
+    }
 }
 
 bool mt_nodedb_remove(uint32_t num)

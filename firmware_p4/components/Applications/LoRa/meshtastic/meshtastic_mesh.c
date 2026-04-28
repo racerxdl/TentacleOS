@@ -37,6 +37,9 @@
 
 #include "mt_modules.h"
 #include "meshtastic_channels.h"
+#include "meshtastic_crypto_pki.h"
+#include "meshtastic_nodedb.h"
+#include "meshtastic_pki.h"
 #include "meshtastic_pkt_history.h"
 #include "meshtastic_roles.h"
 
@@ -186,7 +189,7 @@ static void mesh_crypt_with_psk(const uint8_t *psk,
                                   uint32_t from_node, uint32_t packet_id,
                                   uint8_t *data, size_t len)
 {
-    if (!psk) psk = mt_channel_primary_psk();
+    if (psk == NULL) psk = mt_channel_primary_psk();
 
 
     uint8_t nonce[16];
@@ -230,7 +233,7 @@ static void dedup_add(uint32_t from, uint32_t id)
 static bool tx_queue_push(const uint8_t *buf, uint16_t len,
                           uint8_t priority, uint32_t delay_ms)
 {
-    if (!buf || len == 0 || len > 256) return false;
+    if (buf == NULL || len == 0 || len > 256) return false;
     if (xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(50)) != pdTRUE) {
         return false;
     }
@@ -301,6 +304,17 @@ static int tx_queue_pop_highest(mesh_tx_entry_t *out, uint32_t now_ms)
     s_tx_queue[best].valid = false;
     xSemaphoreGive(s_tx_mutex);
     return 1;
+}
+
+static int tx_queue_pending(void)
+{
+    if (xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(10)) != pdTRUE) return 0;
+    int count = 0;
+    for (int i = 0; i < MESH_TX_QUEUE_SIZE; i++) {
+        if (s_tx_queue[i].valid) count++;
+    }
+    xSemaphoreGive(s_tx_mutex);
+    return count;
 }
 
 
@@ -415,6 +429,7 @@ static void retry_tick(uint32_t now_ms)
             mesh_retry_entry_t snapshot = s_retry[i];
             s_retry[i].in_use = false;
             xSemaphoreGive(s_retry_mutex);
+            mt_nodedb_record_next_hop_failure(snapshot.dest_node);
             retry_emit_nak(&snapshot, MT_ROUTING_ERROR_MAX_RETRANSMIT);
             if (xSemaphoreTake(s_retry_mutex, pdMS_TO_TICKS(20)) != pdTRUE) return;
             continue;
@@ -436,6 +451,46 @@ static void retry_tick(uint32_t now_ms)
     xSemaphoreGive(s_retry_mutex);
 }
 
+
+#define MT_TRAFFIC_MGMT_SLOTS        16
+#define MT_TRAFFIC_MGMT_WINDOW_MS    60000
+#define MT_TRAFFIC_MGMT_MAX_PKT      30
+
+typedef struct {
+    uint32_t node_num;
+    uint32_t window_start_ms;
+    uint16_t count;
+} mt_traffic_slot_t;
+
+static mt_traffic_slot_t s_traffic[MT_TRAFFIC_MGMT_SLOTS] = {0};
+
+static bool traffic_mgmt_should_drop(uint32_t from)
+{
+    if (from == 0 || from == 0xFFFFFFFF) return false;
+    uint32_t now_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+
+    int slot = -1;
+    int free_slot = -1;
+    int oldest_slot = 0;
+    uint32_t oldest_age = 0;
+    for (int i = 0; i < MT_TRAFFIC_MGMT_SLOTS; i++) {
+        if (s_traffic[i].node_num == from) { slot = i; break; }
+        if (s_traffic[i].node_num == 0 && free_slot < 0) free_slot = i;
+        uint32_t age = now_ms - s_traffic[i].window_start_ms;
+        if (age > oldest_age) { oldest_age = age; oldest_slot = i; }
+    }
+    if (slot < 0) slot = (free_slot >= 0) ? free_slot : oldest_slot;
+
+    if (s_traffic[slot].node_num != from ||
+        (now_ms - s_traffic[slot].window_start_ms) > MT_TRAFFIC_MGMT_WINDOW_MS) {
+        s_traffic[slot].node_num = from;
+        s_traffic[slot].window_start_ms = now_ms;
+        s_traffic[slot].count = 0;
+    }
+
+    s_traffic[slot].count++;
+    return s_traffic[slot].count > MT_TRAFFIC_MGMT_MAX_PKT;
+}
 
 static void process_rx_packet(const sx1262_packet_t *pkt)
 {
@@ -469,11 +524,21 @@ static void process_rx_packet(const sx1262_packet_t *pkt)
         return;
     }
 
+    if (traffic_mgmt_should_drop(hdr.from)) {
+        ESP_LOGW(TAG, "TrafficMgmt: dropping pkt from 0x%08lX (rate-limited)",
+                 (unsigned long)hdr.from);
+        return;
+    }
+
 
     bool was_upgraded = false;
     bool seen_before = mt_pkt_history_check_add(hdr.from, hdr.id,
                                                   hop_limit, hdr.relay_node,
                                                   &was_upgraded);
+
+    if (hdr.relay_node != 0) {
+        mt_nodedb_learn_next_hop(hdr.from, hdr.relay_node);
+    }
 
     if (seen_before && !was_upgraded) {
 
@@ -494,16 +559,35 @@ static void process_rx_packet(const sx1262_packet_t *pkt)
     }
 
 
-    const uint8_t *psk = NULL;
-    uint8_t ch_idx = 0;
-    if (!mt_channel_lookup_by_hash(hdr.channel, &ch_idx, &psk)) {
+    uint8_t decrypted[MT_MAX_PAYLOAD];
+    uint16_t dec_len = payload_len;
+    bool pki_decrypted = false;
 
-        psk = mt_channel_primary_psk();
+    if (hdr.channel == 0 && hdr.to == s_node_num && hdr.to != 0xFFFFFFFF &&
+        payload_len > MT_PKI_OVERHEAD) {
+        const mt_node_entry_t *sender = mt_nodedb_get(hdr.from);
+        if (sender != NULL && sender->has_public_key) {
+            if (mt_pki_decrypt_curve25519(sender->public_key, hdr.from, hdr.id,
+                                            pkt->buf + MT_HEADER_SIZE,
+                                            payload_len, decrypted)) {
+                pki_decrypted = true;
+                dec_len = payload_len - MT_PKI_OVERHEAD;
+                ESP_LOGI(TAG, "RX PKI decrypt OK (pkt=0x%08lX from 0x%08lX)",
+                         (unsigned long)hdr.id, (unsigned long)hdr.from);
+            }
+        }
     }
 
-    uint8_t decrypted[MT_MAX_PAYLOAD];
-    memcpy(decrypted, pkt->buf + MT_HEADER_SIZE, payload_len);
-    mesh_crypt_with_psk(psk, hdr.from, hdr.id, decrypted, payload_len);
+    const uint8_t *psk = NULL;
+    uint8_t ch_idx = 0;
+    if (!pki_decrypted) {
+        if (!mt_channel_lookup_by_hash(hdr.channel, &ch_idx, &psk)) {
+            psk = mt_channel_primary_psk();
+        }
+        memcpy(decrypted, pkt->buf + MT_HEADER_SIZE, payload_len);
+        mesh_crypt_with_psk(psk, hdr.from, hdr.id, decrypted, payload_len);
+    }
+    payload_len = dec_len;
 
 
     mt_packet_meta_t meta = {
@@ -544,8 +628,18 @@ static void process_rx_packet(const sx1262_packet_t *pkt)
         mp_len += enc_field_varint(&mp[mp_len], 12, (uint64_t)(int64_t)pkt->rssi_pkt_dbm);
         mp_len += enc_field_varint(&mp[mp_len], 15, hop_start);
 
+        if (pki_decrypted) {
+            const mt_node_entry_t *sender = mt_nodedb_get(hdr.from);
+            if (sender != NULL && sender->has_public_key) {
+                mp_len += enc_field_bytes(&mp[mp_len], 16,
+                                            sender->public_key, MT_NODEDB_PUBKEY_LEN);
+            }
+            mp_len += enc_field_varint(&mp[mp_len], 17, 1);
+        }
+
         phoneapi_push_packet(mp, mp_len);
-        ESP_LOGI(TAG, "RX -> phoneapi: %d bytes MeshPacket", mp_len);
+        ESP_LOGI(TAG, "RX -> phoneapi: %d bytes MeshPacket%s",
+                 mp_len, pki_decrypted ? " [PKI]" : "");
     }
 #else
     ESP_LOGI(TAG, "RX (headless): from=0x%08lX, %d bytes decodificados",
@@ -575,34 +669,46 @@ static void process_rx_packet(const sx1262_packet_t *pkt)
     bool is_rebroadcaster = mt_role_is_rebroadcaster(my_role);
     bool mode_allows = mt_rebr_should_forward(my_mode, portnum_hint, true);
 
-    if (hdr.to == 0xFFFFFFFF && hop_limit > 0 && is_rebroadcaster && mode_allows) {
+    uint8_t our_byte = (uint8_t)(s_node_num & 0xFF);
+    bool is_broadcast_rebr = (hdr.to == 0xFFFFFFFF);
+    bool is_unicast_relay  = (hdr.to != 0xFFFFFFFF && hdr.to != s_node_num);
+    bool unicast_gate_ok   = !is_unicast_relay ||
+                              hdr.next_hop == 0 || hdr.next_hop == our_byte;
+
+    if ((is_broadcast_rebr || is_unicast_relay) && unicast_gate_ok &&
+        hop_limit > 0 && is_rebroadcaster && mode_allows) {
         uint8_t new_flags = (hdr.flags & ~MT_HOP_LIMIT_MASK) |
                             ((hop_limit - 1) & MT_HOP_LIMIT_MASK);
 
         uint8_t rebroadcast[256];
         mesh_packet_header_t new_hdr = hdr;
         new_hdr.flags = new_flags;
-        new_hdr.relay_node = (uint8_t)(s_node_num & 0xFF);
+        new_hdr.relay_node = our_byte;
         memcpy(rebroadcast, &new_hdr, MT_HEADER_SIZE);
 
+        uint16_t src_len = pkt->len - MT_HEADER_SIZE;
+        memcpy(rebroadcast + MT_HEADER_SIZE,
+                pkt->buf + MT_HEADER_SIZE, src_len);
 
-        uint8_t re_payload[MT_MAX_PAYLOAD];
-        memcpy(re_payload, decrypted, payload_len);
-        mesh_crypt_with_psk(psk, hdr.from, hdr.id, re_payload, payload_len);
-        memcpy(rebroadcast + MT_HEADER_SIZE, re_payload, payload_len);
-
-
-        uint32_t backoff;
-        if (mt_role_is_late_rebroadcaster(my_role)) {
-            backoff = 300 + (esp_random() % 1200);
+        if (is_broadcast_rebr && tx_queue_pending() > 0) {
+            ESP_LOGI(TAG, "Rebroadcast skipped: own TX pending in queue");
         } else {
-            backoff = 20 + (esp_random() % 180);
-        }
+            uint32_t backoff;
+            if (mt_role_is_late_rebroadcaster(my_role)) {
+                backoff = 300 + (esp_random() % 1200);
+            } else if (is_broadcast_rebr) {
+                backoff = 2000 + (esp_random() % 3000);
+            } else {
+                backoff = 200 + (esp_random() % 600);
+            }
 
-        uint16_t total = MT_HEADER_SIZE + payload_len;
-        if (tx_queue_push(rebroadcast, total, MESH_PRIO_DEFAULT, backoff)) {
-            ESP_LOGI(TAG, "Rebroadcast enqueued: hop %d->%d, delay %lu ms",
-                     hop_limit, hop_limit - 1, (unsigned long)backoff);
+            uint16_t total = MT_HEADER_SIZE + src_len;
+            if (tx_queue_push(rebroadcast, total, MESH_PRIO_DEFAULT, backoff)) {
+                ESP_LOGI(TAG, "%s enqueued: hop %d->%d, delay %lu ms%s",
+                         is_broadcast_rebr ? "Rebroadcast" : "Unicast relay",
+                         hop_limit, hop_limit - 1, (unsigned long)backoff,
+                         (is_unicast_relay && hdr.next_hop == our_byte) ? " [NextHop]" : "");
+            }
         }
     }
 }
@@ -613,9 +719,11 @@ static uint32_t s_tx_pkt_id = 0;
 static uint16_t build_wire_packet(uint8_t *out, uint32_t to, uint8_t channel,
                                    uint8_t hop_limit,
                                    const uint8_t *payload, uint16_t payload_len,
-                                   uint32_t *out_pkt_id)
+                                   uint32_t *out_pkt_id,
+                                   const uint8_t *peer_pubkey)
 {
-    if (payload_len > MT_MAX_PAYLOAD) return 0;
+    uint16_t cipher_len = peer_pubkey ? payload_len + MT_PKI_OVERHEAD : payload_len;
+    if (cipher_len > MT_MAX_PAYLOAD) return 0;
 
     if (s_tx_pkt_id == 0) s_tx_pkt_id = esp_random();
     uint32_t pkt_id = s_tx_pkt_id++;
@@ -627,16 +735,28 @@ static uint16_t build_wire_packet(uint8_t *out, uint32_t to, uint8_t channel,
     hdr.id = pkt_id;
     hdr.flags = (hop_limit & MT_HOP_LIMIT_MASK) |
                 ((hop_limit << MT_HOP_START_SHIFT) & MT_HOP_START_MASK);
-    hdr.channel = channel;
+    hdr.channel = peer_pubkey ? 0 : channel;
     hdr.relay_node = (uint8_t)(s_node_num & 0xFF);
 
+    if (to != 0xFFFFFFFF && to != s_node_num) {
+        hdr.next_hop = mt_nodedb_get_next_hop(to);
+    }
+
     uint8_t encrypted[MT_MAX_PAYLOAD];
-    memcpy(encrypted, payload, payload_len);
-    mesh_crypt(s_node_num, pkt_id, encrypted, payload_len);
+    if (peer_pubkey) {
+        if (!mt_pki_encrypt_curve25519(peer_pubkey, s_node_num, pkt_id,
+                                         payload, payload_len, encrypted)) {
+            ESP_LOGW(TAG, "PKI encrypt failed, aborting tx");
+            return 0;
+        }
+    } else {
+        memcpy(encrypted, payload, payload_len);
+        mesh_crypt(s_node_num, pkt_id, encrypted, payload_len);
+    }
 
     memcpy(out, &hdr, MT_HEADER_SIZE);
-    memcpy(out + MT_HEADER_SIZE, encrypted, payload_len);
-    return MT_HEADER_SIZE + payload_len;
+    memcpy(out + MT_HEADER_SIZE, encrypted, cipher_len);
+    return MT_HEADER_SIZE + cipher_len;
 }
 
 
@@ -671,7 +791,7 @@ esp_err_t meshtastic_mesh_send_nodeinfo(void)
 
     uint8_t wire[256];
     uint32_t pkt_id;
-    uint16_t wire_len = build_wire_packet(wire, 0xFFFFFFFF, 0, 3, data, d_len, &pkt_id);
+    uint16_t wire_len = build_wire_packet(wire, 0xFFFFFFFF, 0, 3, data, d_len, &pkt_id, NULL);
     if (wire_len == 0) return ESP_ERR_INVALID_ARG;
 
 
@@ -693,15 +813,22 @@ esp_err_t meshtastic_mesh_send_text(const char *text, uint32_t to)
     d_len += enc_field_varint(&data[d_len], 1, 1);
     d_len += enc_field_bytes(&data[d_len], 2, (const uint8_t *)text, text_len);
 
+    const uint8_t *peer_pub = NULL;
+    if (to != 0xFFFFFFFF && to != s_node_num) {
+        const mt_node_entry_t *e = mt_nodedb_get(to);
+        if (e && e->has_public_key) peer_pub = e->public_key;
+    }
+
     uint8_t wire[256];
     uint32_t pkt_id;
-    uint16_t wire_len = build_wire_packet(wire, to, 0, 3, data, d_len, &pkt_id);
+    uint16_t wire_len = build_wire_packet(wire, to, 0, 3, data, d_len, &pkt_id, peer_pub);
     if (wire_len == 0) return ESP_ERR_INVALID_ARG;
 
     dedup_add(s_node_num, pkt_id);
 
-    ESP_LOGI(TAG, "Text enqueued: \"%s\" -> 0x%08lX id=0x%08lX",
-             text, (unsigned long)to, (unsigned long)pkt_id);
+    ESP_LOGI(TAG, "Text enqueued: \"%s\" -> 0x%08lX id=0x%08lX%s",
+             text, (unsigned long)to, (unsigned long)pkt_id,
+             peer_pub ? " [PKI]" : "");
     return tx_queue_push(wire, wire_len, MESH_PRIO_HIGH, 0) ? ESP_OK : ESP_FAIL;
 }
 
@@ -751,7 +878,8 @@ static uint8_t priority_for_portnum(uint32_t portnum)
 esp_err_t meshtastic_mesh_send_data(uint32_t to, uint8_t channel,
                                      uint8_t hop_limit, uint8_t portnum,
                                      const uint8_t *payload, uint16_t plen,
-                                     uint32_t request_id, bool want_ack)
+                                     uint32_t request_id, bool want_ack,
+                                     bool want_response)
 {
     if (plen > 200) return ESP_ERR_INVALID_SIZE;
 
@@ -760,6 +888,9 @@ esp_err_t meshtastic_mesh_send_data(uint32_t to, uint8_t channel,
     uint16_t d_len = 0;
     d_len += enc_field_varint(&data[d_len], 1, portnum);
     d_len += enc_field_bytes(&data[d_len], 2, payload, plen);
+    if (want_response) {
+        d_len += enc_field_varint(&data[d_len], 3, 1);
+    }
     if (request_id != 0) {
         d_len += enc_field_fixed32(&data[d_len], 6, request_id);
     }
@@ -782,10 +913,20 @@ esp_err_t meshtastic_mesh_send_data(uint32_t to, uint8_t channel,
     }
 #endif
 
+    const uint8_t *peer_pub = NULL;
+    if (to != 0xFFFFFFFF && to != s_node_num &&
+        portnum != MT_PORT_ROUTING &&
+        portnum != MT_PORT_NODEINFO &&
+        portnum != MT_PORT_POSITION &&
+        portnum != MT_PORT_TRACEROUTE) {
+        const mt_node_entry_t *e = mt_nodedb_get(to);
+        if (e && e->has_public_key) peer_pub = e->public_key;
+    }
+
     uint8_t wire[256];
     uint32_t pkt_id;
     uint16_t wire_len = build_wire_packet(wire, to, channel, hop_limit,
-                                            data, d_len, &pkt_id);
+                                            data, d_len, &pkt_id, peer_pub);
     if (wire_len == 0) return ESP_ERR_INVALID_ARG;
 
 
@@ -810,9 +951,10 @@ esp_err_t meshtastic_mesh_send_data(uint32_t to, uint8_t channel,
         retry_track(pkt_id, to, channel, hop_limit, wire, wire_len);
     }
 
-    ESP_LOGI(TAG, "send_data: port=%u to=0x%08lX ch=%u prio=%u len=%u req=0x%08lX%s",
+    ESP_LOGI(TAG, "send_data: port=%u to=0x%08lX ch=%u prio=%u len=%u req=0x%08lX%s%s",
              portnum, (unsigned long)to, channel, prio, wire_len,
-             (unsigned long)request_id, want_ack ? " want_ack" : "");
+             (unsigned long)request_id, want_ack ? " want_ack" : "",
+             peer_pub ? " [PKI]" : "");
 
 #if !MESH_HEADLESS
     if (to == 0xFFFFFFFF) {
@@ -1145,13 +1287,13 @@ esp_err_t meshtastic_mesh_init(uint32_t node_num)
     mt_channels_init();
 
     memset(s_tx_queue, 0, sizeof(s_tx_queue));
-    if (!s_tx_mutex) {
+    if (s_tx_mutex == NULL) {
         s_tx_mutex = xSemaphoreCreateMutex();
-        if (!s_tx_mutex) return ESP_ERR_NO_MEM;
+        if (s_tx_mutex == NULL) return ESP_ERR_NO_MEM;
     }
-    if (!s_retry_mutex) {
+    if (s_retry_mutex == NULL) {
         s_retry_mutex = xSemaphoreCreateMutex();
-        if (!s_retry_mutex) return ESP_ERR_NO_MEM;
+        if (s_retry_mutex == NULL) return ESP_ERR_NO_MEM;
     }
     memset(s_retry, 0, sizeof(s_retry));
 

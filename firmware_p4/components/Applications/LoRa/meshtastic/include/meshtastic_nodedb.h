@@ -18,10 +18,12 @@ extern "C" {
 
 #include "esp_err.h"
 
-#define MT_NODEDB_MAX_NODES       64
-#define MT_NODEDB_LONG_NAME_LEN   32
-#define MT_NODEDB_SHORT_NAME_LEN  8
-#define MT_NODEDB_ID_LEN          16
+#define MT_NODEDB_MAX_NODES             150
+#define MT_NODEDB_LONG_NAME_LEN         32
+#define MT_NODEDB_SHORT_NAME_LEN        8
+#define MT_NODEDB_ID_LEN                16
+#define MT_NODEDB_PUBKEY_LEN            32
+#define MT_NODEDB_NEXTHOP_MAX_FAILURES  2
 
 /**
  * @brief In-memory entry for a known node (peer).
@@ -46,6 +48,10 @@ typedef struct {
     bool     is_muted;
     bool     via_mqtt;
     bool     in_use;
+    uint8_t  public_key[MT_NODEDB_PUBKEY_LEN];       /**< X25519 pubkey (all zeros if unknown) */
+    bool     has_public_key;
+    uint8_t  next_hop;                               /**< Last octet of relay that got us here (0 = unknown) */
+    uint8_t  next_hop_failures;                      /**< Count retx failures on current next_hop; fallback to flood at 2 */
 } mt_node_entry_t;
 
 /**
@@ -115,6 +121,28 @@ bool mt_nodedb_toggle_muted(uint32_t num);
  * @brief Remove um no por node number. Persiste em NVS.
  */
 bool mt_nodedb_remove(uint32_t num);
+
+/**
+ * @brief Learn a next-hop for a peer.
+ *
+ * Called when we hear a packet from `num` that was relayed by `relay_byte`
+ * (last octet of relayer's node_num). Updates nodedb[num].next_hop so future
+ * unicasts to `num` can be directed.
+ *
+ * Resets next_hop_failures to 0.
+ */
+void mt_nodedb_learn_next_hop(uint32_t num, uint8_t relay_byte);
+
+/**
+ * @brief Get next_hop byte for unicast routing. Returns 0 if unknown.
+ */
+uint8_t mt_nodedb_get_next_hop(uint32_t num);
+
+/**
+ * @brief Increment retx failure counter for this peer. When it reaches
+ * MT_NODEDB_NEXTHOP_MAX_FAILURES, next_hop is cleared (fallback to flood).
+ */
+void mt_nodedb_record_next_hop_failure(uint32_t num);
 
 /**
  * @brief Forca persistencia imediata em NVS.

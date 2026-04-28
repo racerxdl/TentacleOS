@@ -97,17 +97,29 @@ esp_err_t meshtastic_mesh_send_text(const char *text, uint32_t to);
  * @param portnum    Meshtastic PortNum
  * @param payload    Bytes do payload (proto da aplicacao)
  * @param plen       Tamanho
- * @param request_id Se != 0, adiciona como Data.request_id (reply_id)
- * @param want_ack   Se true, seta flag want_ack no header
+ * @param request_id    Se != 0, adiciona como Data.request_id (reply_id)
+ * @param want_ack      Se true, seta flag want_ack no header do MeshPacket
+ * @param want_response Se true, seta Data.want_response (campo 3) - pede reply
+ *                      do modulo destino (ex: NodeInfo request).
  */
-esp_err_t meshtastic_mesh_send_data(uint32_t to,
-                                    uint8_t channel,
-                                    uint8_t hop_limit,
-                                    uint8_t portnum,
-                                    const uint8_t *payload,
-                                    uint16_t plen,
-                                    uint32_t request_id,
-                                    bool want_ack);
+esp_err_t meshtastic_mesh_send_data(uint32_t to, uint8_t channel,
+                                     uint8_t hop_limit, uint8_t portnum,
+                                     const uint8_t *payload, uint16_t plen,
+                                     uint32_t request_id, bool want_ack,
+                                     bool want_response);
+
+/**
+ * @brief Cancela uma retransmissao pendente porque o ACK chegou.
+ *
+ * Chamado pelo RoutingModule quando recebe Routing{error_reason=NONE} cujo
+ * request_id case com um pacote em retry, ou por process_rx_packet quando
+ * nosso proprio pacote eh ouvido sendo rebroadcastado (ACK implicito).
+ *
+ * @param pkt_id      Packet id original (MeshPacket.id) que foi transmitido.
+ * @param is_implicit true se o ACK veio por audicao do rebroadcast.
+ * @return true se havia um retry pendente e foi cancelado.
+ */
+bool meshtastic_mesh_retry_ack(uint32_t pkt_id, bool is_implicit);
 
 #ifdef __cplusplus
 }
