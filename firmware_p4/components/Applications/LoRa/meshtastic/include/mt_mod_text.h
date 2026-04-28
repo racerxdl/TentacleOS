@@ -44,9 +44,8 @@ void mt_mod_text_init(uint32_t node_num);
  * @param is_compressed True if the packet arrived on portnum 7 (compressed).
  */
 void mt_mod_text_on_received(const mt_packet_meta_t *meta,
-                             const uint8_t *payload,
-                             uint16_t len,
-                             bool is_compressed);
+                              const uint8_t *payload, uint16_t len,
+                              bool is_compressed);
 
 #ifdef __cplusplus
 }
