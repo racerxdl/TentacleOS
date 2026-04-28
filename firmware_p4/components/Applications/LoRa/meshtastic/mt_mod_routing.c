@@ -132,12 +132,12 @@ void mt_mod_routing_maybe_send_ack(const mt_packet_meta_t *meta)
 {
     uint8_t routing_payload[4];
     uint16_t rlen = 0;
-    rlen += enc_field_varint(&routing_payload[rlen], 2, 0);
+    rlen += enc_field_varint(&routing_payload[rlen], 3, 0);
 
     ESP_LOGI(TAG, "ACK -> 0x%08lX req_id=0x%08lX",
              (unsigned long)meta->from, (unsigned long)meta->id);
 
     meshtastic_mesh_send_data(meta->from, meta->channel, MT_ROUTING_HOP_LIMIT,
                                MT_PORT_ROUTING, routing_payload, rlen,
-                               meta->id, false);
+                               meta->id, false, false);
 }
