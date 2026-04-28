@@ -29,10 +29,10 @@ extern "C" {
  *
  * Exposes four characteristics under Service UUID
  * 6ba1b218-15a8-461f-9fa8-5dcae273eafd:
- *   - TORADIO   (WRITE)       — app to device
- *   - FROMRADIO (READ)        — device to app (polling)
- *   - FROMNUM   (READ|NOTIFY) — wake signal for the app
- *   - LOGRADIO  (READ|NOTIFY) — optional log stream
+ *   - TORADIO   (WRITE)       - app to device
+ *   - FROMRADIO (READ)        - device to app (polling)
+ *   - FROMNUM   (READ|NOTIFY) - wake signal for the app
+ *   - LOGRADIO  (READ|NOTIFY) - optional log stream
  *
  * Plus the standard Battery Service (0x180F / 0x2A19).
  *
@@ -40,7 +40,7 @@ extern "C" {
  * I/O capability (RANDOM_PIN mode). A fresh 6-digit passkey is
  * generated per pairing and logged at ESP_LOGI.
  *
- * All protocol decisions are delegated to meshtastic_phoneapi — this
+ * All protocol decisions are delegated to meshtastic_phoneapi - this
  * module only owns the BLE stack lifecycle and GATT plumbing.
  */
 

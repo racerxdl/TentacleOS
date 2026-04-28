@@ -75,6 +75,69 @@ static uint8_t  s_own_addr_type = 0;
 static uint32_t s_random_passkey = 0;
 static TaskHandle_t s_notify_task = NULL;
 
+#define MT_BLE_LOG_RING_SIZE 2048
+#define MT_BLE_LOG_CHUNK_MAX 200
+
+static uint16_t    s_logradio_handle = 0;
+static bool        s_logradio_subscribed = false;
+static uint8_t     s_log_ring[MT_BLE_LOG_RING_SIZE];
+static uint16_t    s_log_head = 0;
+static uint16_t    s_log_tail = 0;
+static vprintf_like_t s_prev_vprintf = NULL;
+
+static void log_ring_push(const char *buf, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        uint16_t next = (s_log_tail + 1) % MT_BLE_LOG_RING_SIZE;
+        if (next == s_log_head) {
+            s_log_head = (s_log_head + 1) % MT_BLE_LOG_RING_SIZE;
+        }
+        s_log_ring[s_log_tail] = (uint8_t)buf[i];
+        s_log_tail = next;
+    }
+}
+
+static uint16_t log_ring_pop(uint8_t *out, uint16_t max_len)
+{
+    uint16_t n = 0;
+    while (n < max_len && s_log_head != s_log_tail) {
+        out[n++] = s_log_ring[s_log_head];
+        s_log_head = (s_log_head + 1) % MT_BLE_LOG_RING_SIZE;
+    }
+    return n;
+}
+
+static int log_vprintf(const char *fmt, va_list args)
+{
+    char line[256];
+    int len = vsnprintf(line, sizeof(line), fmt, args);
+    if (len > 0) {
+        if (len >= (int)sizeof(line)) len = sizeof(line) - 1;
+        log_ring_push(line, (size_t)len);
+    }
+    if (s_prev_vprintf != NULL) {
+        va_list copy;
+        va_copy(copy, args);
+        int r = s_prev_vprintf(fmt, copy);
+        va_end(copy);
+        return r;
+    }
+    return len;
+}
+
+static void notify_logradio(void)
+{
+    if (!s_is_connected || !s_logradio_subscribed || s_logradio_handle == 0) return;
+    if (s_log_head == s_log_tail) return;
+    uint8_t chunk[MT_BLE_LOG_CHUNK_MAX];
+    uint16_t n = log_ring_pop(chunk, sizeof(chunk));
+    if (n == 0) return;
+    struct os_mbuf *om = ble_hs_mbuf_from_flat(chunk, n);
+    if (om != NULL) {
+        ble_gatts_notify_custom(s_conn_handle, s_logradio_handle, om);
+    }
+}
+
 static uint8_t s_battery_level = MT_BLE_BATTERY_STUB_PCT;
 
 static void advertise_start(void);
@@ -99,6 +162,7 @@ static void notify_task(void *arg)
         if (phoneapi_has_data()) {
             notify_fromnum();
         }
+        notify_logradio();
     }
 }
 
@@ -186,6 +250,7 @@ static const struct ble_gatt_svc_def GATT_SERVICES[] = {
             {
                 .uuid = &LOGRADIO_UUID.u,
                 .access_cb = on_logradio_access,
+                .val_handle = &s_logradio_handle,
                 .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY,
             },
             { 0 },
@@ -244,6 +309,9 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         if (event->subscribe.attr_handle == s_fromnum_handle) {
             s_fromnum_subscribed = (event->subscribe.cur_notify != 0);
         }
+        if (event->subscribe.attr_handle == s_logradio_handle) {
+            s_logradio_subscribed = (event->subscribe.cur_notify != 0);
+        }
         break;
 
     case BLE_GAP_EVENT_ENC_CHANGE:
@@ -266,7 +334,9 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 
     case BLE_GAP_EVENT_REPEAT_PAIRING: {
         struct ble_gap_conn_desc desc;
-        ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc);
+        if (ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc) != 0) {
+            return BLE_GAP_REPEAT_PAIRING_IGNORE;
+        }
         ble_store_util_delete_peer(&desc.peer_id_addr);
         return BLE_GAP_REPEAT_PAIRING_RETRY;
     }
@@ -346,8 +416,10 @@ esp_err_t meshtastic_ble_init(uint32_t node_num)
     ble_hs_cfg.sm_bonding = 1;
     ble_hs_cfg.sm_mitm    = 1;
     ble_hs_cfg.sm_sc      = 1;
-    ble_hs_cfg.sm_our_key_dist   = 1;
-    ble_hs_cfg.sm_their_key_dist = 1;
+    ble_hs_cfg.sm_our_key_dist   = BLE_SM_PAIR_KEY_DIST_ENC |
+                                   BLE_SM_PAIR_KEY_DIST_ID;
+    ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC |
+                                   BLE_SM_PAIR_KEY_DIST_ID;
     ble_hs_cfg.reset_cb = on_reset;
     ble_hs_cfg.sync_cb  = on_sync;
     ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
@@ -376,6 +448,8 @@ esp_err_t meshtastic_ble_init(uint32_t node_num)
 
     xTaskCreate(notify_task, "ble_notify", MT_BLE_NOTIFY_TASK_SZ, NULL,
                 tskIDLE_PRIORITY + 2, &s_notify_task);
+
+    s_prev_vprintf = esp_log_set_vprintf(log_vprintf);
 
     ESP_LOGI(TAG, "Initialized - nome='%s'", name);
     return ESP_OK;
