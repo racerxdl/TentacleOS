@@ -26,7 +26,10 @@
 #include "meshtastic_mesh.h"
 #include "meshtastic_nodedb.h"
 #include "meshtastic_nvs.h"
+#include "meshtastic_pki.h"
+
 #include "meshtastic_roles.h"
+#include "mt_mod_keyverify.h"
 #include "mt_mod_nodeinfo.h"
 #include "mt_mod_position.h"
 
@@ -60,12 +63,18 @@ static const char *TAG = "MT_MOD_ADMIN";
 #define MT_ADMIN_VARIANT_BEGIN_EDIT              64
 #define MT_ADMIN_VARIANT_COMMIT_EDIT             65
 
+#define MT_ADMIN_VARIANT_KEY_VERIFICATION        67
 #define MT_ADMIN_VARIANT_SESSION_PASSKEY        101
+
+#define MT_ADMIN_MAX_KEYS       3
+#define MT_ADMIN_KEY_LEN        32
+#define MT_ADMIN_KEYS_NVS_KEY   "admin_keys"
 
 static uint8_t  s_session_passkey[MT_ADMIN_PASSKEY_SIZE];
 static uint32_t s_passkey_set_s = 0;
 static uint32_t s_node_num = 0;
 static bool     s_is_edit_transaction_open = false;
+static uint8_t  s_admin_keys[MT_ADMIN_MAX_KEYS][MT_ADMIN_KEY_LEN];
 
 static uint16_t enc_varint(uint8_t *buf, uint64_t value)
 {
@@ -143,6 +152,84 @@ static bool is_passkey_valid(const uint8_t *provided, uint16_t provided_len)
     return memcmp(provided, s_session_passkey, MT_ADMIN_PASSKEY_SIZE) == 0;
 }
 
+static bool admin_keys_any_set(void)
+{
+    for (int i = 0; i < MT_ADMIN_MAX_KEYS; i++) {
+        for (int k = 0; k < MT_ADMIN_KEY_LEN; k++) {
+            if (s_admin_keys[i][k] != 0) return true;
+        }
+    }
+    return false;
+}
+
+static bool is_sender_admin_authorized(uint32_t from_node)
+{
+    if (!admin_keys_any_set()) return true;
+
+    const mt_node_entry_t *e = mt_nodedb_get(from_node);
+    if (e == NULL || !e->has_public_key) return false;
+
+    for (int i = 0; i < MT_ADMIN_MAX_KEYS; i++) {
+        bool slot_zero = true;
+        for (int k = 0; k < MT_ADMIN_KEY_LEN; k++) {
+            if (s_admin_keys[i][k] != 0) { slot_zero = false; break; }
+        }
+        if (slot_zero) continue;
+        if (memcmp(s_admin_keys[i], e->public_key, MT_ADMIN_KEY_LEN) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void admin_keys_load(void)
+{
+    memset(s_admin_keys, 0, sizeof(s_admin_keys));
+    mt_nvs_get_blob(MT_ADMIN_KEYS_NVS_KEY, s_admin_keys, sizeof(s_admin_keys));
+}
+
+static void admin_keys_save(void)
+{
+    mt_nvs_set_blob(MT_ADMIN_KEYS_NVS_KEY, s_admin_keys, sizeof(s_admin_keys));
+}
+
+static void admin_keys_set_from_security_config(const uint8_t *security_bytes, uint16_t len)
+{
+    uint8_t new_keys[MT_ADMIN_MAX_KEYS][MT_ADMIN_KEY_LEN] = {{0}};
+    uint8_t count = 0;
+
+    uint16_t i = 0;
+    while (i < len && count < MT_ADMIN_MAX_KEYS) {
+        uint16_t used = 0;
+        uint64_t tag = dec_varint(&security_bytes[i], len - i, &used);
+        if (used == 0) break;
+        i += used;
+        uint32_t field = (uint32_t)(tag >> 3);
+        uint32_t wire_type = (uint32_t)(tag & 0x07);
+
+        if (wire_type == 2) {
+            uint16_t lused = 0;
+            uint32_t length = (uint32_t)dec_varint(&security_bytes[i], len - i, &lused);
+            i += lused;
+            if (i + length > len) break;
+            if (field == 3 && length == MT_ADMIN_KEY_LEN) {
+                memcpy(new_keys[count++], &security_bytes[i], MT_ADMIN_KEY_LEN);
+            }
+            i += length;
+        } else if (wire_type == 0) {
+            uint16_t vused = 0;
+            dec_varint(&security_bytes[i], len - i, &vused);
+            i += vused;
+        } else {
+            break;
+        }
+    }
+
+    memcpy(s_admin_keys, new_keys, sizeof(s_admin_keys));
+    admin_keys_save();
+    ESP_LOGI(TAG, "admin_keys updated: %u slot(s) configured", count);
+}
+
 static uint16_t build_user(uint8_t *out)
 {
     uint16_t pos = 0;
@@ -185,7 +272,7 @@ static void handle_get_owner(const mt_packet_meta_t *meta, uint32_t now_s)
 
     ESP_LOGI(TAG, "get_owner -> 0x%08lX", (unsigned long)meta->from);
     meshtastic_mesh_send_data(meta->from, meta->channel, MT_ADMIN_HOP_LIMIT,
-                               MT_PORT_ADMIN, admin, alen, meta->id, false);
+                               MT_PORT_ADMIN, admin, alen, meta->id, false, false);
 }
 
 static void handle_set_owner(const mt_packet_meta_t *meta,
@@ -250,8 +337,9 @@ static void handle_get_channel(const mt_packet_meta_t *meta, uint8_t idx, uint32
             sl += enc_field_bytes(&settings[sl], 3, (const uint8_t *)ch->name,
                                    (uint16_t)name_len);
         }
-        uint32_t channel_id = ((uint32_t)idx << 24) | ((uint32_t)ch->hash << 16) | 0xC0DE;
-        sl += enc_field_fixed32(&settings[sl], 4, channel_id);
+        if (ch->id != 0) {
+            sl += enc_field_fixed32(&settings[sl], 4, ch->id);
+        }
 
         cl += enc_field_bytes(&channel[cl], 2, settings, sl);
         cl += enc_field_varint(&channel[cl], 3, (uint64_t)ch->role);
@@ -266,12 +354,12 @@ static void handle_get_channel(const mt_packet_meta_t *meta, uint8_t idx, uint32
     ESP_LOGI(TAG, "get_channel[%u] role=%d -> 0x%08lX",
              idx, ch ? (int)ch->role : 0, (unsigned long)meta->from);
     meshtastic_mesh_send_data(meta->from, meta->channel, MT_ADMIN_HOP_LIMIT,
-                               MT_PORT_ADMIN, admin, alen, meta->id, false);
+                               MT_PORT_ADMIN, admin, alen, meta->id, false, false);
 }
 
 static void handle_set_channel(const uint8_t *channel_bytes, uint16_t len)
 {
-    int32_t   index    = -1;
+    int32_t   index    = 0;
     uint8_t   role     = MT_CH_DISABLED;
     bool      has_role = false;
     const uint8_t *settings_ptr = NULL;
@@ -326,6 +414,8 @@ static void handle_set_channel(const uint8_t *channel_bytes, uint16_t len)
     uint16_t psk_len = 0;
     char name[32] = {0};
     bool has_name = false;
+    uint32_t ch_id = 0;
+    bool has_id = false;
 
     i = 0;
     while (settings_ptr != NULL && i < settings_len) {
@@ -356,6 +446,14 @@ static void handle_set_channel(const uint8_t *channel_bytes, uint16_t len)
             dec_varint(&settings_ptr[i], settings_len - i, &vused);
             i += vused;
         } else if (wire_type == 5) {
+            if (i + 4 > settings_len) break;
+            if (field == 4) {
+                ch_id = ((uint32_t)settings_ptr[i]) |
+                         ((uint32_t)settings_ptr[i + 1] << 8) |
+                         ((uint32_t)settings_ptr[i + 2] << 16) |
+                         ((uint32_t)settings_ptr[i + 3] << 24);
+                has_id = true;
+            }
             i += 4;
         } else {
             break;
@@ -372,9 +470,13 @@ static void handle_set_channel(const uint8_t *channel_bytes, uint16_t len)
 
     mt_channel_set((uint8_t)index, has_name ? name : NULL,
                     psk_to_save, (mt_channel_role_t)role);
-    ESP_LOGI(TAG, "set_channel[%ld] role=%u name='%s' psk=%s",
+    if (has_id) {
+        mt_channel_set_id((uint8_t)index, ch_id);
+    }
+    ESP_LOGI(TAG, "set_channel[%ld] role=%u name='%s' psk=%s id=0x%08lx",
              (long)index, role, has_name ? name : "(kept)",
-             psk_to_save ? "updated" : "mantido");
+             psk_to_save ? "updated" : "mantido",
+             (unsigned long)(has_id ? ch_id : 0));
 }
 
 static void handle_get_device_metadata(const mt_packet_meta_t *meta, uint32_t now_s)
@@ -395,7 +497,7 @@ static void handle_get_device_metadata(const mt_packet_meta_t *meta, uint32_t no
 
     ESP_LOGI(TAG, "get_device_metadata -> 0x%08lX", (unsigned long)meta->from);
     meshtastic_mesh_send_data(meta->from, meta->channel, MT_ADMIN_HOP_LIMIT,
-                               MT_PORT_ADMIN, admin, alen, meta->id, false);
+                               MT_PORT_ADMIN, admin, alen, meta->id, false, false);
 }
 
 static uint16_t build_config_for_type(uint8_t *out, uint8_t config_type)
@@ -417,6 +519,24 @@ static uint16_t build_config_for_type(uint8_t *out, uint8_t config_type)
         ll += enc_field_varint(&lora[ll], 11, 0);
         ll += enc_field_varint(&lora[ll], 13, 1);
         return enc_field_bytes(out, oneof_field, lora, ll);
+    }
+
+    if (config_type == 7) {
+        uint8_t sec[192];
+        uint16_t sl = 0;
+        sl += enc_field_bytes(&sec[sl], 1, mt_pki_get_pubkey(), MT_PKI_KEY_LEN);
+        sl += enc_field_bytes(&sec[sl], 2, mt_pki_get_privkey(), MT_PKI_KEY_LEN);
+        for (int k = 0; k < MT_ADMIN_MAX_KEYS; k++) {
+            bool zero = true;
+            for (int b = 0; b < MT_ADMIN_KEY_LEN; b++) {
+                if (s_admin_keys[k][b] != 0) { zero = false; break; }
+            }
+            if (!zero) {
+                sl += enc_field_bytes(&sec[sl], 3, s_admin_keys[k],
+                                       MT_ADMIN_KEY_LEN);
+            }
+        }
+        return enc_field_bytes(out, oneof_field, sec, sl);
     }
 
     out[0] = (uint8_t)((oneof_field << 3) | 2);
@@ -487,6 +607,9 @@ static void handle_set_config(const uint8_t *cfg_bytes, uint16_t len)
             if (field == 1) {
                 ESP_LOGI(TAG, "set_config: DeviceConfig (%lu bytes)", (unsigned long)length);
                 parse_device_config(&cfg_bytes[i], (uint16_t)length);
+            } else if (field == 8) {
+                ESP_LOGI(TAG, "set_config: SecurityConfig (%lu bytes)", (unsigned long)length);
+                admin_keys_set_from_security_config(&cfg_bytes[i], (uint16_t)length);
             } else {
                 ESP_LOGI(TAG, "set_config: section %lu (%lu bytes) - not implemented",
                          (unsigned long)field, (unsigned long)length);
@@ -575,7 +698,7 @@ static void dispatch_variant(const mt_packet_meta_t *meta,
             meshtastic_mesh_send_data(meta->from, meta->channel,
                                        MT_ADMIN_HOP_LIMIT,
                                        MT_PORT_ADMIN, admin, alen,
-                                       meta->id, false);
+                                       meta->id, false, false);
             break;
         }
         case MT_ADMIN_VARIANT_GET_DEVICE_METADATA_REQ:
@@ -635,6 +758,38 @@ static void dispatch_variant(const mt_packet_meta_t *meta,
             ESP_LOGI(TAG, "commit_edit_settings");
             break;
 
+        case MT_ADMIN_VARIANT_KEY_VERIFICATION: {
+            uint8_t message_type = 0;
+            uint32_t remote_nodenum = 0;
+            uint64_t nonce = 0;
+            uint32_t security_number = 0;
+            bool has_security = false;
+
+            uint16_t j = 0;
+            while (j < variant_len) {
+                uint16_t uu = 0;
+                uint64_t t = dec_varint(&variant_data[j], variant_len - j, &uu);
+                if (uu == 0) break;
+                j += uu;
+                uint32_t f = (uint32_t)(t >> 3);
+                uint32_t wt = (uint32_t)(t & 0x07);
+                if (wt == 0) {
+                    uint16_t vu = 0;
+                    uint64_t v = dec_varint(&variant_data[j], variant_len - j, &vu);
+                    j += vu;
+                    if (f == 1) message_type = (uint8_t)v;
+                    else if (f == 2) remote_nodenum = (uint32_t)v;
+                    else if (f == 3) nonce = v;
+                    else if (f == 4) { security_number = (uint32_t)v; has_security = true; }
+                } else {
+                    break;
+                }
+            }
+            mt_mod_keyverify_handle_admin(remote_nodenum, message_type, nonce,
+                                            has_security, security_number);
+            break;
+        }
+
         default:
             ESP_LOGI(TAG, "Variant %lu not implemented",
                      (unsigned long)variant_field);
@@ -648,7 +803,9 @@ void mt_mod_admin_init(uint32_t node_num)
     memset(s_session_passkey, 0, sizeof(s_session_passkey));
     s_passkey_set_s = 0;
     s_is_edit_transaction_open = false;
-    ESP_LOGI(TAG, "Initialized");
+    admin_keys_load();
+    ESP_LOGI(TAG, "Initialized (admin_keys: %s)",
+             admin_keys_any_set() ? "configured" : "open mode");
 }
 
 void mt_mod_admin_on_received(const mt_packet_meta_t *meta,
@@ -718,6 +875,11 @@ void mt_mod_admin_on_received(const mt_packet_meta_t *meta,
         if (!is_passkey_valid(passkey, passkey_len)) {
             ESP_LOGW(TAG, "Variant=%lu REJECTED (passkey invalid or expired)",
                      (unsigned long)variant_field);
+            return;
+        }
+        if (!is_sender_admin_authorized(meta->from)) {
+            ESP_LOGW(TAG, "Variant=%lu REJECTED (sender 0x%08lX not in admin_keys)",
+                     (unsigned long)variant_field, (unsigned long)meta->from);
             return;
         }
     }
