@@ -23,19 +23,20 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 
+#include "pin_def.h"
 #include "sx1262_regs.h"
 
-#define PIN_SCK  20
-#define PIN_MOSI 21
-#define PIN_MISO 22
-#define PIN_NSS  23
-#define PIN_NRST 24
-#define PIN_BUSY 25
-#define PIN_DIO1 26
-#define PIN_TXEN 27
-#define PIN_RXEN 32
+#define PIN_SCK  GPIO_LORA_SCLK_PIN
+#define PIN_MOSI GPIO_LORA_MOSI_PIN
+#define PIN_MISO GPIO_LORA_MISO_PIN
+#define PIN_NSS  GPIO_LORA_CS_PIN
+#define PIN_NRST GPIO_LORA_RESET_PIN
+#define PIN_BUSY GPIO_LORA_BUSY_PIN
+#define PIN_DIO1 GPIO_LORA_DIO1_PIN
+#define PIN_TXEN GPIO_LORA_TXEN_PIN
+#define PIN_RXEN GPIO_LORA_RXEN_PIN
 
-#define SPI_HOST_ID      SPI2_HOST
+#define SPI_HOST_ID      SPI3_HOST
 #define SPI_FREQ_HZ      8000000
 #define SPI_MAX_TRANSFER 264
 
@@ -120,6 +121,9 @@ static void hal_exit_critical(void *ctx) {
 
 static void hal_set_antenna(void *ctx, uint8_t mode) {
   (void)ctx;
+  if (PIN_TXEN < 0 || PIN_RXEN < 0) {
+    return;
+  }
   switch (mode) {
     case SX1262_ANT_TX:
       gpio_set_level(PIN_TXEN, 1);
@@ -146,9 +150,15 @@ esp_err_t sx1262_hal_create(sx1262_hal_t *out_hal) {
     goto fill_hal;
   }
 
+  uint64_t out_mask = (1ULL << PIN_NSS) | (1ULL << PIN_NRST);
+  if (PIN_TXEN >= 0) {
+    out_mask |= (1ULL << PIN_TXEN);
+  }
+  if (PIN_RXEN >= 0) {
+    out_mask |= (1ULL << PIN_RXEN);
+  }
   gpio_config_t out_conf = {
-      .pin_bit_mask =
-          (1ULL << PIN_NSS) | (1ULL << PIN_NRST) | (1ULL << PIN_TXEN) | (1ULL << PIN_RXEN),
+      .pin_bit_mask = out_mask,
       .mode = GPIO_MODE_OUTPUT,
       .pull_up_en = GPIO_PULLUP_DISABLE,
       .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -161,8 +171,12 @@ esp_err_t sx1262_hal_create(sx1262_hal_t *out_hal) {
   }
 
   gpio_set_level(PIN_NSS, 1);
-  gpio_set_level(PIN_TXEN, 0);
-  gpio_set_level(PIN_RXEN, 0);
+  if (PIN_TXEN >= 0) {
+    gpio_set_level(PIN_TXEN, 0);
+  }
+  if (PIN_RXEN >= 0) {
+    gpio_set_level(PIN_RXEN, 0);
+  }
 
   gpio_config_t in_conf = {
       .pin_bit_mask = (1ULL << PIN_BUSY) | (1ULL << PIN_DIO1),

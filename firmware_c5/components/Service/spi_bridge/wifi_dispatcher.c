@@ -26,6 +26,7 @@
 #include "client_scanner.h"
 #include "deauther_detector.h"
 #include "evil_twin.h"
+#include "meshtastic_tcp.h"
 #include "probe_monitor.h"
 #include "signal_monitor.h"
 #include "spi_bridge.h"
@@ -526,6 +527,19 @@ spi_status_t wifi_dispatcher_execute(spi_id_t id,
 
     case SPI_ID_WIFI_AP_SAVE_SD:
       return ap_scanner_save_results_to_sd_card() ? SPI_STATUS_OK : SPI_STATUS_ERROR;
+
+    case SPI_ID_MESH_WIFI_INIT: {
+      if (len < sizeof(spi_mesh_init_t)) {
+        return SPI_STATUS_INVALID_ARG;
+      }
+      spi_mesh_init_t req;
+      memcpy(&req, payload, sizeof(req));
+      return (meshtastic_tcp_init(req.node_num) == ESP_OK) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
+    }
+
+    case SPI_ID_MESH_WIFI_STOP:
+      meshtastic_tcp_stop();
+      return SPI_STATUS_OK;
 
     default:
       return SPI_STATUS_ERROR;

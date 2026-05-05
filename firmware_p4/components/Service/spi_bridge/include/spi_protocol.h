@@ -164,7 +164,17 @@ typedef enum {
 
   // LoRa (0x80 - 0x8F)
   SPI_ID_LORA_RX = 0x80,
-  SPI_ID_LORA_TX = 0x81
+  SPI_ID_LORA_TX = 0x81,
+
+  // Meshtastic phone bridge (0x90 - 0x97)
+  SPI_ID_MESH_BLE_INIT = 0x90,
+  SPI_ID_MESH_BLE_STOP = 0x91,
+  SPI_ID_MESH_WIFI_INIT = 0x92,
+  SPI_ID_MESH_WIFI_STOP = 0x93,
+  SPI_ID_MESH_FROMRADIO_PUSH = 0x94,
+  SPI_ID_MESH_LOG_PUSH = 0x95,
+  SPI_ID_MESH_STATUS = 0x96,
+  SPI_ID_MESH_TORADIO_STREAM = 0x97
 } spi_id_t;
 
 /**
@@ -329,6 +339,45 @@ typedef struct {
   uint8_t status;   // 0 = OPEN, 1 = OPEN_FILTERED
   char banner[64];
 } __attribute__((packed)) spi_port_scan_result_t;
+
+/**
+ * @brief Meshtastic transport init payload.
+ *
+ * Sent with SPI_ID_MESH_BLE_INIT and SPI_ID_MESH_WIFI_INIT.
+ */
+typedef struct {
+  uint32_t node_num;
+} __attribute__((packed)) spi_mesh_init_t;
+
+/**
+ * @brief Chunk header for fragmented Meshtastic transport frames.
+ *
+ * Each StreamAPI protobuf frame is split into 1..255 chunks of up to
+ * SPI_MESH_CHUNK_PAYLOAD_MAX bytes. Receivers reassemble per seq.
+ */
+typedef struct {
+  uint8_t seq;
+  uint8_t chunk_idx;
+  uint8_t total_chunks;
+  uint8_t flags;
+} __attribute__((packed)) spi_mesh_chunk_hdr_t;
+
+#define SPI_MESH_CHUNK_FLAG_LAST   0x01
+#define SPI_MESH_PAYLOAD_LIMIT     255
+#define SPI_MESH_CHUNK_PAYLOAD_MAX (SPI_MESH_PAYLOAD_LIMIT - sizeof(spi_mesh_chunk_hdr_t))
+
+/**
+ * @brief Meshtastic transport status payload.
+ *
+ * Returned by SPI_ID_MESH_STATUS.
+ */
+typedef struct {
+  uint8_t ble_connected;
+  uint8_t ble_subscribed;
+  uint8_t tcp_clients;
+  uint8_t logradio_subscribed;
+  uint32_t fromnum_counter;
+} __attribute__((packed)) spi_mesh_status_t;
 
 #ifdef __cplusplus
 }

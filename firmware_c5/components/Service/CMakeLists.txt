@@ -16,6 +16,7 @@ file(GLOB_RECURSE CONSOLE_SERVICE_SRCS "console/*.c")
 file(GLOB_RECURSE CONSOLE_COMMANDS_SRCS "console/commands/*.c")
 file(GLOB_RECURSE SPI_BRIDGE_SRCS "spi_bridge/*.c")
 file(GLOB_RECURSE SD_CARD_SRCS "sd_card/*.c")
+file(GLOB_RECURSE MESHTASTIC_SRCS "meshtastic/*.c")
 
 
 idf_component_register(SRCS 
@@ -41,6 +42,7 @@ idf_component_register(SRCS
   ${CONSOLE_SERVICE_SRCS}
   ${CONSOLE_COMMANDS_SRCS}
   ${SD_CARD_SRCS}
+  ${MESHTASTIC_SRCS}
   INCLUDE_DIRS 
   "wifi/include"
   "http_server/include"
@@ -53,6 +55,7 @@ idf_component_register(SRCS
   "spi_bridge/include"
   "console/include"
   "sd_card/include"
+  "meshtastic/include"
 
 
 
@@ -73,6 +76,7 @@ idf_component_register(SRCS
     lvgl
     littlefs
     cjson
-    console 
-    argtable3 
+    console
+    argtable3
+    mdns
 )

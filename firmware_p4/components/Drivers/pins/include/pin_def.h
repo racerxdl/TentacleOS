@@ -80,6 +80,17 @@ extern "C" {
 #define GPIO_C5_RESET_PIN   48
 #define GPIO_C5_BOOT_PIN    33
 
+// SX1262 LoRa (SPI3_HOST, separate from C5 bridge)
+#define GPIO_LORA_SCLK_PIN  18
+#define GPIO_LORA_MOSI_PIN  19
+#define GPIO_LORA_MISO_PIN  14
+#define GPIO_LORA_CS_PIN    26
+#define GPIO_LORA_RESET_PIN 27
+#define GPIO_LORA_BUSY_PIN  17
+#define GPIO_LORA_DIO1_PIN  54
+#define GPIO_LORA_TXEN_PIN  3
+#define GPIO_LORA_RXEN_PIN  5
+
 // YS-RFID2 125kHz RFID Reader (UART)
 // TODO: placeholder pins — definir com base no schematic do board
 #define GPIO_RFID_UART_TX_PIN 24

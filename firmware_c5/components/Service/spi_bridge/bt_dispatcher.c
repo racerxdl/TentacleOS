@@ -22,6 +22,8 @@
 #include "ble_scanner.h"
 #include "ble_sniffer.h"
 #include "bluetooth_service.h"
+#include "meshtastic_gatt.h"
+#include "meshtastic_transport.h"
 #include "skimmer_detector.h"
 #include "spi_bridge.h"
 #include "tracker_detector.h"
@@ -97,6 +99,42 @@ spi_status_t bt_dispatcher_execute(spi_id_t id,
       skimmer_detector_stop();
       tracker_detector_stop();
       return SPI_STATUS_OK;
+
+    case SPI_ID_MESH_BLE_INIT: {
+      if (len < sizeof(spi_mesh_init_t)) {
+        return SPI_STATUS_INVALID_ARG;
+      }
+      spi_mesh_init_t req;
+      memcpy(&req, payload, sizeof(req));
+      if (meshtastic_transport_init() != ESP_OK) {
+        return SPI_STATUS_ERROR;
+      }
+      esp_err_t ret = meshtastic_gatt_init(req.node_num);
+      if (ret == ESP_ERR_INVALID_STATE) {
+        return SPI_STATUS_OK;
+      }
+      return (ret == ESP_OK) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
+    }
+
+    case SPI_ID_MESH_BLE_STOP:
+      meshtastic_gatt_stop();
+      return SPI_STATUS_OK;
+
+    case SPI_ID_MESH_FROMRADIO_PUSH:
+      meshtastic_transport_inject_fromradio_chunk(payload, len);
+      return SPI_STATUS_OK;
+
+    case SPI_ID_MESH_LOG_PUSH:
+      meshtastic_transport_inject_log_chunk(payload, len);
+      return SPI_STATUS_OK;
+
+    case SPI_ID_MESH_STATUS: {
+      spi_mesh_status_t status;
+      meshtastic_transport_get_status(&status);
+      memcpy(out_resp_payload, &status, sizeof(status));
+      *out_resp_len = sizeof(status);
+      return SPI_STATUS_OK;
+    }
 
     default:
       return SPI_STATUS_ERROR;
