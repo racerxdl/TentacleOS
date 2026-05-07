@@ -26,6 +26,7 @@
 #include "bt_dispatcher.h"
 #include "bluetooth_service.h"
 #include "deauther_detector.h"
+#include "session_manager.h"
 #include "signal_monitor.h"
 #include "spi_slave_driver.h"
 #include "wifi_dispatcher.h"
@@ -149,6 +150,7 @@ esp_err_t spi_bridge_slave_init(void) {
   esp_err_t ret = spi_slave_driver_init();
   if (ret != ESP_OK)
     return ret;
+  session_manager_init();
   xTaskCreate(
       bridge_task, "spi_bridge_task", SPI_BRIDGE_TASK_STACK, NULL, SPI_BRIDGE_TASK_PRIO, NULL);
   return ESP_OK;
@@ -270,6 +272,19 @@ static void bridge_task(void *pvParameters) {
         continue;
       }
       status = SPI_STATUS_BUSY;
+    } else if (header->id == SPI_ID_SESSION_HEARTBEAT) {
+      spi_heartbeat_req_t req = {0};
+      memcpy(&req, rx_buf + sizeof(spi_header_t), sizeof(req));
+      bool alive = session_manager_heartbeat(req.session_id, req.last_acked_seq);
+      spi_heartbeat_resp_t resp = {.alive = alive ? (uint8_t)1 : (uint8_t)0};
+      memcpy(resp_payload, &resp, sizeof(resp));
+      resp_len = sizeof(resp);
+      status = SPI_STATUS_OK;
+    } else if (header->id == SPI_ID_SESSION_STOP) {
+      spi_session_stop_req_t req = {0};
+      memcpy(&req, rx_buf + sizeof(spi_header_t), sizeof(req));
+      esp_err_t r = session_manager_stop(req.session_id);
+      status = (r == ESP_OK) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
     } else if (header->id >= SPI_WIFI_CMD_MIN && header->id <= SPI_WIFI_CMD_MAX) {
       status = wifi_dispatcher_execute(
           header->id, rx_buf + sizeof(spi_header_t), header->length, resp_payload, &resp_len);

@@ -19,7 +19,11 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 #include "esp_err.h"
+
+#include "spi_protocol.h"
 
 /**
  * @brief Start the BLE packet sniffer.
@@ -34,6 +38,12 @@ esp_err_t ble_sniffer_start(void);
  * @brief Stop the BLE packet sniffer and free resources.
  */
 void ble_sniffer_stop(void);
+
+/** Bind a session ID to the running sniffer (called by dispatcher). */
+void ble_sniffer_bind_session(uint32_t session_id);
+
+/** Session-watchdog kill callback. */
+void ble_sniffer_session_killed(spi_id_t op_id);
 
 #ifdef __cplusplus
 }

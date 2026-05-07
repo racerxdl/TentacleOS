@@ -22,6 +22,8 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "spi_protocol.h"
+
 /**
  * @brief Packet filter type for the Wi-Fi sniffer.
  */
@@ -47,6 +49,26 @@ bool wifi_sniffer_start(wifi_sniffer_type_t type, uint8_t channel);
  * @brief Stop the Wi-Fi sniffer.
  */
 void wifi_sniffer_stop(void);
+
+/**
+ * @brief Enable monitor mode: when the local PCAP buffer fills up, the
+ * buffer recycles instead of dropping packets, and the packet counter
+ * keeps incrementing forever. Used by the Packet Monitor screen which
+ * only needs the counter, not the captured PCAP.
+ */
+void wifi_sniffer_set_monitor_mode(bool enabled);
+
+/**
+ * @brief Bind a session ID to the running sniffer (called by dispatcher
+ * after session_manager_start). Streams will be emitted via the session.
+ */
+void wifi_sniffer_bind_session(uint32_t session_id);
+
+/**
+ * @brief Kill callback: stops the sniffer when its session watchdog fires.
+ *  Compatible with session_kill_cb_t.
+ */
+void wifi_sniffer_session_killed(spi_id_t op_id);
 
 /**
  * @brief Save the PCAP buffer to internal flash.

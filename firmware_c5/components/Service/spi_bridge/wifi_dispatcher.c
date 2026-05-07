@@ -25,6 +25,7 @@
 #include "beacon_spam.h"
 #include "client_scanner.h"
 #include "deauther_detector.h"
+#include "session_manager.h"
 #include "evil_twin.h"
 #include "meshtastic_tcp.h"
 #include "probe_monitor.h"
@@ -62,6 +63,53 @@ static const char *TAG = "WIFI_DISPATCHER";
 #define WIFI_FLOOD_TYPE_PROBE     2
 
 static void promisc_noop_cb(void *buf, wifi_promiscuous_pkt_type_t type);
+
+// Session kill callbacks: invoked when watchdog times out a session.
+static void killed_deauther(spi_id_t id) {
+  (void)id;
+  wifi_deauther_stop();
+}
+static void killed_flood(spi_id_t id) {
+  (void)id;
+  wifi_flood_stop();
+}
+static void killed_evil_twin(spi_id_t id) {
+  (void)id;
+  evil_twin_stop_attack();
+}
+static void killed_beacon_spam(spi_id_t id) {
+  (void)id;
+  beacon_spam_stop();
+}
+static void killed_deauth_det(spi_id_t id) {
+  (void)id;
+  deauther_detector_stop();
+}
+static void killed_probe_mon(spi_id_t id) {
+  (void)id;
+  probe_monitor_stop();
+}
+static void killed_signal_mon(spi_id_t id) {
+  (void)id;
+  signal_monitor_stop();
+}
+
+// Helper: after a successful op start, open a session and write the response.
+static spi_status_t open_session(spi_id_t op_id,
+                                 session_kill_cb_t kill_cb,
+                                 uint8_t *out_resp_payload,
+                                 uint8_t *out_resp_len,
+                                 void (*rollback_stop)(void)) {
+  uint32_t sid = session_manager_start(op_id, kill_cb);
+  if (sid == SPI_SESSION_INVALID_ID) {
+    if (rollback_stop != NULL) rollback_stop();
+    return SPI_STATUS_ERROR;
+  }
+  spi_session_resp_t resp = {.session_id = sid};
+  memcpy(out_resp_payload, &resp, sizeof(resp));
+  *out_resp_len = sizeof(resp);
+  return SPI_STATUS_OK;
+}
 
 spi_status_t wifi_dispatcher_execute(spi_id_t id,
                                      const uint8_t *payload,
@@ -203,14 +251,19 @@ spi_status_t wifi_dispatcher_execute(spi_id_t id,
       }
 
     case SPI_ID_WIFI_APP_BEACON_SPAM: {
-      if (len == 0)
-        return beacon_spam_start_random() ? SPI_STATUS_OK : SPI_STATUS_ERROR;
-      char path[WIFI_PATH_MAX_LEN] = {0};
-      size_t copy_len = len;
-      if (copy_len >= sizeof(path))
-        copy_len = sizeof(path) - 1;
-      memcpy(path, payload, copy_len);
-      return beacon_spam_start_custom(path) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
+      bool ok;
+      if (len == 0) {
+        ok = beacon_spam_start_random();
+      } else {
+        char path[WIFI_PATH_MAX_LEN] = {0};
+        size_t copy_len = len;
+        if (copy_len >= sizeof(path)) copy_len = sizeof(path) - 1;
+        memcpy(path, payload, copy_len);
+        ok = beacon_spam_start_custom(path);
+      }
+      if (!ok) return SPI_STATUS_ERROR;
+      return open_session(SPI_ID_WIFI_APP_BEACON_SPAM, killed_beacon_spam,
+                          out_resp_payload, out_resp_len, beacon_spam_stop);
     }
 
     case SPI_ID_WIFI_APP_DEAUTHER: {
@@ -223,7 +276,9 @@ spi_status_t wifi_dispatcher_execute(spi_id_t id,
       uint8_t client[WIFI_MAC_LEN];
       memcpy(client, payload + WIFI_MAC_LEN, WIFI_MAC_LEN);
       wifi_deauther_frame_type_t type = (wifi_deauther_frame_type_t)payload[12];
-      return wifi_deauther_start_targeted(&target, client, type) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
+      if (!wifi_deauther_start_targeted(&target, client, type)) return SPI_STATUS_ERROR;
+      return open_session(SPI_ID_WIFI_APP_DEAUTHER, killed_deauther,
+                          out_resp_payload, out_resp_len, wifi_deauther_stop);
     }
 
     case SPI_ID_WIFI_APP_FLOOD: {
@@ -233,69 +288,73 @@ spi_status_t wifi_dispatcher_execute(spi_id_t id,
       uint8_t bssid[WIFI_MAC_LEN];
       memcpy(bssid, payload + 1, WIFI_MAC_LEN);
       uint8_t channel = (len >= 8) ? payload[7] : 1;
-      if (type == WIFI_FLOOD_TYPE_AUTH)
-        return wifi_flood_auth_start(bssid, channel) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
-      if (type == WIFI_FLOOD_TYPE_ASSOC)
-        return wifi_flood_assoc_start(bssid, channel) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
-      if (type == WIFI_FLOOD_TYPE_PROBE)
-        return wifi_flood_probe_start(bssid, channel) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
-      return SPI_STATUS_ERROR;
+      bool ok = false;
+      if (type == WIFI_FLOOD_TYPE_AUTH) ok = wifi_flood_auth_start(bssid, channel);
+      else if (type == WIFI_FLOOD_TYPE_ASSOC) ok = wifi_flood_assoc_start(bssid, channel);
+      else if (type == WIFI_FLOOD_TYPE_PROBE) ok = wifi_flood_probe_start(bssid, channel);
+      if (!ok) return SPI_STATUS_ERROR;
+      return open_session(SPI_ID_WIFI_APP_FLOOD, killed_flood,
+                          out_resp_payload, out_resp_len, wifi_flood_stop);
     }
 
     case SPI_ID_WIFI_APP_SNIFFER: {
       if (len < WIFI_SNIFFER_MIN_PAYLOAD)
         return SPI_STATUS_ERROR;
+      // payload[2] (optional): monitor_mode flag — when set, buffer recycles
+      // on overflow and packet counter keeps growing (used by Packet Monitor).
+      bool monitor_mode = (len >= 3) && (payload[2] != 0);
+      wifi_sniffer_set_monitor_mode(monitor_mode);
       spi_bridge_stream_enable(SPI_ID_WIFI_APP_SNIFFER, true);
-      if (wifi_sniffer_start((wifi_sniffer_type_t)payload[0], payload[1])) {
-        return SPI_STATUS_OK;
+      if (!wifi_sniffer_start((wifi_sniffer_type_t)payload[0], payload[1])) {
+        spi_bridge_stream_enable(SPI_ID_WIFI_APP_SNIFFER, false);
+        return SPI_STATUS_ERROR;
       }
-      spi_bridge_stream_enable(SPI_ID_WIFI_APP_SNIFFER, false);
-      return SPI_STATUS_ERROR;
+      uint32_t sid = session_manager_start(SPI_ID_WIFI_APP_SNIFFER, wifi_sniffer_session_killed);
+      if (sid == SPI_SESSION_INVALID_ID) {
+        wifi_sniffer_stop();
+        spi_bridge_stream_enable(SPI_ID_WIFI_APP_SNIFFER, false);
+        return SPI_STATUS_ERROR;
+      }
+      wifi_sniffer_bind_session(sid);
+      spi_session_resp_t resp = {.session_id = sid};
+      memcpy(out_resp_payload, &resp, sizeof(resp));
+      *out_resp_len = sizeof(resp);
+      return SPI_STATUS_OK;
     }
 
-    case SPI_ID_WIFI_APP_EVIL_TWIN:
-      if (len == 0)
-        return SPI_STATUS_INVALID_ARG;
-      {
-        char ssid[WIFI_SSID_BUF_LEN] = {0};
-        uint8_t copy_len = (len > WIFI_SSID_MAX_LEN) ? WIFI_SSID_MAX_LEN : len;
-        memcpy(ssid, payload, copy_len);
-        evil_twin_start_attack(ssid);
-        return SPI_STATUS_OK;
-      }
+    case SPI_ID_WIFI_APP_EVIL_TWIN: {
+      if (len == 0) return SPI_STATUS_INVALID_ARG;
+      char ssid[WIFI_SSID_BUF_LEN] = {0};
+      uint8_t copy_len = (len > WIFI_SSID_MAX_LEN) ? WIFI_SSID_MAX_LEN : len;
+      memcpy(ssid, payload, copy_len);
+      evil_twin_start_attack(ssid);
+      return open_session(SPI_ID_WIFI_APP_EVIL_TWIN, killed_evil_twin,
+                          out_resp_payload, out_resp_len, evil_twin_stop_attack);
+    }
 
     case SPI_ID_WIFI_APP_DEAUTH_DET:
       deauther_detector_start();
-      return SPI_STATUS_OK;
+      return open_session(SPI_ID_WIFI_APP_DEAUTH_DET, killed_deauth_det,
+                          out_resp_payload, out_resp_len, deauther_detector_stop);
 
     case SPI_ID_WIFI_APP_PROBE_MON:
-      if (probe_monitor_start()) {
+      if (!probe_monitor_start()) return SPI_STATUS_BUSY;
+      {
         uint16_t count;
         probe_monitor_record_t *results = probe_monitor_get_results(&count);
         spi_bridge_provide_results_dynamic(
             results, probe_monitor_get_count_ptr(), sizeof(probe_monitor_record_t));
-        return SPI_STATUS_OK;
       }
-      return SPI_STATUS_BUSY;
+      return open_session(SPI_ID_WIFI_APP_PROBE_MON, killed_probe_mon,
+                          out_resp_payload, out_resp_len, probe_monitor_stop);
 
     case SPI_ID_WIFI_APP_SIGNAL_MON: {
       if (len < WIFI_SIGNAL_MON_MIN_LEN)
         return SPI_STATUS_ERROR;
       signal_monitor_start(payload, payload[6]);
-      return SPI_STATUS_OK;
+      return open_session(SPI_ID_WIFI_APP_SIGNAL_MON, killed_signal_mon,
+                          out_resp_payload, out_resp_len, signal_monitor_stop);
     }
-
-    case SPI_ID_WIFI_APP_ATTACK_STOP:
-      wifi_deauther_stop();
-      wifi_flood_stop();
-      wifi_sniffer_stop();
-      evil_twin_stop_attack();
-      deauther_detector_stop();
-      probe_monitor_stop();
-      signal_monitor_stop();
-      beacon_spam_stop();
-      spi_bridge_stream_enable(SPI_ID_WIFI_APP_SNIFFER, false);
-      return SPI_STATUS_OK;
 
     case SPI_ID_WIFI_SNIFFER_SET_SNAPLEN: {
       if (len < 2)
