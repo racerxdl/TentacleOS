@@ -65,6 +65,18 @@ bool wifi_sniffer_start(wifi_sniffer_type_t type, uint8_t channel);
 bool wifi_sniffer_start_stream(wifi_sniffer_type_t type, uint8_t channel, wifi_sniffer_cb_t cb);
 
 /**
+ * @brief Start the sniffer in Packet Monitor mode (counter-only).
+ *
+ * Same as `wifi_sniffer_start(WIFI_SNIFFER_TYPE_RAW, channel)` but tells
+ * the C5 to recycle the PCAP buffer when full (instead of dropping new
+ * packets). Use this for the Packet Monitor screen which only reads
+ * counters and never saves the PCAP.
+ *
+ * @param channel  Wi-Fi channel (0 for hopping).
+ */
+bool wifi_sniffer_start_monitor(uint8_t channel);
+
+/**
  * @brief Stop the sniffer and release stream resources.
  */
 void wifi_sniffer_stop(void);

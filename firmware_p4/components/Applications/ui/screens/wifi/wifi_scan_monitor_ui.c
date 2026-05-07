@@ -103,7 +103,7 @@ void ui_wifi_scan_monitor_open(void) {
     s_update_timer = NULL;
   }
 
-  wifi_sniffer_start(WIFI_SNIFFER_TYPE_RAW, 0);
+  wifi_sniffer_start_monitor(0);
   s_last_pkt_count = 0;
 
   s_screen = lv_obj_create(NULL);

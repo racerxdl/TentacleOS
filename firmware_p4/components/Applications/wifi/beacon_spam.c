@@ -19,33 +19,38 @@
 #include "esp_log.h"
 
 #include "spi_bridge.h"
+#include "spi_session.h"
 
 static const char *TAG = "BEACON_SPAM";
 
 static bool s_is_running = false;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 
 bool beacon_spam_start_custom(const char *json_path) {
   if (json_path == NULL)
     return false;
   size_t len = strnlen(json_path, SPI_MAX_PAYLOAD - 1);
-  esp_err_t err = spi_bridge_send_command(
-      SPI_ID_WIFI_APP_BEACON_SPAM, (uint8_t *)json_path, (uint8_t)len, NULL, NULL, 2000);
-  s_is_running = (err == ESP_OK);
+  s_session_id = spi_session_start(
+      SPI_ID_WIFI_APP_BEACON_SPAM, (uint8_t *)json_path, (uint8_t)len, NULL, NULL);
+  s_is_running = (s_session_id != SPI_SESSION_INVALID_ID);
   if (!s_is_running)
     ESP_LOGW(TAG, "Failed to start beacon spam (custom list) over SPI");
   return s_is_running;
 }
 
 bool beacon_spam_start_random(void) {
-  esp_err_t err = spi_bridge_send_command(SPI_ID_WIFI_APP_BEACON_SPAM, NULL, 0, NULL, NULL, 2000);
-  s_is_running = (err == ESP_OK);
+  s_session_id = spi_session_start(SPI_ID_WIFI_APP_BEACON_SPAM, NULL, 0, NULL, NULL);
+  s_is_running = (s_session_id != SPI_SESSION_INVALID_ID);
   if (!s_is_running)
     ESP_LOGW(TAG, "Failed to start beacon spam (random) over SPI");
   return s_is_running;
 }
 
 void beacon_spam_stop(void) {
-  spi_bridge_send_command(SPI_ID_WIFI_APP_ATTACK_STOP, NULL, 0, NULL, NULL, 2000);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
+  }
   s_is_running = false;
 }
 

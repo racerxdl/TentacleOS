@@ -21,6 +21,7 @@
 #include "esp_log.h"
 
 #include "spi_bridge.h"
+#include "spi_session.h"
 #include "tos_storage_paths.h"
 #include "storage_read.h"
 #include "storage_write.h"
@@ -37,13 +38,15 @@ static const char *TAG = "EVIL_TWIN";
 #define EVIL_TWIN_PASSWORD_BUF_SIZE 2048
 
 static bool s_has_password = false;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 
 void evil_twin_start_attack(const char *ssid) {
   if (ssid == NULL)
     return;
   size_t len = strnlen(ssid, EVIL_TWIN_MAX_SSID_LEN);
-  if (spi_bridge_send_command(
-          SPI_ID_WIFI_APP_EVIL_TWIN, (uint8_t *)ssid, (uint8_t)len, NULL, NULL, 2000) == ESP_OK) {
+  s_session_id =
+      spi_session_start(SPI_ID_WIFI_APP_EVIL_TWIN, (uint8_t *)ssid, (uint8_t)len, NULL, NULL);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
     s_has_password = false;
   } else {
     ESP_LOGW(TAG, "Failed to start Evil Twin over SPI");
@@ -80,7 +83,10 @@ void evil_twin_start_attack_with_template(const char *ssid, const char *template
 }
 
 void evil_twin_stop_attack(void) {
-  spi_bridge_send_command(SPI_ID_WIFI_APP_ATTACK_STOP, NULL, 0, NULL, NULL, 2000);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
+  }
 }
 
 void evil_twin_reset_capture(void) {

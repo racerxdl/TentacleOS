@@ -19,6 +19,7 @@
 #include "esp_log.h"
 
 #include "spi_bridge.h"
+#include "spi_session.h"
 
 static const char *TAG = "SIGNAL_MONITOR";
 
@@ -27,19 +28,23 @@ static const char *TAG = "SIGNAL_MONITOR";
 #define SIGNAL_MONITOR_STATS_INDEX  0xEEEE
 
 static int8_t s_last_rssi = SIGNAL_MONITOR_DEFAULT_RSSI;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 
 void signal_monitor_start(const uint8_t *bssid, uint8_t channel) {
   ESP_LOGI(TAG, "Signal monitor started");
   uint8_t payload[SIGNAL_MONITOR_PAYLOAD_SIZE];
   memcpy(payload, bssid, 6);
   payload[6] = channel;
-  spi_bridge_send_command(
-      SPI_ID_WIFI_APP_SIGNAL_MON, payload, SIGNAL_MONITOR_PAYLOAD_SIZE, NULL, NULL, 2000);
+  s_session_id = spi_session_start(
+      SPI_ID_WIFI_APP_SIGNAL_MON, payload, SIGNAL_MONITOR_PAYLOAD_SIZE, NULL, NULL);
 }
 
 void signal_monitor_stop(void) {
   ESP_LOGI(TAG, "Signal monitor stopped");
-  spi_bridge_send_command(SPI_ID_WIFI_APP_ATTACK_STOP, NULL, 0, NULL, NULL, 2000);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
+  }
 }
 
 int8_t signal_monitor_get_rssi(void) {

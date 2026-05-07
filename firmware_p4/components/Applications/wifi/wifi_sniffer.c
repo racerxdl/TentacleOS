@@ -19,6 +19,7 @@
 #include "esp_log.h"
 
 #include "spi_bridge.h"
+#include "spi_session.h"
 #include "storage_stream.h"
 
 static const char *TAG = "WIFI_SNIFFER";
@@ -28,11 +29,11 @@ static const char *TAG = "WIFI_SNIFFER";
 static spi_sniffer_stats_t s_cached_stats;
 static wifi_sniffer_cb_t s_stream_cb = NULL;
 static storage_stream_t s_capture_stream = NULL;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 
 bool wifi_sniffer_stop_capture(void);
 
-static void stream_callback(spi_id_t id, const uint8_t *payload, uint8_t len) {
-  (void)id;
+static void session_stream_cb(const uint8_t *payload, uint8_t len) {
   if (payload == NULL || len < WIFI_SNIFFER_MIN_FRAME_LEN)
     return;
   const spi_wifi_sniffer_frame_t *frame = (const spi_wifi_sniffer_frame_t *)payload;
@@ -49,6 +50,15 @@ static void stream_callback(spi_id_t id, const uint8_t *payload, uint8_t len) {
   }
 }
 
+static void session_lost_cb(uint32_t session_id, spi_id_t op_id) {
+  (void)op_id;
+  if (session_id == s_session_id) {
+    s_session_id = SPI_SESSION_INVALID_ID;
+    wifi_sniffer_stop_capture();
+    s_stream_cb = NULL;
+  }
+}
+
 static void update_stats(void) {
   spi_header_t resp;
   uint16_t magic_stats = SPI_DATA_INDEX_STATS;
@@ -56,31 +66,45 @@ static void update_stats(void) {
       SPI_ID_SYSTEM_DATA, (uint8_t *)&magic_stats, 2, &resp, (uint8_t *)&s_cached_stats, 1000);
 }
 
-bool wifi_sniffer_start(wifi_sniffer_type_t type, uint8_t channel) {
-  uint8_t payload[2];
+static bool start_internal(wifi_sniffer_type_t type,
+                           uint8_t channel,
+                           bool monitor_mode,
+                           wifi_sniffer_cb_t cb) {
+  uint8_t payload[3];
   payload[0] = (uint8_t)type;
   payload[1] = channel;
+  payload[2] = monitor_mode ? 1 : 0;
   memset(&s_cached_stats, 0, sizeof(s_cached_stats));
-  return (spi_bridge_send_command(SPI_ID_WIFI_APP_SNIFFER, payload, 2, NULL, NULL, 2000) == ESP_OK);
-}
-
-bool wifi_sniffer_start_stream(wifi_sniffer_type_t type, uint8_t channel, wifi_sniffer_cb_t cb) {
-  if (cb == NULL) {
-    return wifi_sniffer_start(type, channel);
-  }
   s_stream_cb = cb;
-  spi_bridge_register_stream_cb(SPI_ID_WIFI_APP_SNIFFER, stream_callback);
-  if (!wifi_sniffer_start(type, channel)) {
-    spi_bridge_unregister_stream_cb(SPI_ID_WIFI_APP_SNIFFER);
+  s_session_id = spi_session_start(SPI_ID_WIFI_APP_SNIFFER,
+                                   payload,
+                                   sizeof(payload),
+                                   session_stream_cb,
+                                   session_lost_cb);
+  if (s_session_id == SPI_SESSION_INVALID_ID) {
     s_stream_cb = NULL;
     return false;
   }
   return true;
 }
 
+bool wifi_sniffer_start(wifi_sniffer_type_t type, uint8_t channel) {
+  return start_internal(type, channel, false, NULL);
+}
+
+bool wifi_sniffer_start_stream(wifi_sniffer_type_t type, uint8_t channel, wifi_sniffer_cb_t cb) {
+  return start_internal(type, channel, false, cb);
+}
+
+bool wifi_sniffer_start_monitor(uint8_t channel) {
+  return start_internal(WIFI_SNIFFER_TYPE_RAW, channel, true, NULL);
+}
+
 void wifi_sniffer_stop(void) {
-  spi_bridge_send_command(SPI_ID_WIFI_APP_ATTACK_STOP, NULL, 0, NULL, NULL, 2000);
-  spi_bridge_unregister_stream_cb(SPI_ID_WIFI_APP_SNIFFER);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
+  }
   wifi_sniffer_stop_capture();
   s_stream_cb = NULL;
 }

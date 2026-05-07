@@ -22,6 +22,7 @@
 #include "freertos/task.h"
 
 #include "spi_bridge_phy.h"
+#include "spi_timeouts.h"
 
 static const char *TAG = "SPI_BRIDGE_P4";
 
@@ -42,6 +43,7 @@ typedef struct {
 static SemaphoreHandle_t s_spi_mutex = NULL;
 static TaskHandle_t s_stream_task_handle = NULL;
 static volatile bool s_is_command_in_flight = false;
+static volatile bool s_bridge_alive = true;
 static stream_cb_slot_t s_stream_cbs[SPI_STREAM_CB_SLOTS] = {0};
 
 static void stream_task(void *arg);
@@ -124,12 +126,26 @@ void spi_bridge_unregister_stream_cb(spi_id_t id) {
   }
 }
 
+void spi_bridge_set_alive(bool alive) {
+  s_bridge_alive = alive;
+}
+
+uint32_t spi_bridge_get_timeout(spi_id_t id) {
+  if (id >= SPI_ID_WIFI_SCAN && id <= SPI_ID_WIFI_APP_PROBE_MON) {
+    return SPI_TIMEOUT_WIFI_MS;
+  }
+  return SPI_TIMEOUT_DEFAULT_MS;
+}
+
 esp_err_t spi_bridge_send_command(spi_id_t id,
                                   const uint8_t *payload,
                                   uint8_t len,
                                   spi_header_t *out_header,
                                   uint8_t *out_payload,
                                   uint32_t timeout_ms) {
+  if (!s_bridge_alive) {
+    return ESP_ERR_INVALID_STATE;
+  }
   if (s_spi_mutex == NULL) {
     s_spi_mutex = xSemaphoreCreateMutex();
   }

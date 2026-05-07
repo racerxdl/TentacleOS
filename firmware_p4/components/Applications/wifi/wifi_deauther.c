@@ -19,8 +19,11 @@
 #include "esp_log.h"
 
 #include "spi_bridge.h"
+#include "spi_session.h"
 
 static const char *TAG = "WIFI_DEAUTHER";
+
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 
 bool wifi_deauther_start(const wifi_ap_record_t *ap_record,
                          wifi_deauther_frame_type_t type,
@@ -31,8 +34,9 @@ bool wifi_deauther_start(const wifi_ap_record_t *ap_record,
   memset(payload + 6, is_broadcast ? 0xFF : 0x00, 6);
   payload[12] = (uint8_t)type;
   payload[13] = ap_record->primary;
-  return (spi_bridge_send_command(
-              SPI_ID_WIFI_APP_DEAUTHER, payload, sizeof(payload), NULL, NULL, 2000) == ESP_OK);
+  s_session_id =
+      spi_session_start(SPI_ID_WIFI_APP_DEAUTHER, payload, sizeof(payload), NULL, NULL);
+  return s_session_id != SPI_SESSION_INVALID_ID;
 }
 
 bool wifi_deauther_start_targeted(const wifi_ap_record_t *ap_record,
@@ -43,13 +47,17 @@ bool wifi_deauther_start_targeted(const wifi_ap_record_t *ap_record,
   memcpy(payload + 6, client_mac, 6);
   payload[12] = (uint8_t)type;
   payload[13] = ap_record->primary;
-  return (spi_bridge_send_command(
-              SPI_ID_WIFI_APP_DEAUTHER, payload, sizeof(payload), NULL, NULL, 2000) == ESP_OK);
+  s_session_id =
+      spi_session_start(SPI_ID_WIFI_APP_DEAUTHER, payload, sizeof(payload), NULL, NULL);
+  return s_session_id != SPI_SESSION_INVALID_ID;
 }
 
 void wifi_deauther_stop(void) {
   ESP_LOGI(TAG, "Deauth stopped");
-  spi_bridge_send_command(SPI_ID_WIFI_APP_ATTACK_STOP, NULL, 0, NULL, NULL, 2000);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
+  }
 }
 
 bool wifi_deauther_is_running(void) {

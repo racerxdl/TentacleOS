@@ -20,27 +20,31 @@
 #include "esp_log.h"
 
 #include "spi_bridge.h"
+#include "spi_session.h"
 
 static const char *TAG = "SKIMMER_DETECTOR";
 
-#define SPI_TIMEOUT_MS      2000
 #define SPI_DATA_TIMEOUT_MS 1000
 
 static skimmer_detector_record_t *s_cached_results = NULL;
 static uint16_t s_cached_count = 0;
 static uint16_t s_cached_capacity = 0;
 static skimmer_detector_record_t s_empty_record;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 
 bool skimmer_detector_start(void) {
   ESP_LOGI(TAG, "Skimmer detector started");
   skimmer_detector_clear_results();
-  return (spi_bridge_send_command(SPI_ID_BT_APP_SKIMMER, NULL, 0, NULL, NULL, SPI_TIMEOUT_MS) ==
-          ESP_OK);
+  s_session_id = spi_session_start(SPI_ID_BT_APP_SKIMMER, NULL, 0, NULL, NULL);
+  return s_session_id != SPI_SESSION_INVALID_ID;
 }
 
 void skimmer_detector_stop(void) {
   ESP_LOGI(TAG, "Skimmer detector stopped");
-  spi_bridge_send_command(SPI_ID_BT_APP_STOP, NULL, 0, NULL, NULL, SPI_TIMEOUT_MS);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
+  }
   skimmer_detector_clear_results();
 }
 

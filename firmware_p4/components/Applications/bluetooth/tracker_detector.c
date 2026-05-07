@@ -20,27 +20,31 @@
 #include "esp_log.h"
 
 #include "spi_bridge.h"
+#include "spi_session.h"
 
 static const char *TAG = "TRACKER_DETECTOR";
 
-#define SPI_TIMEOUT_MS      2000
 #define SPI_DATA_TIMEOUT_MS 1000
 
 static tracker_detector_record_t *s_cached_results = NULL;
 static uint16_t s_cached_count = 0;
 static uint16_t s_cached_capacity = 0;
 static tracker_detector_record_t s_empty_record;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 
 bool tracker_detector_start(void) {
   ESP_LOGI(TAG, "Tracker detector started");
   tracker_detector_clear_results();
-  return (spi_bridge_send_command(SPI_ID_BT_APP_TRACKER, NULL, 0, NULL, NULL, SPI_TIMEOUT_MS) ==
-          ESP_OK);
+  s_session_id = spi_session_start(SPI_ID_BT_APP_TRACKER, NULL, 0, NULL, NULL);
+  return s_session_id != SPI_SESSION_INVALID_ID;
 }
 
 void tracker_detector_stop(void) {
   ESP_LOGI(TAG, "Tracker detector stopped");
-  spi_bridge_send_command(SPI_ID_BT_APP_STOP, NULL, 0, NULL, NULL, SPI_TIMEOUT_MS);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
+  }
   tracker_detector_clear_results();
 }
 

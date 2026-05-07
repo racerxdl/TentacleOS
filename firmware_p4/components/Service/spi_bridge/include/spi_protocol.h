@@ -80,7 +80,6 @@ typedef enum {
   SPI_ID_WIFI_APP_DEAUTH_DET = 0x27,
   SPI_ID_WIFI_APP_PROBE_MON = 0x28,
   SPI_ID_WIFI_APP_SIGNAL_MON = 0x29,
-  SPI_ID_WIFI_APP_ATTACK_STOP = 0x2A,
   SPI_ID_WIFI_SNIFFER_SET_SNAPLEN = 0x2B,
   SPI_ID_WIFI_SNIFFER_SET_VERBOSE = 0x2C,
   SPI_ID_WIFI_SNIFFER_SAVE_FLASH = 0x2D,
@@ -147,7 +146,6 @@ typedef enum {
   SPI_ID_BT_APP_SKIMMER = 0x64,
   SPI_ID_BT_APP_TRACKER = 0x65,
   SPI_ID_BT_APP_GATT_EXP = 0x66,
-  SPI_ID_BT_APP_STOP = 0x67,
   SPI_ID_BT_SPAM_LIST_LOAD = 0x68,
   SPI_ID_BT_SPAM_LIST_BEGIN = 0x69,
   SPI_ID_BT_SPAM_LIST_ITEM = 0x6A,
@@ -174,7 +172,12 @@ typedef enum {
   SPI_ID_MESH_FROMRADIO_PUSH = 0x94,
   SPI_ID_MESH_LOG_PUSH = 0x95,
   SPI_ID_MESH_STATUS = 0x96,
-  SPI_ID_MESH_TORADIO_STREAM = 0x97
+  SPI_ID_MESH_TORADIO_STREAM = 0x97,
+
+  // Session lifecycle (long-running operations)
+  SPI_ID_SESSION_HEARTBEAT = 0xF0,
+  SPI_ID_SESSION_LOST = 0xF1,
+  SPI_ID_SESSION_STOP = 0xF2
 } spi_id_t;
 
 /**
@@ -197,6 +200,44 @@ typedef struct {
   uint8_t id;     // spi_id_t
   uint8_t length; // Payload length
 } spi_header_t;
+
+// Session protocol — see spi_bridge/README.md "Session Lifecycle"
+#define SPI_SESSION_INVALID_ID 0u
+#define SPI_SESSION_WINDOW     64u
+
+/** Sent by C5 as response payload to a long-running START command.
+ *  Valid only if the SPI response status byte is SPI_STATUS_OK. */
+typedef struct __attribute__((packed)) {
+  uint32_t session_id;
+} spi_session_resp_t;
+
+/** Sent by P4 every ~2s to keep a session alive and ack streams received. */
+typedef struct __attribute__((packed)) {
+  uint32_t session_id;
+  uint32_t last_acked_seq; // highest stream seq P4 has processed
+} spi_heartbeat_req_t;
+
+/** C5 reply to heartbeat. */
+typedef struct __attribute__((packed)) {
+  uint8_t alive; // 1 if session still active, 0 if not found / different op
+} spi_heartbeat_resp_t;
+
+/** Prefixed to every stream payload from a session-managed operation. */
+typedef struct __attribute__((packed)) {
+  uint32_t session_id;
+  uint32_t seq;
+} spi_stream_meta_t;
+
+/** Sent by P4 in payload of long-running STOP commands. */
+typedef struct __attribute__((packed)) {
+  uint32_t session_id;
+} spi_session_stop_req_t;
+
+/** Stream emitted by C5 when a session is auto-killed by the watchdog. */
+typedef struct __attribute__((packed)) {
+  uint32_t session_id;
+  uint8_t op_id; // spi_id_t of the lost operation
+} spi_session_lost_t;
 
 #define SPI_FRAME_SIZE (sizeof(spi_header_t) + SPI_MAX_PAYLOAD)
 

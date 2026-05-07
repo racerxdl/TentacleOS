@@ -19,17 +19,24 @@
 #include "esp_log.h"
 
 #include "spi_bridge.h"
+#include "spi_session.h"
 
 static const char *TAG = "DEAUTHER_DETECTOR";
 
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
+
 void deauther_detector_start(void) {
-  if (spi_bridge_send_command(SPI_ID_WIFI_APP_DEAUTH_DET, NULL, 0, NULL, NULL, 2000) != ESP_OK) {
+  s_session_id = spi_session_start(SPI_ID_WIFI_APP_DEAUTH_DET, NULL, 0, NULL, NULL);
+  if (s_session_id == SPI_SESSION_INVALID_ID) {
     ESP_LOGW(TAG, "Failed to start deauth detector over SPI");
   }
 }
 
 void deauther_detector_stop(void) {
-  spi_bridge_send_command(SPI_ID_WIFI_APP_ATTACK_STOP, NULL, 0, NULL, NULL, 2000);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
+  }
 }
 
 uint32_t deauther_detector_get_count(void) {

@@ -20,6 +20,7 @@
 #include "esp_log.h"
 
 #include "spi_bridge.h"
+#include "spi_session.h"
 
 static const char *TAG = "PROBE_MONITOR";
 
@@ -30,14 +31,19 @@ static probe_monitor_record_t *s_cached_results = NULL;
 static uint16_t s_cached_count = 0;
 static uint16_t s_cached_capacity = 0;
 static probe_monitor_record_t s_empty_record;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 
 bool probe_monitor_start(void) {
   probe_monitor_free_results();
-  return (spi_bridge_send_command(SPI_ID_WIFI_APP_PROBE_MON, NULL, 0, NULL, NULL, 2000) == ESP_OK);
+  s_session_id = spi_session_start(SPI_ID_WIFI_APP_PROBE_MON, NULL, 0, NULL, NULL);
+  return s_session_id != SPI_SESSION_INVALID_ID;
 }
 
 void probe_monitor_stop(void) {
-  spi_bridge_send_command(SPI_ID_WIFI_APP_ATTACK_STOP, NULL, 0, NULL, NULL, 2000);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
+  }
   probe_monitor_free_results();
 }
 

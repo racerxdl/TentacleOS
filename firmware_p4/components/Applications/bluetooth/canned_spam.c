@@ -29,11 +29,9 @@
 #include "bluetooth_service.h"
 #include "spi_bridge.h"
 #include "spi_protocol.h"
+#include "spi_session.h"
 
 static const char *TAG = "CANNED_SPAM";
-
-#define SPAM_SPI_START_TIMEOUT 5000
-#define SPAM_SPI_STOP_TIMEOUT  2000
 
 typedef enum {
   CANNED_SPAM_CAT_APPLE_JUICE = 0,
@@ -50,6 +48,7 @@ static const canned_spam_type_t CATEGORY_INFO[] = {
 
 static bool s_is_running = false;
 static int s_current_category = -1;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 
 int spam_get_attack_count(void) {
   return CANNED_SPAM_CAT_COUNT;
@@ -77,13 +76,8 @@ esp_err_t spam_start(int attack_index) {
   }
 
   uint8_t payload = (uint8_t)attack_index;
-  spi_header_t resp_hdr;
-  uint8_t resp_buf[SPI_MAX_PAYLOAD];
-
-  esp_err_t ret = spi_bridge_send_command(
-      SPI_ID_BT_APP_SPAM, &payload, sizeof(payload), &resp_hdr, resp_buf, SPAM_SPI_START_TIMEOUT);
-
-  if (ret != ESP_OK || resp_buf[0] != SPI_STATUS_OK) {
+  s_session_id = spi_session_start(SPI_ID_BT_APP_SPAM, &payload, sizeof(payload), NULL, NULL);
+  if (s_session_id == SPI_SESSION_INVALID_ID) {
     ESP_LOGE(TAG, "Failed to start spam on C5");
     return ESP_FAIL;
   }
@@ -100,16 +94,10 @@ esp_err_t spam_stop(void) {
     return ESP_ERR_INVALID_STATE;
   }
 
-  spi_header_t resp_hdr;
-  uint8_t resp_buf[SPI_MAX_PAYLOAD];
-
-  esp_err_t ret = spi_bridge_send_command(
-      SPI_ID_BT_APP_STOP, NULL, 0, &resp_hdr, resp_buf, SPAM_SPI_STOP_TIMEOUT);
-
-  if (ret != ESP_OK || resp_buf[0] != SPI_STATUS_OK) {
-    ESP_LOGW(TAG, "Failed to stop spam on C5");
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
   }
-
   s_is_running = false;
   ESP_LOGI(TAG, "Spam stopped");
   return ESP_OK;

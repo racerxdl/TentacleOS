@@ -20,6 +20,7 @@
 #include "esp_log.h"
 
 #include "spi_bridge.h"
+#include "spi_session.h"
 
 static const char *TAG = "BT_SERVICE_P4";
 
@@ -30,9 +31,9 @@ static const char *TAG = "BT_SERVICE_P4";
 #define BLE_MAC_LEN            6
 
 static bluetooth_service_sniffer_cb_t s_sniffer_cb = NULL;
+static uint32_t s_sniffer_session = SPI_SESSION_INVALID_ID;
 static bluetooth_service_scan_result_t s_cached_scan_record;
 
-static void sniffer_stream_cb(spi_id_t id, const uint8_t *payload, uint8_t len);
 static bool get_info(spi_bt_info_t *out_info);
 
 // Public function implementations
@@ -102,23 +103,36 @@ esp_err_t bluetooth_service_connect(const uint8_t *addr,
       SPI_ID_BT_CONNECT, payload, sizeof(payload), NULL, NULL, SPI_CONNECT_TIMEOUT_MS);
 }
 
-esp_err_t bluetooth_service_start_sniffer(bluetooth_service_sniffer_cb_t cb) {
-  s_sniffer_cb = cb;
-  if (cb != NULL) {
-    spi_bridge_register_stream_cb(SPI_ID_BT_APP_SNIFFER, sniffer_stream_cb);
-  }
-  esp_err_t err =
-      spi_bridge_send_command(SPI_ID_BT_APP_SNIFFER, NULL, 0, NULL, NULL, SPI_TIMEOUT_MS);
-  if (err != ESP_OK) {
-    spi_bridge_unregister_stream_cb(SPI_ID_BT_APP_SNIFFER);
+static void sniffer_session_stream(const uint8_t *payload, uint8_t len) {
+  if (s_sniffer_cb == NULL || payload == NULL || len < sizeof(spi_ble_sniffer_frame_t)) return;
+  const spi_ble_sniffer_frame_t *frame = (const spi_ble_sniffer_frame_t *)payload;
+  s_sniffer_cb(frame->addr, frame->addr_type, frame->rssi, frame->data, frame->len);
+}
+
+static void sniffer_session_lost(uint32_t session_id, spi_id_t op_id) {
+  (void)op_id;
+  if (session_id == s_sniffer_session) {
+    s_sniffer_session = SPI_SESSION_INVALID_ID;
     s_sniffer_cb = NULL;
   }
-  return err;
+}
+
+esp_err_t bluetooth_service_start_sniffer(bluetooth_service_sniffer_cb_t cb) {
+  s_sniffer_cb = cb;
+  s_sniffer_session = spi_session_start(
+      SPI_ID_BT_APP_SNIFFER, NULL, 0, sniffer_session_stream, sniffer_session_lost);
+  if (s_sniffer_session == SPI_SESSION_INVALID_ID) {
+    s_sniffer_cb = NULL;
+    return ESP_FAIL;
+  }
+  return ESP_OK;
 }
 
 void bluetooth_service_stop_sniffer(void) {
-  spi_bridge_send_command(SPI_ID_BT_APP_STOP, NULL, 0, NULL, NULL, SPI_TIMEOUT_MS);
-  spi_bridge_unregister_stream_cb(SPI_ID_BT_APP_SNIFFER);
+  if (s_sniffer_session != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_sniffer_session);
+    s_sniffer_session = SPI_SESSION_INVALID_ID;
+  }
   s_sniffer_cb = NULL;
 }
 
@@ -304,15 +318,6 @@ bluetooth_service_scan_result_t *bluetooth_service_get_scan_result(uint16_t inde
 }
 
 // Static function implementations
-
-static void sniffer_stream_cb(spi_id_t id, const uint8_t *payload, uint8_t len) {
-  (void)id;
-  if (s_sniffer_cb == NULL || payload == NULL || len < sizeof(spi_ble_sniffer_frame_t)) {
-    return;
-  }
-  const spi_ble_sniffer_frame_t *frame = (const spi_ble_sniffer_frame_t *)payload;
-  s_sniffer_cb(frame->addr, frame->addr_type, frame->rssi, frame->data, frame->len);
-}
 
 static bool get_info(spi_bt_info_t *out_info) {
   if (out_info == NULL) {

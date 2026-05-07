@@ -21,14 +21,14 @@
 #include "bluetooth_service.h"
 #include "spi_bridge.h"
 #include "spi_protocol.h"
+#include "spi_session.h"
 
 static const char *TAG = "BLE_L2CAP_FLOOD";
 
 #define L2CAP_ADDR_PAYLOAD_SIZE 7
-#define L2CAP_SPI_START_TIMEOUT 5000
-#define L2CAP_SPI_STOP_TIMEOUT  2000
 
 static bool s_is_running = false;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 
 esp_err_t ble_l2cap_flood_start(const uint8_t *addr, uint8_t addr_type) {
   if (s_is_running) {
@@ -44,13 +44,8 @@ esp_err_t ble_l2cap_flood_start(const uint8_t *addr, uint8_t addr_type) {
   memcpy(payload, addr, 6);
   payload[6] = addr_type;
 
-  spi_header_t resp_hdr;
-  uint8_t resp_buf[SPI_MAX_PAYLOAD];
-
-  esp_err_t ret = spi_bridge_send_command(
-      SPI_ID_BT_APP_FLOOD, payload, sizeof(payload), &resp_hdr, resp_buf, L2CAP_SPI_START_TIMEOUT);
-
-  if (ret != ESP_OK || resp_buf[0] != SPI_STATUS_OK) {
+  s_session_id = spi_session_start(SPI_ID_BT_APP_FLOOD, payload, sizeof(payload), NULL, NULL);
+  if (s_session_id == SPI_SESSION_INVALID_ID) {
     ESP_LOGE(TAG, "Failed to start L2CAP flood on C5");
     return ESP_FAIL;
   }
@@ -64,16 +59,10 @@ esp_err_t ble_l2cap_flood_stop(void) {
   if (!s_is_running)
     return ESP_OK;
 
-  spi_header_t resp_hdr;
-  uint8_t resp_buf[SPI_MAX_PAYLOAD];
-
-  esp_err_t ret = spi_bridge_send_command(
-      SPI_ID_BT_APP_STOP, NULL, 0, &resp_hdr, resp_buf, L2CAP_SPI_STOP_TIMEOUT);
-
-  if (ret != ESP_OK || resp_buf[0] != SPI_STATUS_OK) {
-    ESP_LOGW(TAG, "Failed to stop L2CAP flood on C5");
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
   }
-
   s_is_running = false;
   ESP_LOGI(TAG, "L2CAP Flood stopped");
   return ESP_OK;

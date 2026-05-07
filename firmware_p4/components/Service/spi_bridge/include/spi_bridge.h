@@ -19,6 +19,7 @@
 extern "C" {
 #endif
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "esp_err.h"
@@ -42,6 +43,28 @@ typedef void (*spi_stream_cb_t)(spi_id_t id, const uint8_t *payload, uint8_t len
  *   - Error code from the SPI PHY driver on failure
  */
 esp_err_t spi_bridge_master_init(void);
+
+/**
+ * @brief Return the timeout (ms) for a given SPI command ID.
+ *
+ * Returns SPI_TIMEOUT_DEFAULT_MS unless the command is in the override
+ * table (e.g. WiFi commands which need more time).
+ *
+ * @param id  SPI command identifier.
+ * @return    Timeout in milliseconds.
+ */
+uint32_t spi_bridge_get_timeout(spi_id_t id);
+
+/**
+ * @brief Mark the bridge as alive or dead.
+ *
+ * When dead, spi_bridge_send_command returns ESP_ERR_INVALID_STATE
+ * immediately without attempting transmission. Used to silence the
+ * polling spam when the C5 SPI bridge is not connected/responding.
+ *
+ * @param alive true if the C5 is responding, false otherwise.
+ */
+void spi_bridge_set_alive(bool alive);
 
 /**
  * @brief Send a command to the SPI slave and receive the response.
