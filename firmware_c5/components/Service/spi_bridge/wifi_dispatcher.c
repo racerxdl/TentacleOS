@@ -102,7 +102,8 @@ static spi_status_t open_session(spi_id_t op_id,
                                  void (*rollback_stop)(void)) {
   uint32_t sid = session_manager_start(op_id, kill_cb);
   if (sid == SPI_SESSION_INVALID_ID) {
-    if (rollback_stop != NULL) rollback_stop();
+    if (rollback_stop != NULL)
+      rollback_stop();
     return SPI_STATUS_ERROR;
   }
   spi_session_resp_t resp = {.session_id = sid};
@@ -257,13 +258,18 @@ spi_status_t wifi_dispatcher_execute(spi_id_t id,
       } else {
         char path[WIFI_PATH_MAX_LEN] = {0};
         size_t copy_len = len;
-        if (copy_len >= sizeof(path)) copy_len = sizeof(path) - 1;
+        if (copy_len >= sizeof(path))
+          copy_len = sizeof(path) - 1;
         memcpy(path, payload, copy_len);
         ok = beacon_spam_start_custom(path);
       }
-      if (!ok) return SPI_STATUS_ERROR;
-      return open_session(SPI_ID_WIFI_APP_BEACON_SPAM, killed_beacon_spam,
-                          out_resp_payload, out_resp_len, beacon_spam_stop);
+      if (!ok)
+        return SPI_STATUS_ERROR;
+      return open_session(SPI_ID_WIFI_APP_BEACON_SPAM,
+                          killed_beacon_spam,
+                          out_resp_payload,
+                          out_resp_len,
+                          beacon_spam_stop);
     }
 
     case SPI_ID_WIFI_APP_DEAUTHER: {
@@ -276,9 +282,13 @@ spi_status_t wifi_dispatcher_execute(spi_id_t id,
       uint8_t client[WIFI_MAC_LEN];
       memcpy(client, payload + WIFI_MAC_LEN, WIFI_MAC_LEN);
       wifi_deauther_frame_type_t type = (wifi_deauther_frame_type_t)payload[12];
-      if (!wifi_deauther_start_targeted(&target, client, type)) return SPI_STATUS_ERROR;
-      return open_session(SPI_ID_WIFI_APP_DEAUTHER, killed_deauther,
-                          out_resp_payload, out_resp_len, wifi_deauther_stop);
+      if (!wifi_deauther_start_targeted(&target, client, type))
+        return SPI_STATUS_ERROR;
+      return open_session(SPI_ID_WIFI_APP_DEAUTHER,
+                          killed_deauther,
+                          out_resp_payload,
+                          out_resp_len,
+                          wifi_deauther_stop);
     }
 
     case SPI_ID_WIFI_APP_FLOOD: {
@@ -289,12 +299,16 @@ spi_status_t wifi_dispatcher_execute(spi_id_t id,
       memcpy(bssid, payload + 1, WIFI_MAC_LEN);
       uint8_t channel = (len >= 8) ? payload[7] : 1;
       bool ok = false;
-      if (type == WIFI_FLOOD_TYPE_AUTH) ok = wifi_flood_auth_start(bssid, channel);
-      else if (type == WIFI_FLOOD_TYPE_ASSOC) ok = wifi_flood_assoc_start(bssid, channel);
-      else if (type == WIFI_FLOOD_TYPE_PROBE) ok = wifi_flood_probe_start(bssid, channel);
-      if (!ok) return SPI_STATUS_ERROR;
-      return open_session(SPI_ID_WIFI_APP_FLOOD, killed_flood,
-                          out_resp_payload, out_resp_len, wifi_flood_stop);
+      if (type == WIFI_FLOOD_TYPE_AUTH)
+        ok = wifi_flood_auth_start(bssid, channel);
+      else if (type == WIFI_FLOOD_TYPE_ASSOC)
+        ok = wifi_flood_assoc_start(bssid, channel);
+      else if (type == WIFI_FLOOD_TYPE_PROBE)
+        ok = wifi_flood_probe_start(bssid, channel);
+      if (!ok)
+        return SPI_STATUS_ERROR;
+      return open_session(
+          SPI_ID_WIFI_APP_FLOOD, killed_flood, out_resp_payload, out_resp_len, wifi_flood_stop);
     }
 
     case SPI_ID_WIFI_APP_SNIFFER: {
@@ -323,37 +337,51 @@ spi_status_t wifi_dispatcher_execute(spi_id_t id,
     }
 
     case SPI_ID_WIFI_APP_EVIL_TWIN: {
-      if (len == 0) return SPI_STATUS_INVALID_ARG;
+      if (len == 0)
+        return SPI_STATUS_INVALID_ARG;
       char ssid[WIFI_SSID_BUF_LEN] = {0};
       uint8_t copy_len = (len > WIFI_SSID_MAX_LEN) ? WIFI_SSID_MAX_LEN : len;
       memcpy(ssid, payload, copy_len);
       evil_twin_start_attack(ssid);
-      return open_session(SPI_ID_WIFI_APP_EVIL_TWIN, killed_evil_twin,
-                          out_resp_payload, out_resp_len, evil_twin_stop_attack);
+      return open_session(SPI_ID_WIFI_APP_EVIL_TWIN,
+                          killed_evil_twin,
+                          out_resp_payload,
+                          out_resp_len,
+                          evil_twin_stop_attack);
     }
 
     case SPI_ID_WIFI_APP_DEAUTH_DET:
       deauther_detector_start();
-      return open_session(SPI_ID_WIFI_APP_DEAUTH_DET, killed_deauth_det,
-                          out_resp_payload, out_resp_len, deauther_detector_stop);
+      return open_session(SPI_ID_WIFI_APP_DEAUTH_DET,
+                          killed_deauth_det,
+                          out_resp_payload,
+                          out_resp_len,
+                          deauther_detector_stop);
 
     case SPI_ID_WIFI_APP_PROBE_MON:
-      if (!probe_monitor_start()) return SPI_STATUS_BUSY;
+      if (!probe_monitor_start())
+        return SPI_STATUS_BUSY;
       {
         uint16_t count;
         probe_monitor_record_t *results = probe_monitor_get_results(&count);
         spi_bridge_provide_results_dynamic(
             results, probe_monitor_get_count_ptr(), sizeof(probe_monitor_record_t));
       }
-      return open_session(SPI_ID_WIFI_APP_PROBE_MON, killed_probe_mon,
-                          out_resp_payload, out_resp_len, probe_monitor_stop);
+      return open_session(SPI_ID_WIFI_APP_PROBE_MON,
+                          killed_probe_mon,
+                          out_resp_payload,
+                          out_resp_len,
+                          probe_monitor_stop);
 
     case SPI_ID_WIFI_APP_SIGNAL_MON: {
       if (len < WIFI_SIGNAL_MON_MIN_LEN)
         return SPI_STATUS_ERROR;
       signal_monitor_start(payload, payload[6]);
-      return open_session(SPI_ID_WIFI_APP_SIGNAL_MON, killed_signal_mon,
-                          out_resp_payload, out_resp_len, signal_monitor_stop);
+      return open_session(SPI_ID_WIFI_APP_SIGNAL_MON,
+                          killed_signal_mon,
+                          out_resp_payload,
+                          out_resp_len,
+                          signal_monitor_stop);
     }
 
     case SPI_ID_WIFI_SNIFFER_SET_SNAPLEN: {

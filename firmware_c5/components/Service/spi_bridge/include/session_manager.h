@@ -90,9 +90,7 @@ bool session_manager_heartbeat(uint32_t session_id, uint32_t last_acked_seq);
  * @return            ESP_OK if emitted, ESP_ERR_INVALID_STATE if session
  *                    is not active, ESP_ERR_NO_MEM if backpressure dropped it.
  */
-esp_err_t session_manager_try_emit(uint32_t session_id,
-                                   const uint8_t *data,
-                                   uint8_t len);
+esp_err_t session_manager_try_emit(uint32_t session_id, const uint8_t *data, uint8_t len);
 
 #ifdef __cplusplus
 }

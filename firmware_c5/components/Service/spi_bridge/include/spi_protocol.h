@@ -167,6 +167,13 @@ typedef enum {
   SPI_ID_MESH_STATUS = 0x96,
   SPI_ID_MESH_TORADIO_STREAM = 0x97,
 
+  // MeshCore phone bridge (0x98 - 0x9C)
+  SPI_ID_MCORE_BLE_INIT = 0x98,
+  SPI_ID_MCORE_BLE_STOP = 0x99,
+  SPI_ID_MCORE_TX_PUSH = 0x9A,
+  SPI_ID_MCORE_RX_STREAM = 0x9B,
+  SPI_ID_MCORE_STATUS = 0x9C,
+
   // Session lifecycle (long-running operations)
   SPI_ID_SESSION_HEARTBEAT = 0xF0,
   SPI_ID_SESSION_LOST = 0xF1,
@@ -354,6 +361,29 @@ typedef struct {
   uint8_t logradio_subscribed;
   uint32_t fromnum_counter;
 } __attribute__((packed)) spi_mesh_status_t;
+
+/**
+ * @brief MeshCore BLE init payload.
+ *
+ * Sent with SPI_ID_MCORE_BLE_INIT. The C5 builds the advertised name as
+ * "<name_prefix>-XXXX" (last 4 hex of MAC) and uses `pin` as the static
+ * passkey for SC + MITM + DISP_ONLY pairing.
+ */
+typedef struct {
+  char name_prefix[16];
+  uint32_t pin;
+} __attribute__((packed)) spi_mcore_init_t;
+
+/**
+ * @brief MeshCore transport status payload.
+ *
+ * Returned by SPI_ID_MCORE_STATUS.
+ */
+typedef struct {
+  uint8_t ble_connected;
+  uint8_t ble_subscribed;
+  uint8_t reserved[2];
+} __attribute__((packed)) spi_mcore_status_t;
 
 #ifdef __cplusplus
 }

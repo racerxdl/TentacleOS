@@ -56,13 +56,18 @@ static uint32_t generate_session_id(void) {
 }
 
 static void close_active_locked(const char *reason) {
-  if (s_session.id == SPI_SESSION_INVALID_ID) return;
+  if (s_session.id == SPI_SESSION_INVALID_ID)
+    return;
 
-  ESP_LOGW(TAG, "Closing session 0x%08lx (op 0x%02X): %s",
-           (unsigned long)s_session.id, s_session.op_id, reason);
+  ESP_LOGW(TAG,
+           "Closing session 0x%08lx (op 0x%02X): %s",
+           (unsigned long)s_session.id,
+           s_session.op_id,
+           reason);
 
   if (s_session.total_dropped > 0) {
-    ESP_LOGW(TAG, "Session dropped %lu packets total due to backpressure",
+    ESP_LOGW(TAG,
+             "Session dropped %lu packets total due to backpressure",
              (unsigned long)s_session.total_dropped);
   }
 
@@ -70,7 +75,8 @@ static void close_active_locked(const char *reason) {
   spi_id_t op_id = s_session.op_id;
   memset(&s_session, 0, sizeof(s_session));
 
-  if (cb != NULL) cb(op_id);
+  if (cb != NULL)
+    cb(op_id);
 }
 
 static void emit_session_lost(uint32_t session_id, spi_id_t op_id) {
@@ -101,11 +107,14 @@ static void watchdog_task(void *arg) {
 }
 
 void session_manager_init(void) {
-  if (s_mutex != NULL) return;
+  if (s_mutex != NULL)
+    return;
   s_mutex = xSemaphoreCreateMutex();
   xTaskCreate(watchdog_task, "session_wdt", WATCHDOG_STACK_SIZE, NULL, WATCHDOG_PRIO, NULL);
-  ESP_LOGI(TAG, "Session manager started (timeout %dms, window %u)",
-           SESSION_TIMEOUT_MS, SPI_SESSION_WINDOW);
+  ESP_LOGI(TAG,
+           "Session manager started (timeout %dms, window %u)",
+           SESSION_TIMEOUT_MS,
+           SPI_SESSION_WINDOW);
 }
 
 uint32_t session_manager_start(spi_id_t op_id, session_kill_cb_t kill_cb) {
@@ -154,8 +163,10 @@ bool session_manager_heartbeat(uint32_t session_id, uint32_t last_acked_seq) {
 }
 
 esp_err_t session_manager_try_emit(uint32_t session_id, const uint8_t *data, uint8_t len) {
-  if (data == NULL && len > 0) return ESP_ERR_INVALID_ARG;
-  if (len > SPI_MAX_PAYLOAD - sizeof(spi_stream_meta_t)) return ESP_ERR_INVALID_SIZE;
+  if (data == NULL && len > 0)
+    return ESP_ERR_INVALID_ARG;
+  if (len > SPI_MAX_PAYLOAD - sizeof(spi_stream_meta_t))
+    return ESP_ERR_INVALID_SIZE;
 
   xSemaphoreTake(s_mutex, portMAX_DELAY);
   if (s_session.id != session_id || session_id == SPI_SESSION_INVALID_ID) {
@@ -168,7 +179,8 @@ esp_err_t session_manager_try_emit(uint32_t session_id, const uint8_t *data, uin
     s_session.dropped_packets++;
     s_session.total_dropped++;
     if (s_session.dropped_packets >= DROP_LOG_INTERVAL) {
-      ESP_LOGW(TAG, "Backpressure: dropped %lu more packets (total %lu)",
+      ESP_LOGW(TAG,
+               "Backpressure: dropped %lu more packets (total %lu)",
                (unsigned long)s_session.dropped_packets,
                (unsigned long)s_session.total_dropped);
       s_session.dropped_packets = 0;
@@ -180,7 +192,8 @@ esp_err_t session_manager_try_emit(uint32_t session_id, const uint8_t *data, uin
   uint8_t buf[SPI_MAX_PAYLOAD];
   spi_stream_meta_t meta = {.session_id = session_id, .seq = ++s_session.seq_counter};
   memcpy(buf, &meta, sizeof(meta));
-  if (len > 0) memcpy(buf + sizeof(meta), data, len);
+  if (len > 0)
+    memcpy(buf + sizeof(meta), data, len);
   spi_id_t op = s_session.op_id;
   uint8_t total = sizeof(meta) + len;
   xSemaphoreGive(s_mutex);

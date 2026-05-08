@@ -50,6 +50,8 @@ static const char *TAG = "SPI_BRIDGE_C5";
 #define SPI_MESH_WIFI_CMD_MAX 0x93
 #define SPI_MESH_BT_DATA_MIN  0x94
 #define SPI_MESH_BT_DATA_MAX  0x96
+#define SPI_MCORE_CMD_MIN     0x98
+#define SPI_MCORE_CMD_MAX     0x9C
 #define SPI_FW_VERSION_LEN    32
 #define SPI_FW_VERSION_STRING "1.2.0"
 
@@ -71,6 +73,7 @@ static uint8_t s_stream_count = 0;
 static bool s_is_wifi_sniffer_streaming = false;
 static bool s_is_bt_sniffer_streaming = false;
 static bool s_is_mesh_toradio_streaming = false;
+static bool s_is_mcore_rx_streaming = false;
 static portMUX_TYPE s_stream_mux = portMUX_INITIALIZER_UNLOCKED;
 static volatile bool s_is_restart_pending = false;
 static char s_firmware_version[SPI_FW_VERSION_LEN] = "unknown";
@@ -104,6 +107,8 @@ bool spi_bridge_stream_is_enabled(spi_id_t id) {
     return s_is_bt_sniffer_streaming;
   if (id == SPI_ID_MESH_TORADIO_STREAM)
     return s_is_mesh_toradio_streaming;
+  if (id == SPI_ID_MCORE_RX_STREAM)
+    return s_is_mcore_rx_streaming;
   return false;
 }
 
@@ -114,6 +119,8 @@ void spi_bridge_stream_enable(spi_id_t id, bool enable) {
     s_is_bt_sniffer_streaming = enable;
   if (id == SPI_ID_MESH_TORADIO_STREAM)
     s_is_mesh_toradio_streaming = enable;
+  if (id == SPI_ID_MCORE_RX_STREAM)
+    s_is_mcore_rx_streaming = enable;
 }
 
 bool spi_bridge_stream_push(spi_id_t id, const uint8_t *data, uint8_t len) {
@@ -293,6 +300,9 @@ static void bridge_task(void *pvParameters) {
           header->id, rx_buf + sizeof(spi_header_t), header->length, resp_payload, &resp_len);
     } else if ((header->id >= SPI_MESH_BT_CMD_MIN && header->id <= SPI_MESH_BT_CMD_MAX) ||
                (header->id >= SPI_MESH_BT_DATA_MIN && header->id <= SPI_MESH_BT_DATA_MAX)) {
+      status = bt_dispatcher_execute(
+          header->id, rx_buf + sizeof(spi_header_t), header->length, resp_payload, &resp_len);
+    } else if (header->id >= SPI_MCORE_CMD_MIN && header->id <= SPI_MCORE_CMD_MAX) {
       status = bt_dispatcher_execute(
           header->id, rx_buf + sizeof(spi_header_t), header->length, resp_payload, &resp_len);
     } else if (header->id >= SPI_MESH_WIFI_CMD_MIN && header->id <= SPI_MESH_WIFI_CMD_MAX) {
