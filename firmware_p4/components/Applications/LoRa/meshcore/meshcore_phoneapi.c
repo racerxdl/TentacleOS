@@ -103,6 +103,13 @@ static const char *TAG = "MC_PHONEAPI";
 #define MC_BLE_PIN_MIN 100000U
 #define MC_BLE_PIN_MAX 999999U
 
+#define MESHCORE_PUBKEY_PREFIX_LEN    6
+#define MESHCORE_CHANNEL_SECRET_LEN   16
+#define SEND_TXT_DEFAULT_TIMEOUT_MS   10000
+#define BATT_STORAGE_DEFAULT_MV       4100
+#define BATT_STORAGE_DEFAULT_USED_KB  8
+#define BATT_STORAGE_DEFAULT_TOTAL_KB 1024
+
 typedef struct {
   uint16_t len;
   uint8_t buf[MC_OFFLINE_FRAME_MAX];
@@ -368,10 +375,12 @@ void meshcore_phoneapi_push_contact_msg(const uint8_t peer_pub_key[32],
 }
 
 void meshcore_phoneapi_push_send_confirmed(uint32_t ack_crc, uint8_t snr) {
-  uint8_t buf[6];
+  (void)snr;
+  uint8_t buf[9];
   buf[0] = PUSH_CODE_SEND_CONFIRMED;
-  buf[1] = (uint8_t)((int8_t)(snr * 4));
-  memcpy(&buf[2], &ack_crc, 4);
+  memcpy(&buf[1], &ack_crc, 4);
+  uint32_t trip_time_ms = 0;
+  memcpy(&buf[5], &trip_time_ms, 4);
   send_resp(buf, sizeof(buf));
   ESP_LOGI(TAG, "push SEND_CONFIRMED CRC=0x%08lX", (unsigned long)ack_crc);
 }
@@ -601,19 +610,20 @@ static void handle_app_start(const uint8_t *p, uint16_t len) {
 }
 
 static void handle_batt_storage(const uint8_t *p, uint16_t len) {
-  uint8_t resp[16];
+  (void)p;
+  (void)len;
+  uint8_t resp[11];
   uint16_t o = 0;
   resp[o++] = RESP_CODE_BATT_AND_STORAGE;
-  resp[o++] = 0x04;
-  resp[o++] = 0x10;
-  resp[o++] = 0x00;
-  resp[o++] = 0x04;
-  resp[o++] = 0;
-  resp[o++] = 0;
-  resp[o++] = 0x00;
-  resp[o++] = 0x04;
-  resp[o++] = 0;
-  resp[o++] = 0;
+  uint16_t batt_mv = BATT_STORAGE_DEFAULT_MV;
+  memcpy(&resp[o], &batt_mv, 2);
+  o += 2;
+  uint32_t used_kb = BATT_STORAGE_DEFAULT_USED_KB;
+  uint32_t total_kb = BATT_STORAGE_DEFAULT_TOTAL_KB;
+  memcpy(&resp[o], &used_kb, 4);
+  o += 4;
+  memcpy(&resp[o], &total_kb, 4);
+  o += 4;
   send_resp(resp, o);
 }
 
@@ -812,20 +822,26 @@ static void handle_reset_path(const uint8_t *p, uint16_t len) {
 
 static void handle_get_channel(const uint8_t *p, uint16_t len) {
   uint8_t idx = (len >= 2) ? p[1] : 0;
-  const meshcore_channel_t *ch = meshcore_channel_get(idx);
-  if (ch == NULL) {
+  if (idx >= MESHCORE_MAX_CHANNELS) {
     send_err(ERR_CODE_NOT_FOUND);
     return;
   }
-  uint8_t resp[2 + MESHCORE_NAME_MAX + 16];
+  const meshcore_channel_t *ch = meshcore_channel_get(idx);
+  uint8_t resp[2 + MESHCORE_NAME_MAX + MESHCORE_CHANNEL_SECRET_LEN];
   uint16_t o = 0;
   resp[o++] = RESP_CODE_CHANNEL_INFO;
   resp[o++] = idx;
   memset(&resp[o], 0, MESHCORE_NAME_MAX);
-  strncpy((char *)&resp[o], ch->name, MESHCORE_NAME_MAX);
+  if (ch != NULL) {
+    strncpy((char *)&resp[o], ch->name, MESHCORE_NAME_MAX);
+  }
   o += MESHCORE_NAME_MAX;
-  memcpy(&resp[o], ch->secret, 16);
-  o += 16;
+  if (ch != NULL) {
+    memcpy(&resp[o], ch->secret, MESHCORE_CHANNEL_SECRET_LEN);
+  } else {
+    memset(&resp[o], 0, MESHCORE_CHANNEL_SECRET_LEN);
+  }
+  o += MESHCORE_CHANNEL_SECRET_LEN;
   send_resp(resp, o);
 }
 
@@ -875,32 +891,23 @@ static void handle_send_channel_txt(const uint8_t *p, uint16_t len) {
   uint16_t text_off = 1 + 1 + 1 + 4;
   uint16_t text_len = len - text_off;
 
-  char text[160];
-  if (text_len > sizeof(text) - 1)
+  char text[MESHCORE_TEXT_MAX + 1];
+  if (text_len > sizeof(text) - 1) {
     text_len = sizeof(text) - 1;
+  }
   memcpy(text, &p[text_off], text_len);
   text[text_len] = 0;
 
   esp_err_t ret = meshcore_send_grp_txt(channel_idx, text);
   if (ret != ESP_OK) {
-    send_err(ERR_CODE_BAD_STATE);
+    send_err(ERR_CODE_NOT_FOUND);
     return;
   }
-
-  uint8_t resp[1 + 1 + 4 + 4];
-  uint16_t o = 0;
-  resp[o++] = RESP_CODE_SENT;
-  resp[o++] = 0;
-  memset(&resp[o], 0, 4);
-  o += 4;
-  uint32_t timeout = 10000;
-  memcpy(&resp[o], &timeout, 4);
-  o += 4;
-  send_resp(resp, o);
+  send_ok();
 }
 
 static void handle_send_txt_msg(const uint8_t *p, uint16_t len) {
-  if (len < 1 + 1 + 1 + 4 + 32) {
+  if (len < 1 + 1 + 1 + 4 + MESHCORE_PUBKEY_PREFIX_LEN) {
     send_err(ERR_CODE_ILLEGAL_ARG);
     return;
   }
@@ -908,18 +915,40 @@ static void handle_send_txt_msg(const uint8_t *p, uint16_t len) {
   uint8_t attempt = p[2];
   uint32_t ts;
   memcpy(&ts, &p[3], 4);
-  const uint8_t *peer = &p[7];
-  uint16_t text_off = 1 + 1 + 1 + 4 + 32;
+  const uint8_t *prefix = &p[7];
+  uint16_t text_off = 1 + 1 + 1 + 4 + MESHCORE_PUBKEY_PREFIX_LEN;
   uint16_t text_len = len - text_off;
   char text[MESHCORE_TEXT_MAX + 1];
-  if (text_len > sizeof(text) - 1)
+  if (text_len > sizeof(text) - 1) {
     text_len = sizeof(text) - 1;
+  }
   memcpy(text, &p[text_off], text_len);
   text[text_len] = 0;
   (void)txt_type;
 
+  const meshcore_contact_t *arr = meshcore_contacts_array();
+  const meshcore_contact_t *contact = NULL;
+  for (int i = 0; i < MESHCORE_MAX_CONTACTS; i++) {
+    if (arr[i].is_used && memcmp(arr[i].pub_key, prefix, MESHCORE_PUBKEY_PREFIX_LEN) == 0) {
+      contact = &arr[i];
+      break;
+    }
+  }
+  if (contact == NULL) {
+    ESP_LOGW(TAG,
+             "DM TX: contact with prefix %02X%02X%02X%02X%02X%02X not found",
+             prefix[0],
+             prefix[1],
+             prefix[2],
+             prefix[3],
+             prefix[4],
+             prefix[5]);
+    send_err(ERR_CODE_NOT_FOUND);
+    return;
+  }
+
   uint32_t expected_ack = 0;
-  esp_err_t ret = meshcore_send_direct_msg(peer, text, ts, attempt, &expected_ack);
+  esp_err_t ret = meshcore_send_direct_msg(contact->pub_key, text, ts, attempt, &expected_ack);
   if (ret != ESP_OK) {
     send_err(ERR_CODE_BAD_STATE);
     return;
@@ -931,16 +960,16 @@ static void handle_send_txt_msg(const uint8_t *p, uint16_t len) {
   resp[o++] = 1;
   memcpy(&resp[o], &expected_ack, 4);
   o += 4;
-  uint32_t timeout = 10000;
-  memcpy(&resp[o], &timeout, 4);
+  uint32_t timeout_ms = SEND_TXT_DEFAULT_TIMEOUT_MS;
+  memcpy(&resp[o], &timeout_ms, 4);
   o += 4;
   send_resp(resp, o);
   ESP_LOGI(TAG,
            "DM TX queued (peer=%02X%02X%02X%02X tag=0x%08lX)",
-           peer[0],
-           peer[1],
-           peer[2],
-           peer[3],
+           contact->pub_key[0],
+           contact->pub_key[1],
+           contact->pub_key[2],
+           contact->pub_key[3],
            (unsigned long)expected_ack);
 }
 
