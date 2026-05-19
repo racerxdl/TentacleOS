@@ -68,12 +68,14 @@ file(GLOB_RECURSE BADUSB_APP_SRCS "bad_usb/*.c")
 file(GLOB_RECURSE WIFI_APP_SRCS "wifi/*.c")
 file(GLOB_RECURSE NFC_APP_SRCS "nfc/*.c")
 file(GLOB_RECURSE RFID_APP_SRCS "rfid/*.c")
+file(GLOB_RECURSE RNODE_APP_SRCS "LoRa/rnode/*.c")
 
 idf_component_register(SRCS 
   ${UI_SRCS}
   ${WIFI_APP_SRCS}
   ${NFC_APP_SRCS}
   ${RFID_APP_SRCS}
+  ${RNODE_APP_SRCS}
   ${BADUSB_APP_SRCS}
   ${BLE_APP_SRCS}
   "ui/ui_manager.c"
@@ -140,6 +142,7 @@ idf_component_register(SRCS
   "SubGhz/protocols/include"
   "rfid/include"
   "rfid/protocols/include"
+  "LoRa/rnode/include"
   "ui/include"
   "ui/screens/home/include"
   "ui/screens/boot/include"
@@ -162,10 +165,10 @@ idf_component_register(SRCS
   "ui/components/chart/include"
   "ui/components/text_viewer/include"
   "ui/components/spinner/include"
-  
 
 
-  REQUIRES 
+
+  REQUIRES
   driver
   Drivers
   Service
