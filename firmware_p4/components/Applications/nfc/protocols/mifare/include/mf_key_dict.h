@@ -13,7 +13,12 @@
 // limitations under the License.
 /**
  * @file mf_key_dict.h
- * @brief MIFARE Classic key dictionary (built-in + user-added keys).
+ * @brief MIFARE Classic key dictionary (loaded from .dic files on SD/flash).
+ *
+ * Default and family dictionaries ship on the firmware flash partition and
+ * are copied to the SD card on first boot. The user can edit them or add
+ * extra dictionaries. Keys discovered at runtime are appended to
+ * `mf_classic_user.dic` on the SD card.
  */
 #ifndef MF_KEY_DICT_H
 #define MF_KEY_DICT_H
@@ -27,19 +32,21 @@
 extern "C" {
 #endif
 
-/** @brief Maximum user-added keys stored in NVS (on top of built-in). */
-#define MF_KEY_DICT_MAX_EXTRA 128
-
-/** @brief Total built-in keys count (defined in .c). */
-extern const int MF_KEY_DICT_BUILTIN_COUNT;
+/** @brief Maximum number of keys held in the in-memory dictionary. */
+#define MF_KEY_DICT_MAX_KEYS 256
 
 /**
- * @brief Initialize the key dictionary (load user keys from NVS).
+ * @brief Initialize the key dictionary (load default + user .dic files).
+ *
+ * Reads `mf_classic_default.dic` and `mf_classic_user.dic` from the NFC
+ * dictionary path on the SD card, falling back to the flash partition.
+ * Also migrates the legacy NVS namespace ("nfc_dict") into the user file
+ * the first time it runs after upgrade.
  */
 void mf_key_dict_init(void);
 
 /**
- * @brief Get total number of keys (built-in + user-added).
+ * @brief Get total number of keys currently loaded.
  *
  * @return Total key count.
  */
@@ -57,17 +64,20 @@ void mf_key_dict_get(int idx, uint8_t key_out[6]);
  * @brief Check if a key exists in the dictionary.
  *
  * @param key  6-byte key to check.
- * @return true if the key is in the dictionary.
+ * @return true if the key is already in the dictionary.
  */
 bool mf_key_dict_contains(const uint8_t key[6]);
 
 /**
- * @brief Add a user key to the dictionary.
+ * @brief Add a key to the dictionary and persist it to mf_classic_user.dic.
+ *
+ * If the key is already present (built-in or user), this is a no-op and
+ * returns HB_NFC_OK.
  *
  * @param key  6-byte key to add.
  * @return
- *   - HB_NFC_OK on success
- *   - Error code if dictionary is full or key already exists
+ *   - HB_NFC_OK on success or duplicate
+ *   - Error code if dictionary is full or persistence failed
  */
 hb_nfc_err_t mf_key_dict_add(const uint8_t key[6]);
 

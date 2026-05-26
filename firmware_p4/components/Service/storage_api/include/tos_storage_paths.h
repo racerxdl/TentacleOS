@@ -33,6 +33,7 @@ extern "C" {
 
 // Protocol sub-paths (only what each protocol actually uses per doc)
 #define TOS_PATH_NFC_ASSETS TOS_PATH_NFC "/assets"
+#define TOS_PATH_NFC_DICT   TOS_PATH_NFC_ASSETS "/dict"
 
 #define TOS_PATH_RFID_ASSETS TOS_PATH_RFID "/assets"
 

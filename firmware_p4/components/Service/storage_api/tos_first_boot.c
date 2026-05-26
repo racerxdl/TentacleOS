@@ -45,6 +45,7 @@ static const char *const FIRST_BOOT_DIRS[] = {
 
     // Protocol assets
     TOS_PATH_NFC_ASSETS,
+    TOS_PATH_NFC_DICT,
     TOS_PATH_RFID_ASSETS,
     TOS_PATH_SUBGHZ_ASSETS,
     TOS_PATH_IR_ASSETS,
@@ -237,8 +238,9 @@ static const asset_copy_t FIRST_BOOT_ASSETS[] = {
     // BadUSB example scripts
     {FLASH_STORAGE_BADUSB "/rickroll.txt", TOS_PATH_BADUSB_ASSETS "/rickroll.txt"},
 
-    // TODO: add protocol database entries here when files are added to flash
-    // e.g. mf_classic_dict.nfc, oui_db.csv, frequency_list.sub, etc.
+    {FLASH_NFC_DICT "/mf_classic_default.dic", TOS_PATH_NFC_DICT "/mf_classic_default.dic"},
+    {FLASH_NFC_DICT "/mf_classic_user.dic", TOS_PATH_NFC_DICT "/mf_classic_user.dic"},
+    {FLASH_NFC_DICT "/mf_ulc_default.dic", TOS_PATH_NFC_DICT "/mf_ulc_default.dic"},
 
     {NULL, NULL}};
 

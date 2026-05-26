@@ -41,6 +41,9 @@ extern "C" {
 // Captive portal HTML templates (flash fallback)
 #define FLASH_CAPTIVE_TEMPLATES FLASH_MOUNT "/html/captive_portal"
 
+// NFC key dictionaries (flash fallback)
+#define FLASH_NFC_DICT FLASH_MOUNT "/nfc/dict"
+
 #ifdef __cplusplus
 }
 #endif

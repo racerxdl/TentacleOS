@@ -13,11 +13,13 @@
 // limitations under the License.
 /**
  * @file mf_known_cards.h
- * @brief Known MIFARE Classic card type database.
+ * @brief Known MIFARE Classic card type database (name + identification only).
  *
- * Matches a card by SAK + ATQA (and optionally UID prefix).
- * When a match is found, provides a human-readable name, hint string,
- * and priority key list to try before the full dictionary.
+ * Matches a card by SAK + ATQA (and optionally UID prefix) and returns a
+ * human-readable name plus a hint string. Key dictionaries are no longer
+ * tied to card profiles — the brute-force loop in the reader iterates
+ * @ref mf_key_dict, which already aggregates every mf_classic_*.dic file
+ * the user dropped in /sdcard/nfc/assets/dict/.
  */
 #ifndef MF_KNOWN_CARDS_H
 #define MF_KNOWN_CARDS_H
@@ -38,9 +40,7 @@ typedef struct {
   uint8_t sak;
   uint8_t atqa[2];
   uint8_t uid_prefix[4];
-  uint8_t uid_prefix_len;        /**< @brief 0 = do not check UID prefix. */
-  const uint8_t (*hint_keys)[6]; /**< @brief Priority keys, may be NULL. */
-  int hint_key_count;
+  uint8_t uid_prefix_len; /**< @brief 0 = do not check UID prefix. */
 } mf_known_card_t;
 
 /**
