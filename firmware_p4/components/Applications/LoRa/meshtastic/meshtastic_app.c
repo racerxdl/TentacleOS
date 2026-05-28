@@ -41,7 +41,7 @@ static const char *TAG = "MT_APP";
 #define MT_DEFAULT_TX_POWER_DBM 20
 #define MT_DEFAULT_PREAMBLE_LEN 16
 #define MT_PRIMARY_CHANNEL      19
-#define MT_CR_TO_SX1262(cr)     ((uint8_t)((cr)-4))
+#define MT_CR_TO_SX1262(cr)     ((uint8_t)((cr) - 4))
 
 static uint32_t derive_node_num(void);
 static void poll_task(void *pv);
