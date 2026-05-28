@@ -102,4 +102,4 @@ Agradecemos especialmente aos parceiros que apoiam este projeto:
 ---
 
 ## Licença
-Este projeto está licenciado sob a **Apache License, Version 2.0**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+Este projeto está licenciado sob a **GNU General Public License v3.0**. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
