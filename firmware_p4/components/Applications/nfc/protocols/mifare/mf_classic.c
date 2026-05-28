@@ -105,7 +105,7 @@ static void bit_set(uint8_t *buf, size_t bitpos, uint8_t v) {
   if (v)
     buf[bitpos >> 3] |= (uint8_t)(1U << (bitpos & 7U));
   else
-    buf[bitpos >> 3] &= (uint8_t) ~(1U << (bitpos & 7U));
+    buf[bitpos >> 3] &= (uint8_t)~(1U << (bitpos & 7U));
 }
 
 static uint8_t bit_get(const uint8_t *buf, size_t bitpos) {

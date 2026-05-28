@@ -37,7 +37,8 @@ void mt_mod_keyverify_init(uint32_t node_num);
  * key_manually_verified.
  */
 void mt_mod_keyverify_on_received(const mt_packet_meta_t *meta,
-                                   const uint8_t *payload, uint16_t len);
+                                  const uint8_t *payload,
+                                  uint16_t len);
 
 /**
  * @brief Handle an AdminMessage.key_verification (variant 67) from the
@@ -56,10 +57,10 @@ void mt_mod_keyverify_on_received(const mt_packet_meta_t *meta,
  * @param security_number  4-digit code (field 4)
  */
 void mt_mod_keyverify_handle_admin(uint32_t remote_nodenum,
-                                    uint8_t message_type,
-                                    uint64_t nonce,
-                                    bool has_security,
-                                    uint32_t security_number);
+                                   uint8_t message_type,
+                                   uint64_t nonce,
+                                   bool has_security,
+                                   uint32_t security_number);
 
 #ifdef __cplusplus
 }

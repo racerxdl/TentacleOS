@@ -18,12 +18,12 @@ extern "C" {
 
 #include "esp_err.h"
 
-#define MT_NODEDB_MAX_NODES             150
-#define MT_NODEDB_LONG_NAME_LEN         32
-#define MT_NODEDB_SHORT_NAME_LEN        8
-#define MT_NODEDB_ID_LEN                16
-#define MT_NODEDB_PUBKEY_LEN            32
-#define MT_NODEDB_NEXTHOP_MAX_FAILURES  2
+#define MT_NODEDB_MAX_NODES            150
+#define MT_NODEDB_LONG_NAME_LEN        32
+#define MT_NODEDB_SHORT_NAME_LEN       8
+#define MT_NODEDB_ID_LEN               16
+#define MT_NODEDB_PUBKEY_LEN           32
+#define MT_NODEDB_NEXTHOP_MAX_FAILURES 2
 
 /**
  * @brief In-memory entry for a known node (peer).
@@ -33,25 +33,25 @@ extern "C" {
  * conforme chegam updates.
  */
 typedef struct {
-    uint32_t num;                                    /**< Node number (from field) */
-    uint32_t last_heard;                             /**< Unix seconds (approx) */
-    char     id[MT_NODEDB_ID_LEN];                   /**< "!xxxxxxxx" */
-    char     long_name[MT_NODEDB_LONG_NAME_LEN];
-    char     short_name[MT_NODEDB_SHORT_NAME_LEN];
-    uint8_t  hw_model;
-    uint8_t  role;
-    float    snr;
-    int16_t  rssi;
-    uint8_t  hops_away;
-    bool     is_favorite;
-    bool     is_ignored;
-    bool     is_muted;
-    bool     via_mqtt;
-    bool     in_use;
-    uint8_t  public_key[MT_NODEDB_PUBKEY_LEN];       /**< X25519 pubkey (all zeros if unknown) */
-    bool     has_public_key;
-    uint8_t  next_hop;                               /**< Last octet of relay that got us here (0 = unknown) */
-    uint8_t  next_hop_failures;                      /**< Count retx failures on current next_hop; fallback to flood at 2 */
+  uint32_t num;              /**< Node number (from field) */
+  uint32_t last_heard;       /**< Unix seconds (approx) */
+  char id[MT_NODEDB_ID_LEN]; /**< "!xxxxxxxx" */
+  char long_name[MT_NODEDB_LONG_NAME_LEN];
+  char short_name[MT_NODEDB_SHORT_NAME_LEN];
+  uint8_t hw_model;
+  uint8_t role;
+  float snr;
+  int16_t rssi;
+  uint8_t hops_away;
+  bool is_favorite;
+  bool is_ignored;
+  bool is_muted;
+  bool via_mqtt;
+  bool in_use;
+  uint8_t public_key[MT_NODEDB_PUBKEY_LEN]; /**< X25519 pubkey (all zeros if unknown) */
+  bool has_public_key;
+  uint8_t next_hop;          /**< Last octet of relay that got us here (0 = unknown) */
+  uint8_t next_hop_failures; /**< Count retx failures on current next_hop; fallback to flood at 2 */
 } mt_node_entry_t;
 
 /**
@@ -76,11 +76,11 @@ esp_err_t mt_nodedb_init(void);
  * @return true se houve mudanca (novo no ou campos alterados).
  */
 bool mt_nodedb_upsert_from_user(uint32_t num,
-                                 const uint8_t *user_bytes,
-                                 uint16_t user_len,
-                                 float snr,
-                                 int16_t rssi,
-                                 uint8_t hops_away);
+                                const uint8_t *user_bytes,
+                                uint16_t user_len,
+                                float snr,
+                                int16_t rssi,
+                                uint8_t hops_away);
 
 /**
  * @brief Busca entrada por node number.

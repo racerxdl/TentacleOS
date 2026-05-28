@@ -112,16 +112,16 @@ static const char *TAG = "MC_PHONEAPI";
 #define MC_BLE_PIN_MIN 100000U
 #define MC_BLE_PIN_MAX 999999U
 
-#define MESHCORE_PUBKEY_PREFIX_LEN     6
-#define MESHCORE_CHANNEL_SECRET_LEN    16
-#define SEND_TXT_DEFAULT_TIMEOUT_MS    10000
-#define BATT_STORAGE_DEFAULT_MV        4100
-#define BATT_STORAGE_DEFAULT_USED_KB   8
-#define BATT_STORAGE_DEFAULT_TOTAL_KB  1024
+#define MESHCORE_PUBKEY_PREFIX_LEN    6
+#define MESHCORE_CHANNEL_SECRET_LEN   16
+#define SEND_TXT_DEFAULT_TIMEOUT_MS   10000
+#define BATT_STORAGE_DEFAULT_MV       4100
+#define BATT_STORAGE_DEFAULT_USED_KB  8
+#define BATT_STORAGE_DEFAULT_TOTAL_KB 1024
 
-#define MC_AUTOADD_DEFAULT_CONFIG      0
-#define MC_AUTOADD_DEFAULT_MAX_HOPS    3
-#define MC_AUTOADD_MAX_HOPS_CLAMP      64
+#define MC_AUTOADD_DEFAULT_CONFIG   0
+#define MC_AUTOADD_DEFAULT_MAX_HOPS 3
+#define MC_AUTOADD_MAX_HOPS_CLAMP   64
 
 typedef struct {
   uint16_t len;
@@ -814,9 +814,12 @@ static void handle_export_contact(const uint8_t *p, uint16_t len) {
     bool has_latlon = false;
     mc_get_advert_latlon_internal(&lat, &lon, &has_latlon);
     uint16_t n = meshcore_packet_build_advert(mc_get_identity(),
-                                                lat, lon, has_latlon,
-                                                meshcore_get_unix_time(),
-                                                &resp[1], sizeof(resp) - 1);
+                                              lat,
+                                              lon,
+                                              has_latlon,
+                                              meshcore_get_unix_time(),
+                                              &resp[1],
+                                              sizeof(resp) - 1);
     if (n == 0) {
       send_err(ERR_CODE_TABLE_FULL);
       return;
@@ -984,7 +987,12 @@ static void handle_send_txt_msg(const uint8_t *p, uint16_t len) {
   if (contact == NULL) {
     ESP_LOGW(TAG,
              "DM TX: contact with prefix %02X%02X%02X%02X%02X%02X not found",
-             prefix[0], prefix[1], prefix[2], prefix[3], prefix[4], prefix[5]);
+             prefix[0],
+             prefix[1],
+             prefix[2],
+             prefix[3],
+             prefix[4],
+             prefix[5]);
     send_err(ERR_CODE_NOT_FOUND);
     return;
   }

@@ -45,17 +45,17 @@ static const char *TAG = "C5_FLASHER";
 #define SLIP_ESC_ESC   0xDD
 
 // ESP serial protocol commands
-#define ESP_CMD_SYNC             0x08
-#define ESP_CMD_FLASH_BEGIN      0x02
-#define ESP_CMD_FLASH_DATA       0x03
-#define ESP_CMD_FLASH_END        0x04
-#define ESP_CMD_CHANGE_BAUDRATE  0x0F
+#define ESP_CMD_SYNC            0x08
+#define ESP_CMD_FLASH_BEGIN     0x02
+#define ESP_CMD_FLASH_DATA      0x03
+#define ESP_CMD_FLASH_END       0x04
+#define ESP_CMD_CHANGE_BAUDRATE 0x0F
 
-#define SYNC_ATTEMPTS         3
-#define SYNC_TIMEOUT_MS       100
-#define BAUD_TIMEOUT_MS       300
-#define ACK_TIMEOUT_MS        500
-#define FLASH_BLOCK_DELAY_MS  5
+#define SYNC_ATTEMPTS        3
+#define SYNC_TIMEOUT_MS      100
+#define BAUD_TIMEOUT_MS      300
+#define ACK_TIMEOUT_MS       500
+#define FLASH_BLOCK_DELAY_MS 5
 
 #if C5_FIRMWARE_EMBEDDED
 extern const uint8_t c5_firmware_bin_start[] asm("_binary_TentacleOS_C5_bin_start");
@@ -189,8 +189,10 @@ static esp_err_t read_response(uint32_t timeout_ms) {
   TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
 
   while (xTaskGetTickCount() < deadline) {
-    if (uart_read_bytes(FLASHER_UART, &byte, 1, pdMS_TO_TICKS(10)) <= 0) continue;
-    if (byte != SLIP_END) continue;
+    if (uart_read_bytes(FLASHER_UART, &byte, 1, pdMS_TO_TICKS(10)) <= 0)
+      continue;
+    if (byte != SLIP_END)
+      continue;
     if (!in_packet) {
       in_packet = true;
     } else {

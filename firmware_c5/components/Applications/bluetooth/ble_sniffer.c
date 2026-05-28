@@ -190,8 +190,7 @@ static void sniffer_task(void *pvParameters) {
         if (s_session_id != SPI_SESSION_INVALID_ID) {
           session_manager_try_emit(s_session_id, (const uint8_t *)&stream, sizeof(stream));
         } else {
-          spi_bridge_stream_push(
-              SPI_ID_BT_APP_SNIFFER, (const uint8_t *)&stream, sizeof(stream));
+          spi_bridge_stream_push(SPI_ID_BT_APP_SNIFFER, (const uint8_t *)&stream, sizeof(stream));
         }
       }
     }

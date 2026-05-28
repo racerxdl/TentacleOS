@@ -35,8 +35,7 @@ void mt_mod_routing_init(uint32_t node_num);
  * Currently logs only. ACK/NAK parsing to update retransmit state is
  * deferred to Fase 2 (ReliableRouter).
  */
-void mt_mod_routing_on_received(const mt_packet_meta_t *meta,
-                                 const uint8_t *payload, uint16_t len);
+void mt_mod_routing_on_received(const mt_packet_meta_t *meta, const uint8_t *payload, uint16_t len);
 
 /**
  * @brief Emit an ACK in response to a packet that had want_ack set.

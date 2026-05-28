@@ -103,11 +103,15 @@ esp_err_t meshtastic_mesh_send_text(const char *text, uint32_t to);
  * @param want_response Se true, seta Data.want_response (campo 3) - pede reply
  *                      do modulo destino (ex: NodeInfo request).
  */
-esp_err_t meshtastic_mesh_send_data(uint32_t to, uint8_t channel,
-                                     uint8_t hop_limit, uint8_t portnum,
-                                     const uint8_t *payload, uint16_t plen,
-                                     uint32_t request_id, bool want_ack,
-                                     bool want_response);
+esp_err_t meshtastic_mesh_send_data(uint32_t to,
+                                    uint8_t channel,
+                                    uint8_t hop_limit,
+                                    uint8_t portnum,
+                                    const uint8_t *payload,
+                                    uint16_t plen,
+                                    uint32_t request_id,
+                                    bool want_ack,
+                                    bool want_response);
 
 /**
  * @brief Cancela uma retransmissao pendente porque o ACK chegou.

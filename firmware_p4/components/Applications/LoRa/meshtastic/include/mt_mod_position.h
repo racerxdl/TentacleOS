@@ -38,7 +38,8 @@ void mt_mod_position_init(uint32_t node_num);
  * fixed_position is configured.
  */
 void mt_mod_position_on_received(const mt_packet_meta_t *meta,
-                                  const uint8_t *payload, uint16_t len);
+                                 const uint8_t *payload,
+                                 uint16_t len);
 
 /**
  * @brief Periodic tick. Broadcasts position every 15 min if fixed.

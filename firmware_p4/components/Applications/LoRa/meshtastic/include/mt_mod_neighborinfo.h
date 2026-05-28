@@ -27,7 +27,8 @@ extern "C" {
 void mt_mod_neighborinfo_init(uint32_t node_num);
 
 void mt_mod_neighborinfo_on_received(const mt_packet_meta_t *meta,
-                                      const uint8_t *payload, uint16_t len);
+                                     const uint8_t *payload,
+                                     uint16_t len);
 
 void mt_mod_neighborinfo_tick(uint32_t now_s);
 

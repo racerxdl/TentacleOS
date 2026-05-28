@@ -39,7 +39,8 @@ void mt_mod_nodeinfo_init(uint32_t node_num);
  * a 12h throttle to avoid broadcast storms).
  */
 void mt_mod_nodeinfo_on_received(const mt_packet_meta_t *meta,
-                                  const uint8_t *payload, uint16_t len);
+                                 const uint8_t *payload,
+                                 uint16_t len);
 
 /**
  * @brief Periodic tick (call once per second).

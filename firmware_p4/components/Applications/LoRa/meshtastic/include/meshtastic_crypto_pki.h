@@ -24,7 +24,7 @@ extern "C" {
 #include <stddef.h>
 #include <stdbool.h>
 
-#define MT_PKI_OVERHEAD 12  /* 8-byte AES-CCM tag + 4-byte extra nonce */
+#define MT_PKI_OVERHEAD 12 /* 8-byte AES-CCM tag + 4-byte extra nonce */
 
 /**
  * @brief Encrypt a payload using X25519 + AES-256-CCM (Meshtastic PKI).
@@ -42,11 +42,11 @@ extern "C" {
  * @return true on success, false on failure (weak key, mbedtls error)
  */
 bool mt_pki_encrypt_curve25519(const uint8_t *peer_pub,
-                                uint32_t from_node,
-                                uint32_t packet_id,
-                                const uint8_t *plain,
-                                size_t plen,
-                                uint8_t *out);
+                               uint32_t from_node,
+                               uint32_t packet_id,
+                               const uint8_t *plain,
+                               size_t plen,
+                               uint8_t *out);
 
 /**
  * @brief Decrypt a payload produced by mt_pki_encrypt_curve25519.
@@ -63,11 +63,11 @@ bool mt_pki_encrypt_curve25519(const uint8_t *peer_pub,
  * @return true on success (auth tag valid), false on failure
  */
 bool mt_pki_decrypt_curve25519(const uint8_t *peer_pub,
-                                uint32_t from_node,
-                                uint32_t packet_id,
-                                const uint8_t *cipher,
-                                size_t clen,
-                                uint8_t *out);
+                               uint32_t from_node,
+                               uint32_t packet_id,
+                               const uint8_t *cipher,
+                               size_t clen,
+                               uint8_t *out);
 
 #ifdef __cplusplus
 }

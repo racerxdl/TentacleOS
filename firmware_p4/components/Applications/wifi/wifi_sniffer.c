@@ -67,21 +67,16 @@ static void update_stats(void) {
       SPI_ID_SYSTEM_DATA, (uint8_t *)&magic_stats, 2, &resp, (uint8_t *)&s_cached_stats, 1000);
 }
 
-static bool start_internal(wifi_sniffer_type_t type,
-                           uint8_t channel,
-                           bool monitor_mode,
-                           wifi_sniffer_cb_t cb) {
+static bool
+start_internal(wifi_sniffer_type_t type, uint8_t channel, bool monitor_mode, wifi_sniffer_cb_t cb) {
   uint8_t payload[3];
   payload[0] = (uint8_t)type;
   payload[1] = channel;
   payload[2] = monitor_mode ? 1 : 0;
   memset(&s_cached_stats, 0, sizeof(s_cached_stats));
   s_stream_cb = cb;
-  s_session_id = spi_session_start(SPI_ID_WIFI_APP_SNIFFER,
-                                   payload,
-                                   sizeof(payload),
-                                   session_stream_cb,
-                                   session_lost_cb);
+  s_session_id = spi_session_start(
+      SPI_ID_WIFI_APP_SNIFFER, payload, sizeof(payload), session_stream_cb, session_lost_cb);
   if (s_session_id == SPI_SESSION_INVALID_ID) {
     s_stream_cb = NULL;
     return false;

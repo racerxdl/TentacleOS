@@ -27,16 +27,13 @@ extern "C" {
  * @param username    NULL if anonymous
  * @param password    NULL if anonymous
  */
-esp_err_t meshtastic_mqtt_init(const char *broker_uri,
-                                const char *username,
-                                const char *password);
+esp_err_t meshtastic_mqtt_init(const char *broker_uri, const char *username, const char *password);
 
 /**
  * @brief Publish an already-encoded MeshPacket proto to the uplink.
  *        Called from the mesh RX path for packets we want to uplink.
  */
-void meshtastic_mqtt_publish(const uint8_t *meshpacket_pb, uint16_t len,
-                              const char *channel_name);
+void meshtastic_mqtt_publish(const uint8_t *meshpacket_pb, uint16_t len, const char *channel_name);
 
 bool meshtastic_mqtt_is_connected(void);
 

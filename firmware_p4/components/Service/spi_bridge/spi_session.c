@@ -27,11 +27,11 @@
 
 static const char *TAG = "SPI_SESSION";
 
-#define HEARTBEAT_INTERVAL_MS  2000
-#define HEARTBEAT_FAIL_LIMIT   3
-#define HEARTBEAT_TIMEOUT_MS   1000
-#define HEARTBEAT_STACK_SIZE   3072
-#define HEARTBEAT_PRIO         5
+#define HEARTBEAT_INTERVAL_MS 2000
+#define HEARTBEAT_FAIL_LIMIT  3
+#define HEARTBEAT_TIMEOUT_MS  1000
+#define HEARTBEAT_STACK_SIZE  3072
+#define HEARTBEAT_PRIO        5
 
 typedef struct {
   uint32_t session_id;
@@ -48,10 +48,14 @@ static SemaphoreHandle_t s_mutex = NULL;
 static bool s_initialized = false;
 
 static void notify_lost_locked(const char *reason) {
-  if (s_state.session_id == SPI_SESSION_INVALID_ID) return;
+  if (s_state.session_id == SPI_SESSION_INVALID_ID)
+    return;
 
-  ESP_LOGW(TAG, "Session 0x%08lx (op 0x%02X) lost: %s",
-           (unsigned long)s_state.session_id, s_state.op_id, reason);
+  ESP_LOGW(TAG,
+           "Session 0x%08lx (op 0x%02X) lost: %s",
+           (unsigned long)s_state.session_id,
+           s_state.op_id,
+           reason);
 
   uint32_t lost_id = s_state.session_id;
   spi_id_t lost_op = s_state.op_id;
@@ -61,12 +65,14 @@ static void notify_lost_locked(const char *reason) {
   spi_bridge_unregister_stream_cb(stream_id);
   memset(&s_state, 0, sizeof(s_state));
 
-  if (cb != NULL) cb(lost_id, lost_op);
+  if (cb != NULL)
+    cb(lost_id, lost_op);
 }
 
 static void on_session_stream(spi_id_t id, const uint8_t *payload, uint8_t len) {
   (void)id;
-  if (len < sizeof(spi_stream_meta_t)) return;
+  if (len < sizeof(spi_stream_meta_t))
+    return;
 
   spi_stream_meta_t meta;
   memcpy(&meta, payload, sizeof(meta));
@@ -89,7 +95,8 @@ static void on_session_stream(spi_id_t id, const uint8_t *payload, uint8_t len) 
 
 static void on_session_lost_stream(spi_id_t id, const uint8_t *payload, uint8_t len) {
   (void)id;
-  if (len < sizeof(spi_session_lost_t)) return;
+  if (len < sizeof(spi_session_lost_t))
+    return;
 
   spi_session_lost_t lost;
   memcpy(&lost, payload, sizeof(lost));
@@ -112,7 +119,8 @@ static void heartbeat_task(void *arg) {
     bool still_mine = (s_state.session_id == session_id) && !s_state.stop_requested;
     spi_heartbeat_req_t req = {.session_id = session_id, .last_acked_seq = s_state.last_acked_seq};
     xSemaphoreGive(s_mutex);
-    if (!still_mine) break;
+    if (!still_mine)
+      break;
 
     spi_header_t resp_header = {0};
     spi_heartbeat_resp_t resp = {0};
@@ -129,8 +137,11 @@ static void heartbeat_task(void *arg) {
     }
 
     consecutive_fails++;
-    ESP_LOGW(TAG, "Heartbeat fail %u/%d for session 0x%08lx",
-             consecutive_fails, HEARTBEAT_FAIL_LIMIT, (unsigned long)session_id);
+    ESP_LOGW(TAG,
+             "Heartbeat fail %u/%d for session 0x%08lx",
+             consecutive_fails,
+             HEARTBEAT_FAIL_LIMIT,
+             (unsigned long)session_id);
     if (consecutive_fails >= HEARTBEAT_FAIL_LIMIT) {
       xSemaphoreTake(s_mutex, portMAX_DELAY);
       if (s_state.session_id == session_id) {
@@ -145,7 +156,8 @@ static void heartbeat_task(void *arg) {
 }
 
 void spi_session_init(void) {
-  if (s_initialized) return;
+  if (s_initialized)
+    return;
   s_mutex = xSemaphoreCreateMutex();
   spi_bridge_register_stream_cb(SPI_ID_SESSION_LOST, on_session_lost_stream);
   s_initialized = true;
@@ -157,24 +169,23 @@ uint32_t spi_session_start(spi_id_t op_id,
                            uint8_t params_len,
                            spi_session_stream_cb_t on_stream,
                            spi_session_lost_cb_t on_lost) {
-  if (!s_initialized) spi_session_init();
+  if (!s_initialized)
+    spi_session_init();
 
   xSemaphoreTake(s_mutex, portMAX_DELAY);
   if (s_state.session_id != SPI_SESSION_INVALID_ID) {
-    ESP_LOGW(TAG, "Replacing active session 0x%08lx with new start of op 0x%02X",
-             (unsigned long)s_state.session_id, op_id);
+    ESP_LOGW(TAG,
+             "Replacing active session 0x%08lx with new start of op 0x%02X",
+             (unsigned long)s_state.session_id,
+             op_id);
     notify_lost_locked("preempted by local start");
   }
   xSemaphoreGive(s_mutex);
 
   spi_header_t resp_header = {0};
   spi_session_resp_t resp = {0};
-  esp_err_t ret = spi_bridge_send_command(op_id,
-                                          params,
-                                          params_len,
-                                          &resp_header,
-                                          (uint8_t *)&resp,
-                                          spi_bridge_get_timeout(op_id));
+  esp_err_t ret = spi_bridge_send_command(
+      op_id, params, params_len, &resp_header, (uint8_t *)&resp, spi_bridge_get_timeout(op_id));
   if (ret != ESP_OK) {
     ESP_LOGE(TAG, "START op 0x%02X bridge error: %s", op_id, esp_err_to_name(ret));
     return SPI_SESSION_INVALID_ID;

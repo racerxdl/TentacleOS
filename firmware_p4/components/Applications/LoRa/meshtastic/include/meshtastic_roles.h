@@ -31,20 +31,20 @@ extern "C" {
  * against src/mesh/FloodingRouter.cpp and src/mesh/NodeDB.cpp.
  */
 typedef enum {
-    MT_ROLE_CLIENT         = 0,
-    MT_ROLE_CLIENT_MUTE    = 1,
-    MT_ROLE_ROUTER         = 2,
-    MT_ROLE_ROUTER_CLIENT  = 3,
-    MT_ROLE_REPEATER       = 4,
-    MT_ROLE_TRACKER        = 5,
-    MT_ROLE_SENSOR         = 6,
-    MT_ROLE_TAK            = 7,
-    MT_ROLE_CLIENT_HIDDEN  = 8,
-    MT_ROLE_LOST_AND_FOUND = 9,
-    MT_ROLE_TAK_TRACKER    = 10,
-    MT_ROLE_ROUTER_LATE    = 11,
-    MT_ROLE_CLIENT_BASE    = 12,
-    MT_ROLE_COUNT
+  MT_ROLE_CLIENT = 0,
+  MT_ROLE_CLIENT_MUTE = 1,
+  MT_ROLE_ROUTER = 2,
+  MT_ROLE_ROUTER_CLIENT = 3,
+  MT_ROLE_REPEATER = 4,
+  MT_ROLE_TRACKER = 5,
+  MT_ROLE_SENSOR = 6,
+  MT_ROLE_TAK = 7,
+  MT_ROLE_CLIENT_HIDDEN = 8,
+  MT_ROLE_LOST_AND_FOUND = 9,
+  MT_ROLE_TAK_TRACKER = 10,
+  MT_ROLE_ROUTER_LATE = 11,
+  MT_ROLE_CLIENT_BASE = 12,
+  MT_ROLE_COUNT
 } mt_role_t;
 
 /**
@@ -53,13 +53,13 @@ typedef enum {
  * Values match RebroadcastMode in config.proto.
  */
 typedef enum {
-    MT_REBR_ALL                = 0,
-    MT_REBR_ALL_SKIP_DECODING  = 1,
-    MT_REBR_LOCAL_ONLY         = 2,
-    MT_REBR_KNOWN_ONLY         = 3,
-    MT_REBR_NONE               = 4,
-    MT_REBR_CORE_PORTNUMS_ONLY = 5,
-    MT_REBR_COUNT
+  MT_REBR_ALL = 0,
+  MT_REBR_ALL_SKIP_DECODING = 1,
+  MT_REBR_LOCAL_ONLY = 2,
+  MT_REBR_KNOWN_ONLY = 3,
+  MT_REBR_NONE = 4,
+  MT_REBR_CORE_PORTNUMS_ONLY = 5,
+  MT_REBR_COUNT
 } mt_rebr_mode_t;
 
 /**

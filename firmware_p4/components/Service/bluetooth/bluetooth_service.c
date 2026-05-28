@@ -105,7 +105,8 @@ esp_err_t bluetooth_service_connect(const uint8_t *addr,
 }
 
 static void sniffer_session_stream(const uint8_t *payload, uint8_t len) {
-  if (s_sniffer_cb == NULL || payload == NULL || len < sizeof(spi_ble_sniffer_frame_t)) return;
+  if (s_sniffer_cb == NULL || payload == NULL || len < sizeof(spi_ble_sniffer_frame_t))
+    return;
   const spi_ble_sniffer_frame_t *frame = (const spi_ble_sniffer_frame_t *)payload;
   s_sniffer_cb(frame->addr, frame->addr_type, frame->rssi, frame->data, frame->len);
 }

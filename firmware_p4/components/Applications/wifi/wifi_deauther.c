@@ -35,8 +35,7 @@ bool wifi_deauther_start(const wifi_ap_record_t *ap_record,
   memset(payload + 6, is_broadcast ? 0xFF : 0x00, 6);
   payload[12] = (uint8_t)type;
   payload[13] = ap_record->primary;
-  s_session_id =
-      spi_session_start(SPI_ID_WIFI_APP_DEAUTHER, payload, sizeof(payload), NULL, NULL);
+  s_session_id = spi_session_start(SPI_ID_WIFI_APP_DEAUTHER, payload, sizeof(payload), NULL, NULL);
   return s_session_id != SPI_SESSION_INVALID_ID;
 }
 
@@ -48,8 +47,7 @@ bool wifi_deauther_start_targeted(const wifi_ap_record_t *ap_record,
   memcpy(payload + 6, client_mac, 6);
   payload[12] = (uint8_t)type;
   payload[13] = ap_record->primary;
-  s_session_id =
-      spi_session_start(SPI_ID_WIFI_APP_DEAUTHER, payload, sizeof(payload), NULL, NULL);
+  s_session_id = spi_session_start(SPI_ID_WIFI_APP_DEAUTHER, payload, sizeof(payload), NULL, NULL);
   return s_session_id != SPI_SESSION_INVALID_ID;
 }
 
