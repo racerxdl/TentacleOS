@@ -3,17 +3,17 @@ CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
 CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
 
-# Partição customizada (com OTA)
+# Custom partition table (with OTA)
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
-# OTA rollback no bootloader
+# OTA rollback support in bootloader
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 
-# CPU 360MHz (máximo do P4)
+# CPU 360MHz (P4 maximum)
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_360=y
 
-# PSRAM hex-octal, 200MHz — específico do P4
+# PSRAM hex-octal mode, 200MHz — P4 specific
 CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_HEX=y
 CONFIG_SPIRAM_SPEED_200M=y
@@ -21,16 +21,16 @@ CONFIG_SPIRAM_USE_MALLOC=y
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
 CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
 
-# Stack maior para kernel_init
+# Larger stack for kernel_init
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
-# Console primário UART0, secundário USB JTAG
+# Primary console UART0, secondary USB JTAG
 CONFIG_ESP_CONSOLE_UART_DEFAULT=y
 CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y
 
-# TinyUSB HID — 2 interfaces (keyboard + mouse) para Bad USB
+# TinyUSB HID — 2 interfaces (keyboard + mouse) for Bad USB
 CONFIG_TINYUSB_HID_COUNT=2
 CONFIG_TINYUSB_MODE_DMA=y
 
-# Log INFO por padrão
+# Default log level INFO
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
