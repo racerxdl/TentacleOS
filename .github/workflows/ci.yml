@@ -40,7 +40,7 @@ jobs:
     name: Build Firmware
     runs-on: ubuntu-latest
     container:
-      image: espressif/idf:v5.5.1
+      image: espressif/idf:v5.5.3
 
     steps:
       - uses: actions/checkout@v4

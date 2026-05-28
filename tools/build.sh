@@ -41,7 +41,7 @@ echo -e "${BLUE}>>> Starting TentacleOS Build${NC}"
 
 echo -e "${BLUE}>>> Building ESP32-C5 firmware...${NC}"
 cd "$C5_DIR" || exit
-idf.py reconfigure build
+idf.py -DIDF_TARGET=esp32c5 reconfigure build
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: Failed to build C5 firmware.${NC}"
@@ -50,7 +50,7 @@ fi
 
 echo -e "${BLUE}>>> Building ESP32-P4 firmware (Embedding C5 binary)...${NC}"
 cd "$P4_DIR" || exit
-idf.py reconfigure build
+idf.py -DIDF_TARGET=esp32p4 reconfigure build
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: Failed to build P4 firmware.${NC}"
