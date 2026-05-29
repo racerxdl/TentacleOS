@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 #include "nfc_reader.h"
 
 #include <stdio.h>
@@ -29,6 +30,9 @@
 #include "mf_plus.h"
 #include "mf_ultralight.h"
 #include "nfc_card_info.h"
+#include "nfc_dict_loader.h"
+#include "tos_flash_paths.h"
+#include "tos_storage_paths.h"
 #include "nfc_common.h"
 #include "nfc_store.h"
 #include "poller.h"
@@ -464,39 +468,9 @@ void mf_classic_read_full(nfc_iso14443a_data_t *card) {
     }
 
     if (!res->key_a_found) {
-      if (known && known->hint_keys) {
-        for (int k = 0; k < known->hint_key_count && !res->key_a_found; k++) {
-          if (try_key_bytes(card, (uint8_t)res->first_block, MF_KEY_A, known->hint_keys[k])) {
-            res->key_a_found = true;
-            res->key_a_dict_idx = 0;
-            memcpy(res->key_a, known->hint_keys[k], 6);
-            keys_a_found++;
-            memcpy(s_emu_card.keys[sect].key_a, known->hint_keys[k], 6);
-            s_emu_card.keys[sect].key_a_known = true;
-            prng_record_nonce(sect, mf_classic_get_last_nt());
-            mf_key_cache_store(&(mf_key_cache_store_params_t){.uid = card->uid,
-                                                              .uid_len = card->uid_len,
-                                                              .sector = sect,
-                                                              .sector_count = nsect,
-                                                              .type = MF_KEY_A,
-                                                              .key = known->hint_keys[k]});
-          }
-        }
-      }
       for (int k = 0; k < dict_count && !res->key_a_found; k++) {
         uint8_t key_bytes[6];
         mf_key_dict_get(k, key_bytes);
-        if (known && known->hint_keys) {
-          bool already = false;
-          for (int h = 0; h < known->hint_key_count; h++) {
-            if (memcmp(key_bytes, known->hint_keys[h], 6) == 0) {
-              already = true;
-              break;
-            }
-          }
-          if (already)
-            continue;
-        }
         if (try_key_bytes(card, (uint8_t)res->first_block, MF_KEY_A, key_bytes)) {
           res->key_a_found = true;
           res->key_a_dict_idx = k;
@@ -592,27 +566,9 @@ void mf_classic_read_full(nfc_iso14443a_data_t *card) {
     }                                                                                       \
   } while (0)
 
-      if (known && known->hint_keys) {
-        for (int k = 0; k < known->hint_key_count && !res->key_b_found; k++) {
-          if (try_key_bytes(card, (uint8_t)res->first_block, MF_KEY_B, known->hint_keys[k])) {
-            FOUND_KEY_B(known->hint_keys[k]);
-          }
-        }
-      }
       for (int k = 0; k < dict_count && !res->key_b_found; k++) {
         uint8_t key_bytes[6];
         mf_key_dict_get(k, key_bytes);
-        if (known && known->hint_keys) {
-          bool already = false;
-          for (int h = 0; h < known->hint_key_count; h++) {
-            if (memcmp(key_bytes, known->hint_keys[h], 6) == 0) {
-              already = true;
-              break;
-            }
-          }
-          if (already)
-            continue;
-        }
         if (try_key_bytes(card, (uint8_t)res->first_block, MF_KEY_B, key_bytes)) {
           FOUND_KEY_B(key_bytes);
         }
@@ -1011,12 +967,29 @@ void mfp_probe_and_dump(nfc_iso14443a_data_t *card) {
 #endif
 
 #if MF_ULC_TRY_DEFAULT_KEY
-#ifndef MF_ULC_DEFAULT_KEY
-#define MF_ULC_DEFAULT_KEY \
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-#endif
+#define MF_ULC_DICT_MAX_KEYS 8
+#define MF_ULC_KEY_SIZE      16
 
-static const uint8_t k_mf_ulc_default_key[16] = {MF_ULC_DEFAULT_KEY};
+static uint8_t s_mf_ulc_keys[MF_ULC_DICT_MAX_KEYS][MF_ULC_KEY_SIZE];
+static size_t s_mf_ulc_key_count = 0;
+static bool s_is_mf_ulc_loaded = false;
+
+static void load_mf_ulc_keys(void) {
+  if (s_is_mf_ulc_loaded) {
+    return;
+  }
+  s_is_mf_ulc_loaded = true;
+
+  const nfc_dict_load_params_t load = {
+      .sd_path = TOS_PATH_NFC_DICT "/mf_ulc_default.dic",
+      .flash_path = FLASH_NFC_DICT "/mf_ulc_default.dic",
+      .key_size = MF_ULC_KEY_SIZE,
+      .max_keys = MF_ULC_DICT_MAX_KEYS,
+  };
+  if (nfc_dict_load_file(&load, (uint8_t *)s_mf_ulc_keys, &s_mf_ulc_key_count) != ESP_OK) {
+    s_mf_ulc_key_count = 0;
+  }
+}
 #endif
 
 void mful_dump_card(nfc_iso14443a_data_t *card) {
@@ -1097,11 +1070,15 @@ void mful_dump_card(nfc_iso14443a_data_t *card) {
 
   if (vlen < 7) {
 #if MF_ULC_TRY_DEFAULT_KEY
-    hb_nfc_err_t aerr = mful_ulc_auth(k_mf_ulc_default_key);
-    if (aerr == HB_NFC_OK) {
-      tag_type = "Ultralight C (3DES auth)";
-      total_pages = 48;
-      ESP_LOGI(TAG, "ULC auth OK (default key)");
+    load_mf_ulc_keys();
+    for (size_t ki = 0; ki < s_mf_ulc_key_count; ki++) {
+      hb_nfc_err_t aerr = mful_ulc_auth(s_mf_ulc_keys[ki]);
+      if (aerr == HB_NFC_OK) {
+        tag_type = "Ultralight C (3DES auth)";
+        total_pages = 48;
+        ESP_LOGI(TAG, "ULC auth OK (key %u from dict)", (unsigned)ki);
+        break;
+      }
     }
 #endif
   }

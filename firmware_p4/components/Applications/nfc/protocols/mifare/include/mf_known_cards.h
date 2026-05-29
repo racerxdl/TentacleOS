@@ -1,23 +1,26 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 /**
  * @file mf_known_cards.h
- * @brief Known MIFARE Classic card type database.
+ * @brief Known MIFARE Classic card type database (name + identification only).
  *
- * Matches a card by SAK + ATQA (and optionally UID prefix).
- * When a match is found, provides a human-readable name, hint string,
- * and priority key list to try before the full dictionary.
+ * Matches a card by SAK + ATQA (and optionally UID prefix) and returns a
+ * human-readable name plus a hint string. Key dictionaries are no longer
+ * tied to card profiles — the brute-force loop in the reader iterates
+ * @ref mf_key_dict, which already aggregates every mf_classic_*.dic file
+ * the user dropped in /sdcard/nfc/assets/dict/.
  */
 #ifndef MF_KNOWN_CARDS_H
 #define MF_KNOWN_CARDS_H
@@ -38,9 +41,7 @@ typedef struct {
   uint8_t sak;
   uint8_t atqa[2];
   uint8_t uid_prefix[4];
-  uint8_t uid_prefix_len;        /**< @brief 0 = do not check UID prefix. */
-  const uint8_t (*hint_keys)[6]; /**< @brief Priority keys, may be NULL. */
-  int hint_key_count;
+  uint8_t uid_prefix_len; /**< @brief 0 = do not check UID prefix. */
 } mf_known_card_t;
 
 /**

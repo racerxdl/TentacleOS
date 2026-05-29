@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #include "bt_dispatcher.h"
 
@@ -21,7 +22,12 @@
 #include "ble_connect_flood.h"
 #include "ble_scanner.h"
 #include "ble_sniffer.h"
+#include "session_manager.h"
 #include "bluetooth_service.h"
+#include "meshcore_gatt.h"
+#include "meshcore_transport.h"
+#include "meshtastic_gatt.h"
+#include "meshtastic_transport.h"
 #include "skimmer_detector.h"
 #include "spi_bridge.h"
 #include "tracker_detector.h"
@@ -32,6 +38,36 @@ static const char *TAG = "BT_DISPATCHER";
 #define BT_CONNECT_MIN_PAYLOAD      7
 #define BT_GET_INFO_RESP_LEN        7
 #define BT_MAC_LEN                  6
+
+static void killed_ble_flood(spi_id_t id) {
+  (void)id;
+  ble_connect_flood_stop();
+}
+static void killed_skimmer(spi_id_t id) {
+  (void)id;
+  skimmer_detector_stop();
+}
+static void killed_tracker(spi_id_t id) {
+  (void)id;
+  tracker_detector_stop();
+}
+
+static spi_status_t bt_open_session(spi_id_t op_id,
+                                    session_kill_cb_t kill_cb,
+                                    uint8_t *out_resp_payload,
+                                    uint8_t *out_resp_len,
+                                    void (*rollback_stop)(void)) {
+  uint32_t sid = session_manager_start(op_id, kill_cb);
+  if (sid == SPI_SESSION_INVALID_ID) {
+    if (rollback_stop != NULL)
+      rollback_stop();
+    return SPI_STATUS_ERROR;
+  }
+  spi_session_resp_t resp = {.session_id = sid};
+  memcpy(out_resp_payload, &resp, sizeof(resp));
+  *out_resp_len = sizeof(resp);
+  return SPI_STATUS_OK;
+}
 
 spi_status_t bt_dispatcher_execute(spi_id_t id,
                                    const uint8_t *payload,
@@ -75,28 +111,123 @@ spi_status_t bt_dispatcher_execute(spi_id_t id,
     case SPI_ID_BT_APP_SCANNER:
       return ble_scanner_start() ? SPI_STATUS_OK : SPI_STATUS_BUSY;
 
-    case SPI_ID_BT_APP_SNIFFER:
-      return (ble_sniffer_start() == ESP_OK) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
+    case SPI_ID_BT_APP_SNIFFER: {
+      if (ble_sniffer_start() != ESP_OK)
+        return SPI_STATUS_ERROR;
+      uint32_t sid = session_manager_start(SPI_ID_BT_APP_SNIFFER, ble_sniffer_session_killed);
+      if (sid == SPI_SESSION_INVALID_ID) {
+        ble_sniffer_stop();
+        return SPI_STATUS_ERROR;
+      }
+      ble_sniffer_bind_session(sid);
+      spi_session_resp_t resp = {.session_id = sid};
+      memcpy(out_resp_payload, &resp, sizeof(resp));
+      *out_resp_len = sizeof(resp);
+      return SPI_STATUS_OK;
+    }
 
     case SPI_ID_BT_APP_FLOOD: {
       if (len < BT_CONNECT_MIN_PAYLOAD)
         return SPI_STATUS_ERROR;
-      return (ble_connect_flood_start(payload, payload[BT_MAC_LEN]) == ESP_OK) ? SPI_STATUS_OK
-                                                                               : SPI_STATUS_ERROR;
+      if (ble_connect_flood_start(payload, payload[BT_MAC_LEN]) != ESP_OK)
+        return SPI_STATUS_ERROR;
+      uint32_t sid = session_manager_start(SPI_ID_BT_APP_FLOOD, killed_ble_flood);
+      if (sid == SPI_SESSION_INVALID_ID) {
+        ble_connect_flood_stop();
+        return SPI_STATUS_ERROR;
+      }
+      spi_session_resp_t resp = {.session_id = sid};
+      memcpy(out_resp_payload, &resp, sizeof(resp));
+      *out_resp_len = sizeof(resp);
+      return SPI_STATUS_OK;
     }
 
     case SPI_ID_BT_APP_SKIMMER:
-      return (skimmer_detector_start() == ESP_OK) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
+      if (skimmer_detector_start() != ESP_OK)
+        return SPI_STATUS_ERROR;
+      return bt_open_session(SPI_ID_BT_APP_SKIMMER,
+                             killed_skimmer,
+                             out_resp_payload,
+                             out_resp_len,
+                             skimmer_detector_stop);
 
     case SPI_ID_BT_APP_TRACKER:
-      return (tracker_detector_start() == ESP_OK) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
+      if (tracker_detector_start() != ESP_OK)
+        return SPI_STATUS_ERROR;
+      return bt_open_session(SPI_ID_BT_APP_TRACKER,
+                             killed_tracker,
+                             out_resp_payload,
+                             out_resp_len,
+                             tracker_detector_stop);
 
-    case SPI_ID_BT_APP_STOP:
-      ble_sniffer_stop();
-      ble_connect_flood_stop();
-      skimmer_detector_stop();
-      tracker_detector_stop();
+    case SPI_ID_MESH_BLE_INIT: {
+      if (len < sizeof(spi_mesh_init_t)) {
+        return SPI_STATUS_INVALID_ARG;
+      }
+      spi_mesh_init_t req;
+      memcpy(&req, payload, sizeof(req));
+      if (meshtastic_transport_init() != ESP_OK) {
+        return SPI_STATUS_ERROR;
+      }
+      esp_err_t ret = meshtastic_gatt_init(req.node_num);
+      if (ret == ESP_ERR_INVALID_STATE) {
+        return SPI_STATUS_OK;
+      }
+      return (ret == ESP_OK) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
+    }
+
+    case SPI_ID_MESH_BLE_STOP:
+      meshtastic_gatt_stop();
       return SPI_STATUS_OK;
+
+    case SPI_ID_MESH_FROMRADIO_PUSH:
+      meshtastic_transport_inject_fromradio_chunk(payload, len);
+      return SPI_STATUS_OK;
+
+    case SPI_ID_MESH_LOG_PUSH:
+      meshtastic_transport_inject_log_chunk(payload, len);
+      return SPI_STATUS_OK;
+
+    case SPI_ID_MESH_STATUS: {
+      spi_mesh_status_t status;
+      meshtastic_transport_get_status(&status);
+      memcpy(out_resp_payload, &status, sizeof(status));
+      *out_resp_len = sizeof(status);
+      return SPI_STATUS_OK;
+    }
+
+    case SPI_ID_MCORE_BLE_INIT: {
+      if (len < sizeof(spi_mcore_init_t)) {
+        return SPI_STATUS_INVALID_ARG;
+      }
+      spi_mcore_init_t req;
+      memcpy(&req, payload, sizeof(req));
+      req.name_prefix[sizeof(req.name_prefix) - 1] = '\0';
+      if (meshcore_transport_init() != ESP_OK) {
+        return SPI_STATUS_ERROR;
+      }
+      esp_err_t ret = meshcore_gatt_init(req.name_prefix, req.pin);
+      if (ret == ESP_ERR_INVALID_STATE) {
+        return SPI_STATUS_OK;
+      }
+      return (ret == ESP_OK) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
+    }
+
+    case SPI_ID_MCORE_BLE_STOP:
+      meshcore_gatt_stop();
+      return SPI_STATUS_OK;
+
+    case SPI_ID_MCORE_TX_PUSH:
+      meshcore_transport_inject_tx_chunk(payload, len);
+      return SPI_STATUS_OK;
+
+    case SPI_ID_MCORE_STATUS: {
+      spi_mcore_status_t status;
+      meshcore_transport_get_status(&status);
+      memcpy(out_resp_payload, &status, sizeof(status));
+      *out_resp_len = sizeof(status);
+      return SPI_STATUS_OK;
+    }
 
     default:
       return SPI_STATUS_ERROR;

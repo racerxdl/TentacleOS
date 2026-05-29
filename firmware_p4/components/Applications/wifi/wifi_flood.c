@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #include "wifi_flood.h"
 
@@ -19,6 +20,7 @@
 #include "esp_log.h"
 
 #include "spi_bridge.h"
+#include "spi_session.h"
 
 static const char *TAG = "WIFI_FLOOD";
 
@@ -27,8 +29,9 @@ static const char *TAG = "WIFI_FLOOD";
 #define WIFI_FLOOD_TYPE_PROBE 2
 
 static bool s_is_running = false;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 
-static esp_err_t send_flood(uint8_t type, const uint8_t *target_bssid, uint8_t channel) {
+static bool start_flood(uint8_t type, const uint8_t *target_bssid, uint8_t channel) {
   uint8_t payload[8];
   payload[0] = type;
   if (target_bssid != NULL)
@@ -36,35 +39,34 @@ static esp_err_t send_flood(uint8_t type, const uint8_t *target_bssid, uint8_t c
   else
     memset(payload + 1, 0xFF, 6);
   payload[7] = channel;
-  return spi_bridge_send_command(SPI_ID_WIFI_APP_FLOOD, payload, sizeof(payload), NULL, NULL, 2000);
+  s_session_id = spi_session_start(SPI_ID_WIFI_APP_FLOOD, payload, sizeof(payload), NULL, NULL);
+  s_is_running = (s_session_id != SPI_SESSION_INVALID_ID);
+  return s_is_running;
 }
 
 bool wifi_flood_auth_start(const uint8_t *target_bssid, uint8_t channel) {
-  esp_err_t err = send_flood(WIFI_FLOOD_TYPE_AUTH, target_bssid, channel);
-  s_is_running = (err == ESP_OK);
-  if (!s_is_running)
+  if (!start_flood(WIFI_FLOOD_TYPE_AUTH, target_bssid, channel))
     ESP_LOGW(TAG, "Wi-Fi auth flood failed over SPI");
   return s_is_running;
 }
 
 bool wifi_flood_assoc_start(const uint8_t *target_bssid, uint8_t channel) {
-  esp_err_t err = send_flood(WIFI_FLOOD_TYPE_ASSOC, target_bssid, channel);
-  s_is_running = (err == ESP_OK);
-  if (!s_is_running)
+  if (!start_flood(WIFI_FLOOD_TYPE_ASSOC, target_bssid, channel))
     ESP_LOGW(TAG, "Wi-Fi assoc flood failed over SPI");
   return s_is_running;
 }
 
 bool wifi_flood_probe_start(const uint8_t *target_bssid, uint8_t channel) {
-  esp_err_t err = send_flood(WIFI_FLOOD_TYPE_PROBE, target_bssid, channel);
-  s_is_running = (err == ESP_OK);
-  if (!s_is_running)
+  if (!start_flood(WIFI_FLOOD_TYPE_PROBE, target_bssid, channel))
     ESP_LOGW(TAG, "Wi-Fi probe flood failed over SPI");
   return s_is_running;
 }
 
 void wifi_flood_stop(void) {
-  spi_bridge_send_command(SPI_ID_WIFI_APP_ATTACK_STOP, NULL, 0, NULL, NULL, 2000);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
+  }
   s_is_running = false;
 }
 

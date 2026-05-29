@@ -1,21 +1,24 @@
 # Copyright (c) 2025 HIGH CODE LLC
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# TentacleOS is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
-# http://www.apache.org/licenses/LICENSE-2.0
+# TentacleOS is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# You should have received a copy of the GNU General Public License
+# along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 file(GLOB_RECURSE CONSOLE_SERVICE_SRCS "console/*.c")
 file(GLOB_RECURSE CONSOLE_COMMANDS_SRCS "console/commands/*.c")
 file(GLOB_RECURSE SPI_BRIDGE_SRCS "spi_bridge/*.c")
 file(GLOB_RECURSE SD_CARD_SRCS "sd_card/*.c")
+file(GLOB_RECURSE MESHTASTIC_SRCS "meshtastic/*.c")
+file(GLOB_RECURSE MESHCORE_SRCS "meshcore/*.c")
 
 
 idf_component_register(SRCS 
@@ -41,6 +44,8 @@ idf_component_register(SRCS
   ${CONSOLE_SERVICE_SRCS}
   ${CONSOLE_COMMANDS_SRCS}
   ${SD_CARD_SRCS}
+  ${MESHTASTIC_SRCS}
+  ${MESHCORE_SRCS}
   INCLUDE_DIRS 
   "wifi/include"
   "http_server/include"
@@ -53,6 +58,8 @@ idf_component_register(SRCS
   "spi_bridge/include"
   "console/include"
   "sd_card/include"
+  "meshtastic/include"
+  "meshcore/include"
 
 
 
@@ -73,6 +80,7 @@ idf_component_register(SRCS
     lvgl
     littlefs
     cjson
-    console 
-    argtable3 
+    console
+    argtable3
+    mdns
 )

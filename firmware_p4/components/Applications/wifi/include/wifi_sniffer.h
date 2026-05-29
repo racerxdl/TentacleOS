@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef WIFI_SNIFFER_H
 #define WIFI_SNIFFER_H
@@ -63,6 +64,18 @@ bool wifi_sniffer_start(wifi_sniffer_type_t type, uint8_t channel);
  * @return true on success, false on failure.
  */
 bool wifi_sniffer_start_stream(wifi_sniffer_type_t type, uint8_t channel, wifi_sniffer_cb_t cb);
+
+/**
+ * @brief Start the sniffer in Packet Monitor mode (counter-only).
+ *
+ * Same as `wifi_sniffer_start(WIFI_SNIFFER_TYPE_RAW, channel)` but tells
+ * the C5 to recycle the PCAP buffer when full (instead of dropping new
+ * packets). Use this for the Packet Monitor screen which only reads
+ * counters and never saves the PCAP.
+ *
+ * @param channel  Wi-Fi channel (0 for hopping).
+ */
+bool wifi_sniffer_start_monitor(uint8_t channel);
 
 /**
  * @brief Stop the sniffer and release stream resources.

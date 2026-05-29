@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #include "tos_first_boot.h"
 #include "tos_config.h"
@@ -45,6 +46,7 @@ static const char *const FIRST_BOOT_DIRS[] = {
 
     // Protocol assets
     TOS_PATH_NFC_ASSETS,
+    TOS_PATH_NFC_DICT,
     TOS_PATH_RFID_ASSETS,
     TOS_PATH_SUBGHZ_ASSETS,
     TOS_PATH_IR_ASSETS,
@@ -237,8 +239,9 @@ static const asset_copy_t FIRST_BOOT_ASSETS[] = {
     // BadUSB example scripts
     {FLASH_STORAGE_BADUSB "/rickroll.txt", TOS_PATH_BADUSB_ASSETS "/rickroll.txt"},
 
-    // TODO: add protocol database entries here when files are added to flash
-    // e.g. mf_classic_dict.nfc, oui_db.csv, frequency_list.sub, etc.
+    {FLASH_NFC_DICT "/mf_classic_default.dic", TOS_PATH_NFC_DICT "/mf_classic_default.dic"},
+    {FLASH_NFC_DICT "/mf_classic_user.dic", TOS_PATH_NFC_DICT "/mf_classic_user.dic"},
+    {FLASH_NFC_DICT "/mf_ulc_default.dic", TOS_PATH_NFC_DICT "/mf_ulc_default.dic"},
 
     {NULL, NULL}};
 

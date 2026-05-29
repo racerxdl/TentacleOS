@@ -1,24 +1,28 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #include "buttons_gpio.h"
 
 #include "driver/gpio.h"
+#include "esp_log.h"
 
 static const char *TAG = "BUTTONS_GPIO";
 
 #define BUTTON_PRESSED_LEVEL 0
+
+static const char *const s_button_names[] = {"UP", "DOWN", "LEFT", "RIGHT", "OK", "BACK"};
 
 static button_t s_buttons[] = {
     {GPIO_BTN_UP_PIN, true, false},
@@ -31,8 +35,19 @@ static button_t s_buttons[] = {
 
 #define NUM_BUTTONS (sizeof(s_buttons) / sizeof(s_buttons[0]))
 
+static bool s_last_down[6] = {false};
+
 static bool get_raw_level(uint32_t gpio) {
   return gpio_get_level(gpio) == BUTTON_PRESSED_LEVEL;
+}
+
+static bool check_and_log(int idx, uint32_t gpio) {
+  bool now = gpio_get_level(gpio) == BUTTON_PRESSED_LEVEL;
+  if (now && !s_last_down[idx]) {
+    ESP_LOGI(TAG, "Pressed: %s (GPIO %lu)", s_button_names[idx], (unsigned long)gpio);
+  }
+  s_last_down[idx] = now;
+  return now;
 }
 
 bool up_button_pressed(void) {
@@ -61,22 +76,22 @@ bool back_button_pressed(void) {
 }
 
 bool up_button_is_down(void) {
-  return get_raw_level(GPIO_BTN_UP_PIN);
+  return check_and_log(0, GPIO_BTN_UP_PIN);
 }
 bool down_button_is_down(void) {
-  return get_raw_level(GPIO_BTN_DOWN_PIN);
+  return check_and_log(1, GPIO_BTN_DOWN_PIN);
 }
 bool left_button_is_down(void) {
-  return get_raw_level(GPIO_BTN_LEFT_PIN);
+  return check_and_log(2, GPIO_BTN_LEFT_PIN);
 }
 bool right_button_is_down(void) {
-  return get_raw_level(GPIO_BTN_RIGHT_PIN);
+  return check_and_log(3, GPIO_BTN_RIGHT_PIN);
 }
 bool ok_button_is_down(void) {
-  return get_raw_level(GPIO_BTN_OK_PIN);
+  return check_and_log(4, GPIO_BTN_OK_PIN);
 }
 bool back_button_is_down(void) {
-  return get_raw_level(GPIO_BTN_BACK_PIN);
+  return check_and_log(5, GPIO_BTN_BACK_PIN);
 }
 
 void buttons_task(void) {
@@ -85,6 +100,7 @@ void buttons_task(void) {
 
     if (s_buttons[i].last_state == true && current == false) {
       s_buttons[i].pressed_flag = true;
+      ESP_LOGI(TAG, "Pressed: %s (GPIO %lu)", s_button_names[i], (unsigned long)s_buttons[i].gpio);
     }
 
     s_buttons[i].last_state = current;

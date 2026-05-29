@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #include "c5_flasher.h"
 
@@ -27,26 +28,34 @@
 static const char *TAG = "C5_FLASHER";
 
 #define FLASHER_UART          UART_NUM_1
-#define FLASHER_UART_BUF      2048
+#define FLASHER_UART_BUF      4096
 #define FLASH_BLOCK_SIZE      1024
 #define FLASH_BLOCK_HDR_SIZE  16
 #define FLASH_CHECKSUM_INIT   0xEF
-#define BOOTLOADER_DELAY_MS   100
-#define BOOT_RELEASE_DELAY_MS 200
-#define FLASH_BEGIN_DELAY_MS  100
-#define FLASH_BLOCK_DELAY_MS  20
+#define BOOTLOADER_DELAY_MS   50
+#define BOOT_RELEASE_DELAY_MS 50
+#define FLASH_BEGIN_DELAY_MS  50
 
 // ESP serial protocol (SLIP framing)
-#define ESP_ROM_BAUD 115200
-#define SLIP_END     0xC0
-#define SLIP_ESC     0xDB
-#define SLIP_ESC_END 0xDC
-#define SLIP_ESC_ESC 0xDD
+#define ESP_ROM_BAUD   115200
+#define ESP_FLASH_BAUD 921600
+#define SLIP_END       0xC0
+#define SLIP_ESC       0xDB
+#define SLIP_ESC_END   0xDC
+#define SLIP_ESC_ESC   0xDD
 
 // ESP serial protocol commands
-#define ESP_CMD_FLASH_BEGIN 0x02
-#define ESP_CMD_FLASH_DATA  0x03
-#define ESP_CMD_FLASH_END   0x04
+#define ESP_CMD_SYNC            0x08
+#define ESP_CMD_FLASH_BEGIN     0x02
+#define ESP_CMD_FLASH_DATA      0x03
+#define ESP_CMD_FLASH_END       0x04
+#define ESP_CMD_CHANGE_BAUDRATE 0x0F
+
+#define SYNC_ATTEMPTS        3
+#define SYNC_TIMEOUT_MS      100
+#define BAUD_TIMEOUT_MS      300
+#define ACK_TIMEOUT_MS       500
+#define FLASH_BLOCK_DELAY_MS 5
 
 #if C5_FIRMWARE_EMBEDDED
 extern const uint8_t c5_firmware_bin_start[] asm("_binary_TentacleOS_C5_bin_start");
@@ -60,8 +69,14 @@ typedef struct {
   uint32_t checksum;
 } __attribute__((packed)) c5_flasher_cmd_header_t;
 
+static bool s_ack_supported = false;
+
 static void slip_send_byte(uint8_t b);
 static void send_packet(uint8_t cmd, uint8_t *payload, uint16_t len, uint32_t checksum);
+static esp_err_t read_response(uint32_t timeout_ms);
+static esp_err_t sync_bootloader(void);
+static esp_err_t change_baudrate(uint32_t new_baud);
+static void wait_for_ack_or_delay(uint32_t fallback_delay_ms);
 
 esp_err_t c5_flasher_init(void) {
   gpio_config_t io_conf = {
@@ -124,10 +139,15 @@ esp_err_t c5_flasher_update(const uint8_t *bin_data, uint32_t bin_size) {
 
   c5_flasher_enter_bootloader();
 
+  s_ack_supported = (sync_bootloader() == ESP_OK);
+  if (s_ack_supported) {
+    change_baudrate(ESP_FLASH_BAUD);
+  }
+
   uint32_t num_blocks = (bin_size + FLASH_BLOCK_SIZE - 1) / FLASH_BLOCK_SIZE;
   uint32_t begin_params[4] = {bin_size, num_blocks, FLASH_BLOCK_SIZE, 0x0000};
   send_packet(ESP_CMD_FLASH_BEGIN, (uint8_t *)begin_params, sizeof(begin_params), 0);
-  vTaskDelay(pdMS_TO_TICKS(FLASH_BEGIN_DELAY_MS));
+  wait_for_ack_or_delay(FLASH_BEGIN_DELAY_MS);
 
   for (uint32_t i = 0; i < num_blocks; i++) {
     uint32_t offset = i * FLASH_BLOCK_SIZE;
@@ -148,16 +168,73 @@ esp_err_t c5_flasher_update(const uint8_t *bin_data, uint32_t bin_size) {
     }
 
     send_packet(ESP_CMD_FLASH_DATA, block_buffer, this_len + FLASH_BLOCK_HDR_SIZE, checksum);
-    ESP_LOGI(TAG, "Writing block %lu/%lu", i + 1, num_blocks);
-    vTaskDelay(pdMS_TO_TICKS(FLASH_BLOCK_DELAY_MS));
+    if ((i % 100) == 0 || i == num_blocks - 1) {
+      ESP_LOGI(TAG, "Writing block %lu/%lu", i + 1, num_blocks);
+    }
+    wait_for_ack_or_delay(FLASH_BLOCK_DELAY_MS);
   }
 
   uint32_t end_params[1] = {0};
   send_packet(ESP_CMD_FLASH_END, (uint8_t *)end_params, sizeof(end_params), 0);
+  wait_for_ack_or_delay(FLASH_BEGIN_DELAY_MS);
 
   ESP_LOGI(TAG, "Update successful");
   c5_flasher_reset_normal();
   return ESP_OK;
+}
+
+static esp_err_t read_response(uint32_t timeout_ms) {
+  uint8_t byte;
+  bool in_packet = false;
+  TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+
+  while (xTaskGetTickCount() < deadline) {
+    if (uart_read_bytes(FLASHER_UART, &byte, 1, pdMS_TO_TICKS(10)) <= 0)
+      continue;
+    if (byte != SLIP_END)
+      continue;
+    if (!in_packet) {
+      in_packet = true;
+    } else {
+      return ESP_OK;
+    }
+  }
+  return ESP_ERR_TIMEOUT;
+}
+
+static esp_err_t sync_bootloader(void) {
+  uint8_t sync_data[36] = {0x07, 0x07, 0x12, 0x20};
+  memset(sync_data + 4, 0x55, 32);
+  for (int i = 0; i < SYNC_ATTEMPTS; i++) {
+    send_packet(ESP_CMD_SYNC, sync_data, sizeof(sync_data), 0);
+    if (read_response(SYNC_TIMEOUT_MS) == ESP_OK) {
+      ESP_LOGI(TAG, "Bootloader synced — using ACK flow control");
+      return ESP_OK;
+    }
+  }
+  ESP_LOGW(TAG, "No ACK from bootloader — falling back to fixed delays");
+  return ESP_ERR_TIMEOUT;
+}
+
+static esp_err_t change_baudrate(uint32_t new_baud) {
+  uint32_t params[2] = {new_baud, 0};
+  send_packet(ESP_CMD_CHANGE_BAUDRATE, (uint8_t *)params, sizeof(params), 0);
+  if (read_response(BAUD_TIMEOUT_MS) != ESP_OK) {
+    ESP_LOGW(TAG, "Baud rate change unconfirmed, staying at %d", ESP_ROM_BAUD);
+    return ESP_ERR_TIMEOUT;
+  }
+  uart_set_baudrate(FLASHER_UART, new_baud);
+  vTaskDelay(pdMS_TO_TICKS(50));
+  ESP_LOGI(TAG, "Baud rate changed to %lu", (unsigned long)new_baud);
+  return ESP_OK;
+}
+
+static void wait_for_ack_or_delay(uint32_t fallback_delay_ms) {
+  if (s_ack_supported) {
+    read_response(ACK_TIMEOUT_MS);
+  } else {
+    vTaskDelay(pdMS_TO_TICKS(fallback_delay_ms));
+  }
 }
 
 static void slip_send_byte(uint8_t b) {

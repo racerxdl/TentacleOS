@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #include "wifi_sniffer.h"
 
@@ -28,6 +29,7 @@
 #include "pcap_serializer.h"
 #include "sd_card_init.h"
 #include "sd_card_write.h"
+#include "session_manager.h"
 #include "spi_bridge.h"
 #include "storage_mkdir.h"
 #include "storage_write.h"
@@ -86,7 +88,9 @@ typedef struct {
 static uint8_t *s_pcap_buffer = NULL;
 static uint32_t s_buffer_offset = 0;
 static uint32_t s_packet_count = 0;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 static uint32_t s_deauth_count = 0;
+static bool s_is_monitor_mode = false; // packet monitor: counts forever, buffer recycles
 static bool s_is_sniffing = false;
 static bool s_is_pcap_enabled = false;
 static bool s_is_verbose = false;
@@ -265,7 +269,27 @@ bool wifi_sniffer_start_stream_sd(wifi_sniffer_type_t type, uint8_t channel, con
   return true;
 }
 
+void wifi_sniffer_set_monitor_mode(bool enabled) {
+  s_is_monitor_mode = enabled;
+  if (!enabled) {
+    return;
+  }
+  // Reset buffer position so monitor mode starts with a clean rolling window.
+  s_buffer_offset = sizeof(pcap_global_header_t);
+}
+
+void wifi_sniffer_bind_session(uint32_t session_id) {
+  s_session_id = session_id;
+}
+
+void wifi_sniffer_session_killed(spi_id_t op_id) {
+  (void)op_id;
+  s_session_id = SPI_SESSION_INVALID_ID;
+  wifi_sniffer_stop();
+}
+
 void wifi_sniffer_stop(void) {
+  s_session_id = SPI_SESSION_INVALID_ID;
   if (!s_is_sniffing)
     return;
 
@@ -599,9 +623,12 @@ static void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
     return;
 
   const bool is_pcap_ok = (s_pcap_buffer != NULL);
-  if (is_pcap_ok && !s_is_streaming_sd &&
-      s_buffer_offset >= SNIFFER_BUFFER_SIZE - SNIFFER_BUFFER_MARGIN) {
-    return;
+  bool pcap_full = is_pcap_ok && !s_is_streaming_sd &&
+                   s_buffer_offset >= SNIFFER_BUFFER_SIZE - SNIFFER_BUFFER_MARGIN;
+  if (pcap_full && s_is_monitor_mode) {
+    // Monitor mode: recycle buffer (counter keeps growing)
+    s_buffer_offset = sizeof(pcap_global_header_t);
+    pcap_full = false;
   }
 
   const wifi_promiscuous_pkt_t *ppkt = (const wifi_promiscuous_pkt_t *)buf;
@@ -698,10 +725,14 @@ static void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
     stream->channel = ppkt->rx_ctrl.channel;
     stream->len = (uint8_t)raw_len;
     memcpy(stream->data, ppkt->payload, raw_len);
-    spi_bridge_stream_push(SPI_ID_WIFI_APP_SNIFFER, stream_buf, (uint8_t)(raw_len + 3));
+    if (s_session_id != SPI_SESSION_INVALID_ID) {
+      session_manager_try_emit(s_session_id, stream_buf, (uint8_t)(raw_len + 3));
+    } else {
+      spi_bridge_stream_push(SPI_ID_WIFI_APP_SNIFFER, stream_buf, (uint8_t)(raw_len + 3));
+    }
   }
 
-  if (is_save && is_pcap_ok) {
+  if (is_save && is_pcap_ok && !pcap_full) {
     pcap_packet_header_t pkt_hdr;
     int64_t now_us = esp_timer_get_time();
     pkt_hdr.ts_sec = (uint32_t)(now_us / US_PER_S);
@@ -740,9 +771,12 @@ static void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
         s_buffer_offset += sizeof(pkt_hdr);
         memcpy(s_pcap_buffer + s_buffer_offset, ppkt->payload, pkt_hdr.incl_len);
         s_buffer_offset += pkt_hdr.incl_len;
-        s_packet_count++;
       }
     }
+  }
+
+  if (is_save) {
+    s_packet_count++;
   }
 }
 

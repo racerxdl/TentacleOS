@@ -89,7 +89,7 @@ void sys_monitor(bool show_ram_logs) {
     params->verbose_logging = show_ram_logs;
 
     xTaskCreatePinnedToCore(
-        sys_monitor_task, "SysMonitor", STACK_SIZE_BYTES, (void *)params, 1, NULL, 1);
+        sys_monitor_task, "SysMonitor", STACK_SIZE_BYTES, (void *)params, 1, NULL, 0);
   } else {
     ESP_LOGE(TAG, "Failed to allocate memory for SysMonitor parameters.");
   }

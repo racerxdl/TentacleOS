@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #include "spi_bridge.h"
 
@@ -24,12 +25,11 @@
 #include "freertos/task.h"
 
 #include "bt_dispatcher.h"
-#include "cJSON.h"
 #include "bluetooth_service.h"
 #include "deauther_detector.h"
+#include "session_manager.h"
 #include "signal_monitor.h"
 #include "spi_slave_driver.h"
-#include "storage_assets.h"
 #include "wifi_dispatcher.h"
 #include "wifi_service.h"
 #include "wifi_sniffer.h"
@@ -45,7 +45,16 @@ static const char *TAG = "SPI_BRIDGE_C5";
 #define SPI_WIFI_CMD_MAX      0x4F
 #define SPI_BT_CMD_MIN        0x50
 #define SPI_BT_CMD_MAX        0x7F
+#define SPI_MESH_BT_CMD_MIN   0x90
+#define SPI_MESH_BT_CMD_MAX   0x91
+#define SPI_MESH_WIFI_CMD_MIN 0x92
+#define SPI_MESH_WIFI_CMD_MAX 0x93
+#define SPI_MESH_BT_DATA_MIN  0x94
+#define SPI_MESH_BT_DATA_MAX  0x96
+#define SPI_MCORE_CMD_MIN     0x98
+#define SPI_MCORE_CMD_MAX     0x9C
 #define SPI_FW_VERSION_LEN    32
+#define SPI_FW_VERSION_STRING "1.2.0"
 
 typedef struct {
   spi_id_t id;
@@ -64,6 +73,8 @@ static uint8_t s_stream_tail = 0;
 static uint8_t s_stream_count = 0;
 static bool s_is_wifi_sniffer_streaming = false;
 static bool s_is_bt_sniffer_streaming = false;
+static bool s_is_mesh_toradio_streaming = false;
+static bool s_is_mcore_rx_streaming = false;
 static portMUX_TYPE s_stream_mux = portMUX_INITIALIZER_UNLOCKED;
 static volatile bool s_is_restart_pending = false;
 static char s_firmware_version[SPI_FW_VERSION_LEN] = "unknown";
@@ -95,6 +106,10 @@ bool spi_bridge_stream_is_enabled(spi_id_t id) {
     return s_is_wifi_sniffer_streaming;
   if (id == SPI_ID_BT_APP_SNIFFER)
     return s_is_bt_sniffer_streaming;
+  if (id == SPI_ID_MESH_TORADIO_STREAM)
+    return s_is_mesh_toradio_streaming;
+  if (id == SPI_ID_MCORE_RX_STREAM)
+    return s_is_mcore_rx_streaming;
   return false;
 }
 
@@ -103,6 +118,10 @@ void spi_bridge_stream_enable(spi_id_t id, bool enable) {
     s_is_wifi_sniffer_streaming = enable;
   if (id == SPI_ID_BT_APP_SNIFFER)
     s_is_bt_sniffer_streaming = enable;
+  if (id == SPI_ID_MESH_TORADIO_STREAM)
+    s_is_mesh_toradio_streaming = enable;
+  if (id == SPI_ID_MCORE_RX_STREAM)
+    s_is_mcore_rx_streaming = enable;
 }
 
 bool spi_bridge_stream_push(spi_id_t id, const uint8_t *data, uint8_t len) {
@@ -139,6 +158,7 @@ esp_err_t spi_bridge_slave_init(void) {
   esp_err_t ret = spi_slave_driver_init();
   if (ret != ESP_OK)
     return ret;
+  session_manager_init();
   xTaskCreate(
       bridge_task, "spi_bridge_task", SPI_BRIDGE_TASK_STACK, NULL, SPI_BRIDGE_TASK_PRIO, NULL);
   return ESP_OK;
@@ -147,23 +167,9 @@ esp_err_t spi_bridge_slave_init(void) {
 // Static functions
 
 static void load_firmware_version(void) {
-  size_t size;
-  uint8_t *json_data = storage_assets_load_file("config/OTA/firmware.json", &size);
-  if (json_data == NULL)
-    return;
-
-  cJSON *root = cJSON_ParseWithLength((const char *)json_data, size);
-  free(json_data);
-  if (root == NULL)
-    return;
-
-  cJSON *version = cJSON_GetObjectItem(root, "version");
-  if (cJSON_IsString(version) && version->valuestring != NULL) {
-    strncpy(s_firmware_version, version->valuestring, sizeof(s_firmware_version) - 1);
-    s_firmware_version[sizeof(s_firmware_version) - 1] = '\0';
-    ESP_LOGI(TAG, "Firmware version: %s", s_firmware_version);
-  }
-  cJSON_Delete(root);
+  strncpy(s_firmware_version, SPI_FW_VERSION_STRING, sizeof(s_firmware_version) - 1);
+  s_firmware_version[sizeof(s_firmware_version) - 1] = '\0';
+  ESP_LOGI(TAG, "Firmware version: %s", s_firmware_version);
 }
 
 static bool stream_pop(spi_id_t *out_id, uint8_t *out_data, uint8_t *out_len) {
@@ -274,11 +280,34 @@ static void bridge_task(void *pvParameters) {
         continue;
       }
       status = SPI_STATUS_BUSY;
+    } else if (header->id == SPI_ID_SESSION_HEARTBEAT) {
+      spi_heartbeat_req_t req = {0};
+      memcpy(&req, rx_buf + sizeof(spi_header_t), sizeof(req));
+      bool alive = session_manager_heartbeat(req.session_id, req.last_acked_seq);
+      spi_heartbeat_resp_t resp = {.alive = alive ? (uint8_t)1 : (uint8_t)0};
+      memcpy(resp_payload, &resp, sizeof(resp));
+      resp_len = sizeof(resp);
+      status = SPI_STATUS_OK;
+    } else if (header->id == SPI_ID_SESSION_STOP) {
+      spi_session_stop_req_t req = {0};
+      memcpy(&req, rx_buf + sizeof(spi_header_t), sizeof(req));
+      esp_err_t r = session_manager_stop(req.session_id);
+      status = (r == ESP_OK) ? SPI_STATUS_OK : SPI_STATUS_ERROR;
     } else if (header->id >= SPI_WIFI_CMD_MIN && header->id <= SPI_WIFI_CMD_MAX) {
       status = wifi_dispatcher_execute(
           header->id, rx_buf + sizeof(spi_header_t), header->length, resp_payload, &resp_len);
     } else if (header->id >= SPI_BT_CMD_MIN && header->id <= SPI_BT_CMD_MAX) {
       status = bt_dispatcher_execute(
+          header->id, rx_buf + sizeof(spi_header_t), header->length, resp_payload, &resp_len);
+    } else if ((header->id >= SPI_MESH_BT_CMD_MIN && header->id <= SPI_MESH_BT_CMD_MAX) ||
+               (header->id >= SPI_MESH_BT_DATA_MIN && header->id <= SPI_MESH_BT_DATA_MAX)) {
+      status = bt_dispatcher_execute(
+          header->id, rx_buf + sizeof(spi_header_t), header->length, resp_payload, &resp_len);
+    } else if (header->id >= SPI_MCORE_CMD_MIN && header->id <= SPI_MCORE_CMD_MAX) {
+      status = bt_dispatcher_execute(
+          header->id, rx_buf + sizeof(spi_header_t), header->length, resp_payload, &resp_len);
+    } else if (header->id >= SPI_MESH_WIFI_CMD_MIN && header->id <= SPI_MESH_WIFI_CMD_MAX) {
+      status = wifi_dispatcher_execute(
           header->id, rx_buf + sizeof(spi_header_t), header->length, resp_payload, &resp_len);
     } else {
       status = SPI_STATUS_UNSUPPORTED;

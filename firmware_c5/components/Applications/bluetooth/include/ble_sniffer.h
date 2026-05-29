@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef BLE_SNIFFER_H
 #define BLE_SNIFFER_H
@@ -19,7 +20,11 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 #include "esp_err.h"
+
+#include "spi_protocol.h"
 
 /**
  * @brief Start the BLE packet sniffer.
@@ -34,6 +39,12 @@ esp_err_t ble_sniffer_start(void);
  * @brief Stop the BLE packet sniffer and free resources.
  */
 void ble_sniffer_stop(void);
+
+/** Bind a session ID to the running sniffer (called by dispatcher). */
+void ble_sniffer_bind_session(uint32_t session_id);
+
+/** Session-watchdog kill callback. */
+void ble_sniffer_session_killed(spi_id_t op_id);
 
 #ifdef __cplusplus
 }

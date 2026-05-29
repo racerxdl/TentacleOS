@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef WIFI_SNIFFER_H
 #define WIFI_SNIFFER_H
@@ -21,6 +22,8 @@ extern "C" {
 
 #include <stdbool.h>
 #include <stdint.h>
+
+#include "spi_protocol.h"
 
 /**
  * @brief Packet filter type for the Wi-Fi sniffer.
@@ -47,6 +50,26 @@ bool wifi_sniffer_start(wifi_sniffer_type_t type, uint8_t channel);
  * @brief Stop the Wi-Fi sniffer.
  */
 void wifi_sniffer_stop(void);
+
+/**
+ * @brief Enable monitor mode: when the local PCAP buffer fills up, the
+ * buffer recycles instead of dropping packets, and the packet counter
+ * keeps incrementing forever. Used by the Packet Monitor screen which
+ * only needs the counter, not the captured PCAP.
+ */
+void wifi_sniffer_set_monitor_mode(bool enabled);
+
+/**
+ * @brief Bind a session ID to the running sniffer (called by dispatcher
+ * after session_manager_start). Streams will be emitted via the session.
+ */
+void wifi_sniffer_bind_session(uint32_t session_id);
+
+/**
+ * @brief Kill callback: stops the sniffer when its session watchdog fires.
+ *  Compatible with session_kill_cb_t.
+ */
+void wifi_sniffer_session_killed(spi_id_t op_id);
 
 /**
  * @brief Save the PCAP buffer to internal flash.

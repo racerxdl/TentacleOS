@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 /**
  * @file pin_def.h
@@ -79,6 +80,22 @@ extern "C" {
 #define GPIO_C5_UART_RX_PIN 47
 #define GPIO_C5_RESET_PIN   48
 #define GPIO_C5_BOOT_PIN    33
+
+// SX1262 LoRa (SPI3_HOST, separate from C5 bridge)
+#define GPIO_LORA_SCLK_PIN  18
+#define GPIO_LORA_MOSI_PIN  19
+#define GPIO_LORA_MISO_PIN  14
+#define GPIO_LORA_CS_PIN    26
+#define GPIO_LORA_RESET_PIN 27
+#define GPIO_LORA_BUSY_PIN  17
+#define GPIO_LORA_DIO1_PIN  54
+#define GPIO_LORA_TXEN_PIN  3
+#define GPIO_LORA_RXEN_PIN  5
+
+// YS-RFID2 125kHz RFID Reader (UART)
+// TODO: placeholder pins — definir com base no schematic do board
+#define GPIO_RFID_UART_TX_PIN 24
+#define GPIO_RFID_UART_RX_PIN 25
 
 #ifdef __cplusplus
 }

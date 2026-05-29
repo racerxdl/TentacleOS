@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #ifndef SPI_PROTOCOL_H
 #define SPI_PROTOCOL_H
@@ -80,7 +81,6 @@ typedef enum {
   SPI_ID_WIFI_APP_DEAUTH_DET = 0x27,
   SPI_ID_WIFI_APP_PROBE_MON = 0x28,
   SPI_ID_WIFI_APP_SIGNAL_MON = 0x29,
-  SPI_ID_WIFI_APP_ATTACK_STOP = 0x2A,
   SPI_ID_WIFI_SNIFFER_SET_SNAPLEN = 0x2B,
   SPI_ID_WIFI_SNIFFER_SET_VERBOSE = 0x2C,
   SPI_ID_WIFI_SNIFFER_SAVE_FLASH = 0x2D,
@@ -147,7 +147,6 @@ typedef enum {
   SPI_ID_BT_APP_SKIMMER = 0x64,
   SPI_ID_BT_APP_TRACKER = 0x65,
   SPI_ID_BT_APP_GATT_EXP = 0x66,
-  SPI_ID_BT_APP_STOP = 0x67,
   SPI_ID_BT_SPAM_LIST_LOAD = 0x68,
   SPI_ID_BT_SPAM_LIST_BEGIN = 0x69,
   SPI_ID_BT_SPAM_LIST_ITEM = 0x6A,
@@ -164,7 +163,29 @@ typedef enum {
 
   // LoRa (0x80 - 0x8F)
   SPI_ID_LORA_RX = 0x80,
-  SPI_ID_LORA_TX = 0x81
+  SPI_ID_LORA_TX = 0x81,
+
+  // Meshtastic phone bridge (0x90 - 0x97)
+  SPI_ID_MESH_BLE_INIT = 0x90,
+  SPI_ID_MESH_BLE_STOP = 0x91,
+  SPI_ID_MESH_WIFI_INIT = 0x92,
+  SPI_ID_MESH_WIFI_STOP = 0x93,
+  SPI_ID_MESH_FROMRADIO_PUSH = 0x94,
+  SPI_ID_MESH_LOG_PUSH = 0x95,
+  SPI_ID_MESH_STATUS = 0x96,
+  SPI_ID_MESH_TORADIO_STREAM = 0x97,
+
+  // MeshCore phone bridge (0x98 - 0x9C)
+  SPI_ID_MCORE_BLE_INIT = 0x98,
+  SPI_ID_MCORE_BLE_STOP = 0x99,
+  SPI_ID_MCORE_TX_PUSH = 0x9A,
+  SPI_ID_MCORE_RX_STREAM = 0x9B,
+  SPI_ID_MCORE_STATUS = 0x9C,
+
+  // Session lifecycle (long-running operations)
+  SPI_ID_SESSION_HEARTBEAT = 0xF0,
+  SPI_ID_SESSION_LOST = 0xF1,
+  SPI_ID_SESSION_STOP = 0xF2
 } spi_id_t;
 
 /**
@@ -187,6 +208,44 @@ typedef struct {
   uint8_t id;     // spi_id_t
   uint8_t length; // Payload length
 } spi_header_t;
+
+// Session protocol — see spi_bridge/README.md "Session Lifecycle"
+#define SPI_SESSION_INVALID_ID 0u
+#define SPI_SESSION_WINDOW     64u
+
+/** Sent by C5 as response payload to a long-running START command.
+ *  Valid only if the SPI response status byte is SPI_STATUS_OK. */
+typedef struct __attribute__((packed)) {
+  uint32_t session_id;
+} spi_session_resp_t;
+
+/** Sent by P4 every ~2s to keep a session alive and ack streams received. */
+typedef struct __attribute__((packed)) {
+  uint32_t session_id;
+  uint32_t last_acked_seq; // highest stream seq P4 has processed
+} spi_heartbeat_req_t;
+
+/** C5 reply to heartbeat. */
+typedef struct __attribute__((packed)) {
+  uint8_t alive; // 1 if session still active, 0 if not found / different op
+} spi_heartbeat_resp_t;
+
+/** Prefixed to every stream payload from a session-managed operation. */
+typedef struct __attribute__((packed)) {
+  uint32_t session_id;
+  uint32_t seq;
+} spi_stream_meta_t;
+
+/** Sent by P4 in payload of long-running STOP commands. */
+typedef struct __attribute__((packed)) {
+  uint32_t session_id;
+} spi_session_stop_req_t;
+
+/** Stream emitted by C5 when a session is auto-killed by the watchdog. */
+typedef struct __attribute__((packed)) {
+  uint32_t session_id;
+  uint8_t op_id; // spi_id_t of the lost operation
+} spi_session_lost_t;
 
 #define SPI_FRAME_SIZE (sizeof(spi_header_t) + SPI_MAX_PAYLOAD)
 
@@ -329,6 +388,68 @@ typedef struct {
   uint8_t status;   // 0 = OPEN, 1 = OPEN_FILTERED
   char banner[64];
 } __attribute__((packed)) spi_port_scan_result_t;
+
+/**
+ * @brief Meshtastic transport init payload.
+ *
+ * Sent with SPI_ID_MESH_BLE_INIT and SPI_ID_MESH_WIFI_INIT.
+ */
+typedef struct {
+  uint32_t node_num;
+} __attribute__((packed)) spi_mesh_init_t;
+
+/**
+ * @brief Chunk header for fragmented Meshtastic transport frames.
+ *
+ * Each StreamAPI protobuf frame is split into 1..255 chunks of up to
+ * SPI_MESH_CHUNK_PAYLOAD_MAX bytes. Receivers reassemble per seq.
+ */
+typedef struct {
+  uint8_t seq;
+  uint8_t chunk_idx;
+  uint8_t total_chunks;
+  uint8_t flags;
+} __attribute__((packed)) spi_mesh_chunk_hdr_t;
+
+#define SPI_MESH_CHUNK_FLAG_LAST   0x01
+#define SPI_MESH_PAYLOAD_LIMIT     255
+#define SPI_MESH_CHUNK_PAYLOAD_MAX (SPI_MESH_PAYLOAD_LIMIT - sizeof(spi_mesh_chunk_hdr_t))
+
+/**
+ * @brief Meshtastic transport status payload.
+ *
+ * Returned by SPI_ID_MESH_STATUS.
+ */
+typedef struct {
+  uint8_t ble_connected;
+  uint8_t ble_subscribed;
+  uint8_t tcp_clients;
+  uint8_t logradio_subscribed;
+  uint32_t fromnum_counter;
+} __attribute__((packed)) spi_mesh_status_t;
+
+/**
+ * @brief MeshCore BLE init payload.
+ *
+ * Sent with SPI_ID_MCORE_BLE_INIT. The C5 builds the advertised name as
+ * "<name_prefix>-XXXX" (last 4 hex of MAC) and uses `pin` as the static
+ * passkey for SC + MITM + DISP_ONLY pairing.
+ */
+typedef struct {
+  char name_prefix[16];
+  uint32_t pin;
+} __attribute__((packed)) spi_mcore_init_t;
+
+/**
+ * @brief MeshCore transport status payload.
+ *
+ * Returned by SPI_ID_MCORE_STATUS.
+ */
+typedef struct {
+  uint8_t ble_connected;
+  uint8_t ble_subscribed;
+  uint8_t reserved[2];
+} __attribute__((packed)) spi_mcore_status_t;
 
 #ifdef __cplusplus
 }

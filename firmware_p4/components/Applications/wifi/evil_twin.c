@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #include "evil_twin.h"
 
@@ -21,6 +22,7 @@
 #include "esp_log.h"
 
 #include "spi_bridge.h"
+#include "spi_session.h"
 #include "tos_storage_paths.h"
 #include "storage_read.h"
 #include "storage_write.h"
@@ -37,13 +39,15 @@ static const char *TAG = "EVIL_TWIN";
 #define EVIL_TWIN_PASSWORD_BUF_SIZE 2048
 
 static bool s_has_password = false;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 
 void evil_twin_start_attack(const char *ssid) {
   if (ssid == NULL)
     return;
   size_t len = strnlen(ssid, EVIL_TWIN_MAX_SSID_LEN);
-  if (spi_bridge_send_command(
-          SPI_ID_WIFI_APP_EVIL_TWIN, (uint8_t *)ssid, (uint8_t)len, NULL, NULL, 2000) == ESP_OK) {
+  s_session_id =
+      spi_session_start(SPI_ID_WIFI_APP_EVIL_TWIN, (uint8_t *)ssid, (uint8_t)len, NULL, NULL);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
     s_has_password = false;
   } else {
     ESP_LOGW(TAG, "Failed to start Evil Twin over SPI");
@@ -80,7 +84,10 @@ void evil_twin_start_attack_with_template(const char *ssid, const char *template
 }
 
 void evil_twin_stop_attack(void) {
-  spi_bridge_send_command(SPI_ID_WIFI_APP_ATTACK_STOP, NULL, 0, NULL, NULL, 2000);
+  if (s_session_id != SPI_SESSION_INVALID_ID) {
+    spi_session_stop(s_session_id);
+    s_session_id = SPI_SESSION_INVALID_ID;
+  }
 }
 
 void evil_twin_reset_capture(void) {

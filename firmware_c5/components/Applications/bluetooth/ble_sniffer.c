@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #include "ble_sniffer.h"
 
@@ -24,6 +25,7 @@
 #include "freertos/task.h"
 
 #include "bluetooth_service.h"
+#include "session_manager.h"
 #include "spi_bridge.h"
 
 static const char *TAG = "BLE_SNIFFER";
@@ -45,6 +47,7 @@ static TaskHandle_t s_sniffer_task_handle = NULL;
 static StackType_t *s_sniffer_task_stack = NULL;
 static StaticTask_t *s_sniffer_task_tcb = NULL;
 static uint8_t *s_sniffer_queue_storage = NULL;
+static uint32_t s_session_id = SPI_SESSION_INVALID_ID;
 static StaticQueue_t *s_sniffer_queue_struct = NULL;
 
 static void sniffer_task(void *pvParameters);
@@ -119,7 +122,18 @@ esp_err_t ble_sniffer_start(void) {
   return bluetooth_service_start_sniffer(packet_handler);
 }
 
+void ble_sniffer_bind_session(uint32_t session_id) {
+  s_session_id = session_id;
+}
+
+void ble_sniffer_session_killed(spi_id_t op_id) {
+  (void)op_id;
+  s_session_id = SPI_SESSION_INVALID_ID;
+  ble_sniffer_stop();
+}
+
 void ble_sniffer_stop(void) {
+  s_session_id = SPI_SESSION_INVALID_ID;
   bluetooth_service_stop_sniffer();
 
   if (s_sniffer_task_handle != NULL) {
@@ -173,7 +187,11 @@ static void sniffer_task(void *pvParameters) {
         stream.rssi = (int8_t)packet.rssi;
         stream.len = packet.len;
         memcpy(stream.data, packet.data, packet.len);
-        spi_bridge_stream_push(SPI_ID_BT_APP_SNIFFER, (const uint8_t *)&stream, sizeof(stream));
+        if (s_session_id != SPI_SESSION_INVALID_ID) {
+          session_manager_try_emit(s_session_id, (const uint8_t *)&stream, sizeof(stream));
+        } else {
+          spi_bridge_stream_push(SPI_ID_BT_APP_SNIFFER, (const uint8_t *)&stream, sizeof(stream));
+        }
       }
     }
   }

@@ -1,16 +1,17 @@
 // Copyright (c) 2025 HIGH CODE LLC
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// TentacleOS is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// TentacleOS is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// You should have received a copy of the GNU General Public License
+// along with TentacleOS. If not, see <https://www.gnu.org/licenses/>.
 
 #include "spi_bridge.h"
 
@@ -22,26 +23,34 @@
 #include "freertos/task.h"
 
 #include "spi_bridge_phy.h"
+#include "spi_timeouts.h"
 
 static const char *TAG = "SPI_BRIDGE_P4";
 
-#define SPI_STREAM_TASK_STACK 4096
+#define SPI_STREAM_TASK_STACK 16384
 #define SPI_STREAM_TASK_PRIO  5
 #define SPI_MUTEX_TIMEOUT_MS  50
 #define SPI_STREAM_POLL_MS    10
 #define SPI_STREAM_IDLE_MS    20
 #define SPI_STREAM_YIELD_MS   1
 #define SPI_IRQ_WAIT_MS       100
+#define SPI_STREAM_CB_SLOTS   4
+
+typedef struct {
+  spi_id_t id;
+  spi_stream_cb_t cb;
+} stream_cb_slot_t;
 
 static SemaphoreHandle_t s_spi_mutex = NULL;
 static TaskHandle_t s_stream_task_handle = NULL;
 static volatile bool s_is_command_in_flight = false;
-static spi_stream_cb_t s_stream_cb_wifi = NULL;
-static spi_stream_cb_t s_stream_cb_bt = NULL;
+static volatile bool s_bridge_alive = true;
+static stream_cb_slot_t s_stream_cbs[SPI_STREAM_CB_SLOTS] = {0};
 
 static void stream_task(void *arg);
 static esp_err_t fetch_stream(spi_header_t *out_header, uint8_t *out_payload, uint8_t *out_len);
 static spi_stream_cb_t get_stream_cb(spi_id_t id);
+static bool has_any_stream_cb(void);
 
 static esp_err_t status_to_err(spi_status_t status) {
   switch (status) {
@@ -69,12 +78,29 @@ esp_err_t spi_bridge_master_init(void) {
 }
 
 void spi_bridge_register_stream_cb(spi_id_t id, spi_stream_cb_t cb) {
-  if (id == SPI_ID_WIFI_APP_SNIFFER)
-    s_stream_cb_wifi = cb;
-  if (id == SPI_ID_BT_APP_SNIFFER)
-    s_stream_cb_bt = cb;
+  if (cb == NULL) {
+    spi_bridge_unregister_stream_cb(id);
+    return;
+  }
 
-  if ((s_stream_cb_wifi != NULL || s_stream_cb_bt != NULL) && s_stream_task_handle == NULL) {
+  int free_slot = -1;
+  for (int i = 0; i < SPI_STREAM_CB_SLOTS; i++) {
+    if (s_stream_cbs[i].cb != NULL && s_stream_cbs[i].id == id) {
+      s_stream_cbs[i].cb = cb;
+      return;
+    }
+    if (s_stream_cbs[i].cb == NULL && free_slot < 0) {
+      free_slot = i;
+    }
+  }
+  if (free_slot < 0) {
+    ESP_LOGE(TAG, "No free stream cb slot for id 0x%02X", id);
+    return;
+  }
+  s_stream_cbs[free_slot].id = id;
+  s_stream_cbs[free_slot].cb = cb;
+
+  if (s_stream_task_handle == NULL) {
     if (s_spi_mutex == NULL) {
       s_spi_mutex = xSemaphoreCreateMutex();
     }
@@ -92,10 +118,24 @@ void spi_bridge_register_stream_cb(spi_id_t id, spi_stream_cb_t cb) {
 }
 
 void spi_bridge_unregister_stream_cb(spi_id_t id) {
-  if (id == SPI_ID_WIFI_APP_SNIFFER)
-    s_stream_cb_wifi = NULL;
-  if (id == SPI_ID_BT_APP_SNIFFER)
-    s_stream_cb_bt = NULL;
+  for (int i = 0; i < SPI_STREAM_CB_SLOTS; i++) {
+    if (s_stream_cbs[i].cb != NULL && s_stream_cbs[i].id == id) {
+      s_stream_cbs[i].cb = NULL;
+      s_stream_cbs[i].id = 0;
+      return;
+    }
+  }
+}
+
+void spi_bridge_set_alive(bool alive) {
+  s_bridge_alive = alive;
+}
+
+uint32_t spi_bridge_get_timeout(spi_id_t id) {
+  if (id >= SPI_ID_WIFI_SCAN && id <= SPI_ID_WIFI_APP_PROBE_MON) {
+    return SPI_TIMEOUT_WIFI_MS;
+  }
+  return SPI_TIMEOUT_DEFAULT_MS;
 }
 
 esp_err_t spi_bridge_send_command(spi_id_t id,
@@ -104,6 +144,9 @@ esp_err_t spi_bridge_send_command(spi_id_t id,
                                   spi_header_t *out_header,
                                   uint8_t *out_payload,
                                   uint32_t timeout_ms) {
+  if (!s_bridge_alive) {
+    return ESP_ERR_INVALID_STATE;
+  }
   if (s_spi_mutex == NULL) {
     s_spi_mutex = xSemaphoreCreateMutex();
   }
@@ -204,11 +247,21 @@ esp_err_t spi_bridge_send_command(spi_id_t id,
 // Static functions
 
 static spi_stream_cb_t get_stream_cb(spi_id_t id) {
-  if (id == SPI_ID_WIFI_APP_SNIFFER)
-    return s_stream_cb_wifi;
-  if (id == SPI_ID_BT_APP_SNIFFER)
-    return s_stream_cb_bt;
+  for (int i = 0; i < SPI_STREAM_CB_SLOTS; i++) {
+    if (s_stream_cbs[i].cb != NULL && s_stream_cbs[i].id == id) {
+      return s_stream_cbs[i].cb;
+    }
+  }
   return NULL;
+}
+
+static bool has_any_stream_cb(void) {
+  for (int i = 0; i < SPI_STREAM_CB_SLOTS; i++) {
+    if (s_stream_cbs[i].cb != NULL) {
+      return true;
+    }
+  }
+  return false;
 }
 
 static esp_err_t fetch_stream(spi_header_t *out_header, uint8_t *out_payload, uint8_t *out_len) {
@@ -262,7 +315,7 @@ static void stream_task(void *arg) {
   spi_header_t header;
 
   while (1) {
-    if (s_stream_cb_wifi == NULL && s_stream_cb_bt == NULL) {
+    if (!has_any_stream_cb()) {
       s_stream_task_handle = NULL;
       vTaskDelete(NULL);
       return;
