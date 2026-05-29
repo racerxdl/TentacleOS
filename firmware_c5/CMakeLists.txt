@@ -6,6 +6,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(IDF_TARGET "esp32c5")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
