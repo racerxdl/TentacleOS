@@ -1,3 +1,9 @@
+## [1.3.1](https://github.com/HighCodeh/TentacleOS/compare/v1.3.0...v1.3.1) (2026-06-04)
+
+### Bug Fixes
+
+* **sx1262:** make HAL re-creatable and tolerate shared SPI3 bus (fccb5271790931a47055a7e62e1cc9f02f3b7b67) - [@yajatnarayan](https://github.com/yajatnarayan)
+
 ## [1.3.0](https://github.com/HighCodeh/TentacleOS/compare/v1.2.4...v1.3.0) (2026-05-29)
 
 ### Features
